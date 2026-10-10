@@ -412,7 +412,7 @@ function initAuth() {
             input.addEventListener('contextmenu', (e) => e.preventDefault());
 
             input.addEventListener('keydown', (e) => {
-                const key = e.key.toLowerCase();
+                const key = (e.key || '').toLowerCase();   // autofill sends keydown with no key
                 const mod = e.ctrlKey || e.metaKey;
                 if ((mod && ['c', 'v', 'x', 'insert'].includes(key)) ||
                     (e.shiftKey && ['insert', 'delete'].includes(key))) {
@@ -2436,7 +2436,6 @@ function renderRecommendations() {
         const cardClass = REC_SEVERITY_CLASS[r.severity] || REC_SEVERITY_CLASS.LOW;
         const ambientText = r.ambientTemp === undefined ? '...' : formatCardTemp(r.ambientTemp);
         const tip = escapeHtml(getRecTip(r));
-        const aiTag = r.ai ? '<span class="ht-ai-badge"><i data-lucide="sparkles"></i>AI</span>' : '';
 
         return `
             <button type="button" data-rec-id="${r.id}" class="${cardClass}" role="listitem">
@@ -2451,7 +2450,7 @@ function renderRecommendations() {
                         </div>
                         <div class="ht-rec-card__meta">
                             <span class="ht-rec-card__category">Body Temp ${formatCardTemp(r.bodyTemp)}</span>
-                            <span class="ht-rec-card__category">Ambient Temp ${ambientText}</span>${aiTag}
+                            <span class="ht-rec-card__category">Ambient Temp ${ambientText}</span>
                         </div>
                         <p class="ht-rec-card__tip">${tip}</p>
                         <div class="ht-rec-card__time">${r.timestamp}</div>
@@ -2733,7 +2732,8 @@ async function processAiRecQueue() {
                 aiRec.pausedUntil = Date.now() + (info.daily ? AI_REC_DAILY_LIMIT_PAUSE_MS : AI_REC_RATE_LIMIT_PAUSE_MS);
                 aiRec.queue.unshift(analyticsId);    // try this one again after the pause
             } else {
-                console.warn('HeatTrack: AI recommendation failed for result', analyticsId, status, code || error.message);
+                // info.tried: why each AI provider failed (from the recommend function)
+                console.warn('HeatTrack: AI recommendation failed for result', analyticsId, status, code || error.message, info.tried || '');
                 aiRec.failedAt.set(analyticsId, Date.now());
                 refreshOpenRecommendation(analyticsId);
             }
@@ -5800,7 +5800,8 @@ function initAdminProfile() {
     });
 
     document.getElementById('adminProfileEditBtn').addEventListener('click', () => {
-        if (adminSelf) setAdminProfileEditing(true);
+        if (adminSelf) setAdmin
+ProfileEditing(true);
     });
     document.getElementById('adminProfileCancelBtn').addEventListener('click', () => {
         renderAdminSelf();
