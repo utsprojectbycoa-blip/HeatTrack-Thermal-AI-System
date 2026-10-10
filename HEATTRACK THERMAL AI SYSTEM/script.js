@@ -2136,8 +2136,30 @@ function updateDHTBadge() {
 // Re-check every 10 s so the badge turns INACTIVE when readings stop arriving
 setInterval(updateDHTBadge, 10000);
 
+// Detection Log entries: first detections and the readings every 30 minutes
+// after them (see logEntryLabels)
+function logEntryDetections() {
+    const rows = summaryDetections();
+    const entries = logEntryLabels(rows);
+    return rows.filter((d) => entries.has(d.id));
+}
+
+// KPI cards count only the 30-minute readings (log entries labelled '30 min',
+// every 30 minutes from the first detection); the first detection is not added
+function isThirtyMinuteReading(d, entries = logEntryLabels()) {
+    return entries.get(d.id) === '30 min';
+}
+
+// The 30-minute readings: what the KPI cards and the Severity / Detection
+// Distribution charts count
+function thirtyMinuteReadings() {
+    const rows = summaryDetections();
+    const entries = logEntryLabels(rows);
+    return rows.filter((d) => isThirtyMinuteReading(d, entries));
+}
+
 function updateStats() {
-    applyDetectionCountsToStats(getDetectionCounts());
+    applyDetectionCountsToStats(getDetectionCounts(thirtyMinuteReadings()));
 }
 
 // ============================================
@@ -2253,6 +2275,8 @@ function renderDetectionLogs() {
     state.currentPage = Math.min(state.currentPage, totalPages);
     const startIndex = (state.currentPage - 1) * state.pageSize;
     const pageData = filtered.slice(startIndex, startIndex + state.pageSize);
+    // Worked out over all results, so the status filter doesn't break a run
+    const durations = logEntryLabels();
 
     if (!pageData.length) {
         tbody.innerHTML = `
@@ -2283,7 +2307,7 @@ function renderDetectionLogs() {
 
             return `
                 <tr class="ht-log-row-clickable${flash}" data-detection-id="${d.id}">
-                    <td class="ht-log-cell--mono">${formatTimestamp(d.timestamp)}${intervalBadge(d)}</td>
+                    <td class="ht-log-cell--mono">${formatTimestamp(d.timestamp)}${intervalBadge(durations.get(d.id))}</td>
                     <td>
                         <div class="${statusWrap}">
                             <i data-lucide="${statusIcon}"></i>
@@ -2387,15 +2411,15 @@ function renderRecommendations() {
     const container = document.getElementById('recommendationsList');
     const activeRecs = [];
 
-    // One recommendation per 10-minute detection with ducks (newest first).
-    // Intervals without ducks have no detection row, so they add nothing.
+    // One recommendation per 30-minute reading with ducks (newest first), on the
+    // 30-minute steps from the first detection. Slots without ducks have no row.
     const duckDetections = detailDetections().filter(d => d.count > 0);
     const currentTemp = state.sensorHistory.temp.length > 0 ? state.sensorHistory.temp[state.sensorHistory.temp.length - 1] : null;
 
     if (!duckDetections.length) {
         container.innerHTML = `
             <div class="ht-footnote" style="text-align:center; padding:1.5rem 0; font-size:15px; line-height:1.6;">
-                No ducks detected yet, so there are no recommendations. A recommendation appears for every 10-minute interval in which ducks are detected.
+                No ducks detected yet, so there are no recommendations. A recommendation appears every 30 minutes after ducks are first detected.
             </div>
         `;
         lucide.createIcons();
@@ -2999,23 +3023,6 @@ function formatRelativeTime(date) {
 // ============================================
 // ALERTS SYSTEM
 // ============================================
-function showAlert(detection) {
-    if (state.alerts.some((a) => a.id === detection.id)) return;   // already in the list
-    // Add viewed tracking to alert
-    const alertWithViewed = {
-        ...detection,
-        viewed: false,
-        viewedAt: null
-    };
-    state.alerts.unshift(alertWithViewed);
-    if (state.alerts.length > 100) state.alerts.pop();
-    updateAlertBadge();
-    saveAlerts();
-
-    renderAlerts();
-    lucide.createIcons();
-}
-
 // Notifications are kept in this browser per account (read ones included), so a
 // reload or signing in again shows the same list with its read/unread state.
 // Up to the latest 100 are kept.
@@ -3046,16 +3053,24 @@ function loadSavedAlerts() {
     renderAlerts();
 }
 
-// Every heat-stress result is a notification: results loaded with the page and
-// results that arrive live. Same rows as the Detection Log (10-minute and
-// 30-minute rows), so each HEAT STRESS row in the log has a notification.
+// Heat-stress notifications: the 30-minute readings with Heat Stress
+// status (see heatStressAlertIds). Covers results loaded
+// with the page and results that arrive live.
 // New ones start unread; read ones stay in the list. The bell counts only the unread ones.
 const ALERT_LIST_LIMIT = 100;
 
 function syncResultAlerts() {
+    const alertIds = heatStressAlertIds();
+    // Drop entries that no longer raise an alert: old check-ins, repeated
+    // 30-minute rows and extra results inside a block (results no longer loaded stay)
+    const loaded = new Set(state.detections.map((d) => d.id));
+    const before = state.alerts.length;
+    state.alerts = state.alerts.filter((a) => a.kind !== 'checkin' && (!loaded.has(a.id) || alertIds.has(a.id)));
+    if (state.alerts.length !== before) saveAlerts();
+
     const known = new Set(state.alerts.map((a) => a.id));
-    const added = state.detections
-        .filter((d) => d.isHeatStress && !known.has(d.id))
+    const added = summaryDetections()
+        .filter((d) => alertIds.has(d.id) && !known.has(d.id))
         .map((d) => ({ ...d, viewed: false, viewedAt: null }));
     if (added.length) {
         state.alerts = state.alerts.concat(added)
@@ -3099,9 +3114,9 @@ function renderAlerts() {
             return `
                 <button type="button" data-alert-id="${a.id}" class="ht-alert-item ${viewedClass}">
                     <div class="ht-alert-item__row">
-                        <i data-lucide="${a.kind === 'checkin' ? 'clock' : 'alert-triangle'}"></i>
+                        <i data-lucide="alert-triangle"></i>
                         <div class="ht-alert-item__body">
-                            <div class="ht-alert-item__title"><span class="ht-alert-item__title-text">${a.kind === 'checkin' ? '10-minute check-in' : 'Heat stress detected'}</span>${a.kind === 'checkin' ? '' : intervalBadge(a)}</div>
+                            <div class="ht-alert-item__title"><span class="ht-alert-item__title-text">Heat stress detected</span></div>
                             <div class="ht-alert-item__meta">
                                 <span class="ht-alert-item__sub">${a.bodyTemp}°C • ${a.severity}</span>
                                 <span class="ht-alert-item__time">${formatRelativeTime(a.timestamp)}</span>
@@ -3135,7 +3150,7 @@ function renderAlerts() {
             if (alert) {
                 // The stored copy can be older than the result (e.g. before its AI text arrived)
                 const detection = state.detections.find((d) => d.id === alert.id) || alert;
-                const rec = alert.kind === 'checkin' ? alert.rec : buildRecommendationFromDetection(detection);
+                const rec = buildRecommendationFromDetection(detection);
                 openRecommendationModal(rec, state.sensorHistory.temp[state.sensorHistory.temp.length - 1]);
             }
         });
@@ -3164,7 +3179,7 @@ function markAlertAsViewed(alertId) {
     }
 }
 
-// One pop-up (lower right) for both heat stress alerts and the 10-minute check-in.
+// Pop-up (lower right) for heat stress alerts.
 // It only pops up for heat stress: HIGH or CRITICAL severity.
 let toastTimer = null;
 const TOAST_LEVELS = ['HIGH', 'CRITICAL'];
@@ -3187,28 +3202,6 @@ function showToast(detection) {
         stats,
         action: action || `Severity: ${detection.severity}. Open the details for the recommended actions.`,
         timestamp: detection.timestamp,
-    });
-}
-
-function showCheckinToast(checkin) {
-    if (!state.alertsEnabled || !isToastLevel(checkin?.level)) return;
-    // A heat stress alert on screen is more important: don't cover it
-    const toast = document.getElementById('alertToast');
-    if (toast?.classList.contains('is-visible') && toast.dataset.kind !== 'checkin') return;
-
-    state.lastToastDetection = { kind: 'checkin', checkin };
-    renderToast({
-        kind: 'checkin',
-        level: checkin.level,
-        title: '10-minute check-in',
-        icon: 'clock',
-        stats: [
-            ['Temperature', fmtTemp(checkin.temp)],
-            ['Humidity', checkin.humidity != null ? `${Number(checkin.humidity).toFixed(0)}%` : '--'],
-        ],
-        stale: checkin.stale,
-        action: checkin.rec.action,
-        timestamp: checkin.at,
     });
 }
 
@@ -3519,9 +3512,11 @@ function initCharts() {
     });
 }
 
-// Severity chart counts ducks (sum of duck_count), matching the KPI cards
+// Severity chart counts ducks (sum of duck_count) of the 30-minute readings,
+// matching the KPI cards
 function getSeverityData() {
-    const sum = (sev) => summaryDetections()
+    const readings = thirtyMinuteReadings();
+    const sum = (sev) => readings
         .filter(d => d.severity === sev)
         .reduce((total, d) => total + (d.count ?? 1), 0);
     // Low -> Critical, matching the chart's labels and colours
@@ -3536,10 +3531,12 @@ function updateEnvChart() {
     envChart.update('none');
 }
 
+// Same 30-minute readings as the KPI cards
 function getDetectionDistributionValues() {
+    const readings = thirtyMinuteReadings();
     const counts = detectionStatusLabels.map(label => {
         const status = label.toUpperCase();
-        return summaryDetections()
+        return readings
             .filter(d => d.status === status)
             .reduce((total, d) => total + (d.count ?? 1), 0);
     });
@@ -3598,11 +3595,13 @@ function xlsStyle(id, o = {}) {
 
 // The rows the Detection Log shows for the chosen filters (status + period).
 // Generate Report uses the same rows, so the file always matches the screen.
+// Only first detections and the readings every 30 minutes after them are listed (see logEntryLabels),
+// (the KPI cards count the '30 min' ones only).
 function getFilteredLogDetections() {
     const statusFilter = document.getElementById('logFilter')?.value || 'all';
     const { start, end } = getLogDateBounds();
 
-    let filtered = state.detections.slice();
+    let filtered = logEntryDetections();
     if (statusFilter === 'heatstress') filtered = filtered.filter(d => d.status === 'HEAT STRESS');
     if (statusFilter === 'mild') filtered = filtered.filter(d => d.status === 'MILD');
     if (statusFilter === 'normal') filtered = filtered.filter(d => d.status === 'NORMAL');
@@ -3620,10 +3619,11 @@ function getFilteredLogDetections() {
 
 function exportDetectionsToExcel() {
     const rows = getFilteredLogDetections();
-    // Summary boxes count the same way as the KPI cards (10-minute rows; the
-    // 30-minute rows repeat them), but only for the rows in this report
-    const countedRows = rows.filter(d => !(d.hasInterval && d.interval === 30));
-    const counts = getDetectionCounts(countedRows);
+    // Summary boxes count the same way as the KPI cards: the listed entries
+    // (readings after every 30 minutes of monitoring, not the first detection)
+    // in the chosen filters
+    const durations = logEntryLabels();   // same badges as the Detection Log
+    const counts = getDetectionCounts(rows.filter((d) => isThirtyMinuteReading(d, durations)));
     const totalDucks = (counts.normal || 0) + (counts.mild || 0) + (counts.stress || 0);
     const now = new Date();
     const pad = (n) => String(n).padStart(2, '0');
@@ -3725,7 +3725,7 @@ function exportDetectionsToExcel() {
     // ---- Table header (same columns as the Detection Log) ----
     tableXml += '<Row ss:Height="30"><Cell/>'
         + textCell('sHeader', 'Timestamp', 1)
-        + ['Interval', 'Status', 'Lowest Body Temp (°C)', 'Average Body Temp (°C)', 'Highest Body Temp (°C)',
+        + ['Duration', 'Status', 'Lowest Body Temp (°C)', 'Average Body Temp (°C)', 'Highest Body Temp (°C)',
            'Duck Count', 'Batch Count', 'Severity'].map((h) => textCell('sHeader', h)).join('')
         + textCell('sHeader', 'Top Recommendation', 1)
         + '</Row>';
@@ -3748,7 +3748,7 @@ function exportDetectionsToExcel() {
         const statusStyle = d.status === 'HEAT STRESS' ? 'sStatusHeatstress' : d.status === 'MILD' ? 'sStatusMild' : 'sStatusNormal';
         const sevStyle = d.severity === 'CRITICAL' ? 'sSevCritical' : d.severity === 'HIGH' ? 'sSevHigh'
             : d.severity === 'MODERATE' ? 'sSevModerate' : 'sSevLow';
-        const interval = d.hasInterval ? (d.interval === 10 ? '10 min' : '30 min (peak)') : '--';
+        const interval = durations.get(d.id) || '--';
         const recText = buildRecommendationFromDetection(d)?.action || '';
         const rowHeight = Math.max(24, (Math.ceil(recText.length / 45) + 1) * 14);
         const batch = d.batchCount != null && /^\d+$/.test(String(d.batchCount))
@@ -3773,7 +3773,7 @@ function exportDetectionsToExcel() {
         tableXml += fullRow(30, 'sDataCenterRow1', 'No detections for the selected events and period.');
     }
     tableXml += spacerRow;
-    tableXml += fullRow(28, 'sNote', 'Duck totals count the 10-minute records only; 30-minute peak records repeat them. '
+    tableXml += fullRow(28, 'sNote', 'Listed: the first detection (--) and the reading every 30 minutes after it (30 min). Totals count the 30 min readings only. '
         + 'Results and recommendations are assistive only. Always confirm with on-site observation and follow your farm protocol or veterinary guidance.');
     tableXml += '</Table>';
 
@@ -3991,12 +3991,6 @@ function setupEventListeners() {
         document.getElementById('alertToast')?.classList.remove('is-visible');
         const detection = state.lastToastDetection;
         if (!detection) return;
-        if (detection.kind === 'checkin') {
-            const { checkin } = detection;
-            if (checkin.alertId) markAlertAsViewed(checkin.alertId);
-            openRecommendationModal(checkin.rec, checkin.temp);
-            return;
-        }
         if (detection.id) {
             markAlertAsViewed(detection.id);
         }
@@ -4522,15 +4516,11 @@ function initProfile() {
 }
 
 // ============================================
-// 10-MINUTE CHECK-IN (recommendations + insights prompt)
+// 10-MINUTE REFRESH (recommendations + insights panels)
 // Fires on the clock at :00, :10, :20, :30, :40, :50 while a user is signed in.
-// Uses the latest sensor reading + recent detections; turned off by "Alert Notifications".
+// No notification or pop-up: only heat-stress results raise those.
 // ============================================
 const CHECKIN_EVERY_MS = 10 * 60 * 1000;
-const CHECKIN_STALE_MS = 15 * 60 * 1000;     // older sensor data is flagged on the card
-const CHECKIN_DETECTION_WINDOW_MS = 30 * 60 * 1000;
-const CHECKIN_LEVEL_ORDER = ['LOW', 'MODERATE', 'HIGH', 'CRITICAL'];
-const CHECKIN_LEVEL_TEXT = { LOW: 'Normal', MODERATE: 'Moderate', HIGH: 'High', CRITICAL: 'Critical' };
 let checkinTimer = null;
 
 function checkinLevelFromTemp(temp) {
@@ -4548,77 +4538,13 @@ function checkinUserActive() {
         && !!userUi && !userUi.classList.contains('u-hidden');
 }
 
-// Builds the check-in from the current data, or returns null when there is nothing to report
-function buildCheckin(now = new Date()) {
-    const temps = state.sensorHistory.temp;
-    const hums = state.sensorHistory.humidity;
-    const temp = temps.length ? temps[temps.length - 1] : null;
-    const humidity = hums.length ? hums[hums.length - 1] : null;
-    const tempOk = typeof temp === 'number';
-
-    const recent = recentDuckDetections(now.getTime())[0] || null;
-    // The check-in carries a recommendation, so it needs ducks detected recently too
-    if (!recent) return null;
-
-    // Level = the more serious of the air temperature and the latest detection
-    let level = checkinLevelFromTemp(temp) || 'LOW';
-    if (recent && CHECKIN_LEVEL_ORDER.indexOf(recent.severity) > CHECKIN_LEVEL_ORDER.indexOf(level)) {
-        level = recent.severity;
-    }
-    const top = recommendationFor(recent, recommendations[level] ? level : 'LOW');
-    const stale = !state.lastSensorAt || now - state.lastSensorAt > CHECKIN_STALE_MS;
-
-    return {
-        level,
-        temp: tempOk ? temp : null,
-        humidity: typeof humidity === 'number' ? humidity : null,
-        stale,
-        detection: recent,
-        rec: {
-            ...top,
-            id: `checkin-${now.getTime()}`,
-            timestamp: formatTimestamp(now),
-            timestampMs: now.getTime(),
-            severity: level,
-            bodyTemp: recent ? recent.bodyTemp : (tempOk ? temp : null),
-            lowTemp: recent?.lowTemp ?? null,
-            highTemp: recent?.highTemp ?? null,
-            duckCount: recent?.count ?? null,
-            batchCount: recent?.batchCount ?? null,
-            confidence: null,
-            isHeatStress: recent ? recent.isHeatStress : level !== 'LOW',
-        },
-        at: now,
-    };
-}
-
-function runCheckin(now = new Date()) {
-    if (!checkinUserActive()) return null;
+function runCheckin() {
+    if (!checkinUserActive()) return;
 
     // Refresh the Recommendations + Insights panels on the same rhythm
     renderRecommendations();
     renderLiveDetections();
     updateStats();
-
-    if (!state.alertsEnabled) return null;
-    const checkin = buildCheckin(now);
-    if (!checkin) return null;
-
-    // Moderate or worse goes into the bell list; only High / Critical also pops up
-    if (checkin.level !== 'LOW') {
-        const alertId = `checkin-${now.getTime()}`;
-        showAlert({
-            id: alertId,
-            kind: 'checkin',
-            timestamp: now,
-            bodyTemp: checkin.temp != null ? Number(checkin.temp).toFixed(1) : '--',
-            severity: checkin.level,
-            rec: checkin.rec,
-        });
-        checkin.alertId = alertId;
-    }
-    showCheckinToast(checkin);
-    return checkin;
 }
 
 // Next :00 / :10 / :20 ... boundary (re-scheduled every time, so it never drifts)
@@ -4706,30 +4632,59 @@ function summaryDetections() {
     return state.detections.filter((d) => !(d.hasInterval && d.interval === 30) || !windowCovered(d));
 }
 
-// Live list, recommendations, check-ins and alerts use the 10-minute rows
-// (fresher). Old rows saved before the interval column are kept in both.
-// Recommendations use the same rows as the totals (10-minute rows, or the
-// 30-minute row where no 10-minute rows were saved)
+// Insights page Results (live list) and Recommendations show only the 30-minute
+// readings (every 30 minutes from the first detection); first detections are left out
 function detailDetections() {
-    return summaryDetections();
+    return thirtyMinuteReadings();
 }
 
-// Recommendations (panel + check-in) only appear when ducks were detected
-// recently: a saved 10- or 30-minute row with ducks in the last 30 minutes
-const RECOMMENDATION_WINDOW_MS = 30 * 60 * 1000;
-
-function recentDuckDetections(now = Date.now()) {
-    return detailDetections().filter((d) => d.count > 0
-        && d.timestamp instanceof Date
-        && now - d.timestamp.getTime() <= RECOMMENDATION_WINDOW_MS);
+// Alerts (bell + pop-up): the 30-minute readings (see logEntryLabels) whose
+// status is Heat Stress, e.g. first detection 12:10 -> 12:40, 1:10. First
+// detections and the results between readings raise nothing.
+// Returns the ids of the results that raise an alert.
+function heatStressAlertIds(rows = summaryDetections()) {
+    const entries = logEntryLabels(rows);
+    return new Set(rows.filter((d) => d.isHeatStress && isThirtyMinuteReading(d, entries)).map((d) => d.id));
 }
 
-function intervalBadge(d) {
-    if (!d.hasInterval) return '';
-    const label = d.interval === 10 ? '10 min' : '30 min · peak';
-    const style = d.interval === 10
-        ? 'background:#eff6ff;color:#1d4ed8'
-        : 'background:#fff7ed;color:#c2410c';
+// Detection Log entries, whatever the status. The 30-minute monitoring counts
+// from the timestamp of the first detection: first detection 12:10 -> readings
+// at 12:40, 1:10, 1:40 ... and keeps that schedule. A status change or a short
+// gap doesn't restart it (a missed slot just has no reading); only when no
+// ducks are detected for more than 30 minutes does the next result start a new
+// count as a new first detection.
+//   - first detection: listed, no label
+//   - result on each 30-minute step from it: listed, label '30 min'
+// Everything else is hidden. Returns id -> label ('' or '30 min').
+const LOG_EVERY_MS = 30 * 60 * 1000;
+const MARK_SLACK_MS = 60 * 1000;
+
+function logEntryLabels(rows = summaryDetections()) {
+    const sorted = rows
+        .filter((d) => d.timestamp instanceof Date && !Number.isNaN(d.timestamp.getTime()))
+        .slice()
+        .sort((a, b) => a.timestamp - b.timestamp);
+    const shown = new Map();
+    let prev = null;
+    let firstAt = null;
+    sorted.forEach((d) => {
+        if (!prev || d.timestamp - prev.timestamp > LOG_EVERY_MS + MARK_SLACK_MS) {
+            shown.set(d.id, '');
+            firstAt = d.timestamp.getTime();
+        } else {
+            const since = d.timestamp.getTime() - firstAt;
+            const offset = since % LOG_EVERY_MS;
+            const onStep = offset < MARK_SLACK_MS || offset > LOG_EVERY_MS - MARK_SLACK_MS;
+            if (since >= LOG_EVERY_MS - MARK_SLACK_MS && onStep) shown.set(d.id, '30 min');
+        }
+        prev = d;
+    });
+    return shown;
+}
+
+function intervalBadge(label) {
+    if (!label) return '';
+    const style = 'background:#fff7ed;color:#c2410c';
     return ` <span style="display:inline-block;margin-left:.4rem;padding:.05rem .45rem;border-radius:999px;font:700 .68rem 'DM Sans',system-ui,sans-serif;vertical-align:middle;${style}">${label}</span>`;
 }
 
@@ -4838,7 +4793,7 @@ function handleEnvironmentInsert(row) {
     pushSensorPoint(row);
     updateSensorReadings();
     updateEnvChart();
-    // Recommendations/insights refresh on the 10-minute check-in (see CHECK-IN below),
+    // Recommendations/insights refresh every 10 minutes (see 10-MINUTE REFRESH),
     // not on every reading. Heat-stress detections still refresh them immediately.
 }
 
@@ -4849,10 +4804,11 @@ function handleAnalyticsInsert(row) {
     state.detections.unshift(detection);
     refreshDashboard();
 
-    // Always listed in Alerts & Notifications; the pop-up follows the alerts setting
+    // Listed in Alerts & Notifications when it's a 30-minute reading with Heat
+    // Stress; the pop-up follows the same rule and the alerts setting
     syncResultAlerts();
-    const isWindowRow = detection.hasInterval && detection.interval === 30;
-    if (detection.isHeatStress && state.alertsEnabled && !isWindowRow) {
+    const raisesAlert = heatStressAlertIds().has(detection.id);
+    if (state.alertsEnabled && raisesAlert) {
         showToast(detection);
     }
 }
