@@ -5362,7 +5362,8 @@ let adminDeviceTrashReady = true; // false when device_trash.sql has not been ru
 function adminTrashErrorText(error, fallback) {
     // PGRST202 / 42883 / 404: the function is not installed (or PostgREST has not reloaded its schema yet)
     if (error?.code === 'PGRST202' || error?.code === '42883' || error?.status === 404) {
-        return 'Device trash is not set up. Run device_trash.sql in the Supabase SQL Editor.';
+        // Supabase's own text says which function is missing (the trash one, or one it calls)
+        return `Device trash is not set up. Run device_trash.sql in the Supabase SQL Editor.${error?.message ? ` (${error.message})` : ''}`;
     }
     return error?.message ? `${fallback} ${error.message}` : fallback;
 }
