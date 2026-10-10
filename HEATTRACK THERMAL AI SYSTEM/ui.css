@@ -2529,9 +2529,11 @@ img { max-width: 100%; height: auto; display: block; }
     border-radius: 8px;
     overflow: hidden;
     display: block;
-    background: linear-gradient(90deg, #2563eb 0%, #22c55e 33%, #facc15 66%, #ef4444 100%);
+    /* Same INFERNO scale as the feed and the Home page spectrum (.ht-spectrum__bar), 25-45°C */
+    background: linear-gradient(90deg, #000004 0%, #420a68 20%, #932667 40%, #dd513a 60%, #fca50a 80%, #fcffa4 100%);
     box-shadow: 0 6px 18px rgba(15,23,42,0.12), inset 0 -6px 18px rgba(255,255,255,0.02);
-    border: 1px solid rgba(255,255,255,0.03);
+    /* Light outline so the black (coolest) end stays visible against the dark feed */
+    border: 1px solid rgba(255,255,255,0.35);
 }
 .ht-thermal-scale__bar span { display: none; }
 
