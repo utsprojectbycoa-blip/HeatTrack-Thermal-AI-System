@@ -582,7 +582,11 @@ class Camera:
 class Detector:
     """Runs the YOLO model on the newest frame in the background."""
 
-    COLORS = [(80, 200, 80), (0, 165, 255), (60, 60, 230), (230, 160, 40), (200, 80, 200)]
+    # Box colors (BGR) follow each duck's status, same colors and thresholds as the
+    # website (LIVE_TEMP_LEVELS in script.js): above 41 C = Mild, above 42 C = Heat Stress
+    STATUS_COLORS = {"normal": (128, 222, 74), "mild": (36, 191, 251), "stress": (113, 113, 248)}
+    NO_READING_COLOR = (160, 160, 160)   # grey: no body temperature for this duck
+    MILD_C, STRESS_C = 41.0, 42.0
 
     def __init__(self, cam):
         from ultralytics import YOLO   # imported here so streaming works even if missing
@@ -677,9 +681,14 @@ class Detector:
     def draw(self, frame):
         cv2 = self.cv2
         boxes = self.current()
-        class_ids = {name: i for i, name in self.names.items()}
         for x1, y1, x2, y2, name, conf in boxes:
-            color = self.COLORS[class_ids.get(name, 0) % len(self.COLORS)]
+            reading = collector.reading_for((x1, y1, x2, y2)) if collector else None
+            if reading is not None and reading.valid:
+                t = reading.estimated_body_c
+                status = "stress" if t > self.STRESS_C else "mild" if t > self.MILD_C else "normal"
+                color = self.STATUS_COLORS[status]
+            else:
+                color = self.NO_READING_COLOR
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
             label = f"{name} {conf:.2f}"
             (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)
@@ -688,8 +697,7 @@ class Detector:
             cv2.putText(frame, label, (x1 + 3, ty - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
 
             # Body temperature from the thermal camera, inside the box's bottom-left
-            # (highlighted in the box's own color; grey when there is no reading)
-            reading = collector.reading_for((x1, y1, x2, y2)) if collector else None
+            # (tag in the box's own color, white text; grey tag when there is no reading)
             if reading is not None:
                 if reading.valid:
                     temp_text, bg = f"{reading.estimated_body_c:.1f} C", color
@@ -740,7 +748,7 @@ def render_thermal_jpeg(cv2, vmin=None, vmax=None, hud=True):
             if r.thermal_box is None:
                 continue
             x1, y1, x2, y2 = (int(round(v * s)) for v in r.thermal_box)
-            color = (0, 255, 0) if r.valid else (160, 160, 160)
+            color = (255, 255, 255) if r.valid else (160, 160, 160)   # white box + text; grey = no reading
             cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
             text = (f"{r.estimated_body_c:.1f} C" if r.valid
                     else SHORT_REASON.get(r.reason.split(" (")[0], "no reading"))
