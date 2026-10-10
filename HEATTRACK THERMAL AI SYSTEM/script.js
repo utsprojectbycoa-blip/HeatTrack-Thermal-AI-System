@@ -3164,28 +3164,86 @@ function markAlertAsViewed(alertId) {
     }
 }
 
+// One pop-up (lower right) for both heat stress alerts and the 10-minute check-in.
+// It only pops up for heat stress: HIGH or CRITICAL severity.
+let toastTimer = null;
+const TOAST_LEVELS = ['HIGH', 'CRITICAL'];
+const isToastLevel = (level) => TOAST_LEVELS.includes(String(level || '').toUpperCase());
+
+const fmtTemp = (t) => (t != null && t !== '--' && !Number.isNaN(Number(t)) ? `${Number(t).toFixed(1)}°C` : '--');
+
 function showToast(detection) {
-    if (!state.alertsEnabled) return;
-
-    const toast = document.getElementById('alertToast');
-    const msg = document.getElementById('toastMessage');
-    const time = document.getElementById('toastTime');
-
+    if (!state.alertsEnabled || !isToastLevel(detection?.severity)) return;
     state.lastToastDetection = detection;
-    msg.textContent = `Heat stress detected. Body temp: ${detection.bodyTemp}°C, Severity: ${detection.severity}`;
-    time.textContent = formatRelativeTime(detection.timestamp);
+    let action = '';
+    try { action = buildRecommendationFromDetection(detection).action || ''; } catch { /* no recommendation text */ }
+    const stats = [['Body temp', fmtTemp(detection.bodyTemp)]];
+    if (detection.ambientTemp != null) stats.push(['Barn', fmtTemp(detection.ambientTemp)]);
+    if (detection.count != null) stats.push(['Ducks', String(detection.count)]);
+    renderToast({
+        level: detection.severity,
+        title: 'Heat stress detected',
+        icon: 'alert-triangle',
+        stats,
+        action: action || `Severity: ${detection.severity}. Open the details for the recommended actions.`,
+        timestamp: detection.timestamp,
+    });
+}
+
+function showCheckinToast(checkin) {
+    if (!state.alertsEnabled || !isToastLevel(checkin?.level)) return;
+    // A heat stress alert on screen is more important: don't cover it
+    const toast = document.getElementById('alertToast');
+    if (toast?.classList.contains('is-visible') && toast.dataset.kind !== 'checkin') return;
+
+    state.lastToastDetection = { kind: 'checkin', checkin };
+    renderToast({
+        kind: 'checkin',
+        level: checkin.level,
+        title: '10-minute check-in',
+        icon: 'clock',
+        stats: [
+            ['Temperature', fmtTemp(checkin.temp)],
+            ['Humidity', checkin.humidity != null ? `${Number(checkin.humidity).toFixed(0)}%` : '--'],
+        ],
+        stale: checkin.stale,
+        action: checkin.rec.action,
+        timestamp: checkin.at,
+    });
+}
+
+// Fills the pop-up card (same look as the old check-in card: colored top strip
+// and level badge, readings, the recommended action, Dismiss / View details)
+function renderToast({ kind = 'heatstress', level = 'LOW', title, icon, stats = [], stale = false, action, timestamp }) {
+    const toast = document.getElementById('alertToast');
+    if (!toast) return;
+    toast.dataset.kind = kind;
+    toast.dataset.level = level;
+    toast.querySelector('.ht-toast__icon').innerHTML = `<i data-lucide="${icon}"></i>`;
+    document.getElementById('toastTitle').textContent = title;
+    document.getElementById('toastLevel').textContent = level;   // LOW / MODERATE / HIGH / CRITICAL, like the Severity pills
+
+    const statsEl = document.getElementById('toastStats');
+    statsEl.innerHTML = '';
+    stats.forEach(([label, value]) => {
+        const span = document.createElement('span');
+        span.append(`${label} `);
+        const b = document.createElement('b');
+        b.textContent = value;
+        span.appendChild(b);
+        statsEl.appendChild(span);
+    });
+    document.getElementById('toastStale').hidden = !stale;
+    document.getElementById('toastMessage').textContent = action;
+    const at = new Date(timestamp);
+    document.getElementById('toastTime').textContent = Number.isNaN(at.getTime())
+        ? '' : at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    lucide.createIcons();
 
     toast.classList.add('is-visible');
-
-    // Mark as viewed when user clicks the toast
-    const toastCard = toast.querySelector('.ht-toast__card');
-    if (toastCard) {
-        toastCard.style.cursor = 'pointer';
-    }
-
-    setTimeout(() => {
-        toast.classList.remove('is-visible');
-    }, 5000);
+    // Restart the 5-second timer so a new pop-up isn't closed early by the previous one
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('is-visible'), 5000);
 }
 
 function updateSystemToggleStates() {
@@ -3928,11 +3986,17 @@ function setupEventListeners() {
         toast.classList.remove('is-visible');
     });
 
-    // Click toast to open recommendation details and mark as viewed
-    document.getElementById('alertToast')?.addEventListener('click', (e) => {
-        if (e.target.closest('#closeToast')) return;
+    // "View details": open the recommendation details and mark the alert as viewed
+    document.getElementById('toastDetails')?.addEventListener('click', () => {
+        document.getElementById('alertToast')?.classList.remove('is-visible');
         const detection = state.lastToastDetection;
         if (!detection) return;
+        if (detection.kind === 'checkin') {
+            const { checkin } = detection;
+            if (checkin.alertId) markAlertAsViewed(checkin.alertId);
+            openRecommendationModal(checkin.rec, checkin.temp);
+            return;
+        }
         if (detection.id) {
             markAlertAsViewed(detection.id);
         }
@@ -4528,116 +4592,6 @@ function buildCheckin(now = new Date()) {
     };
 }
 
-function ensureCheckinStyles() {
-    if (document.getElementById('htCheckinStyles')) return;
-    const style = document.createElement('style');
-    style.id = 'htCheckinStyles';
-    style.textContent = `
-.ht-checkin{position:fixed;left:1.5rem;bottom:1.5rem;z-index:55;width:min(23rem,calc(100vw - 2rem));border-radius:18px;background:#fff;box-shadow:0 18px 50px rgba(15,23,42,.22);border:1px solid rgba(15,23,42,.08);border-top:5px solid var(--ci,#16a34a);font-family:'DM Sans',system-ui,sans-serif;color:#0f172a;opacity:0;transform:translateY(1.5rem);pointer-events:none;transition:opacity .35s ease,transform .35s ease}
-.ht-checkin.is-visible{opacity:1;transform:none;pointer-events:auto}
-.ht-checkin__body{padding:1rem 1.1rem .9rem}
-.ht-checkin__head{display:flex;align-items:center;justify-content:space-between;gap:.75rem;margin-bottom:.55rem}
-.ht-checkin__title{display:flex;align-items:center;gap:.45rem;font-weight:700;font-size:.95rem}
-.ht-checkin__title svg{width:1.05rem;height:1.05rem;color:var(--ci,#16a34a)}
-.ht-checkin__level{padding:.2rem .6rem;border-radius:999px;font-size:.72rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#fff;background:var(--ci,#16a34a)}
-.ht-checkin__stats{display:flex;flex-wrap:wrap;gap:.35rem .9rem;margin:0 0 .5rem;font-size:.82rem;color:#475569}
-.ht-checkin__stats b{color:#0f172a}
-.ht-checkin__stale{margin:0 0 .5rem;font-size:.78rem;font-weight:600;color:#b45309}
-.ht-checkin__det{margin:0 0 .55rem;font-size:.8rem;color:#475569}
-.ht-checkin__action{margin:0;padding:.6rem .7rem;border-radius:12px;background:#f8fafc;font-size:.86rem;font-weight:600;line-height:1.4}
-.ht-checkin__foot{display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.65rem 1.1rem .85rem}
-.ht-checkin__time{font-size:.75rem;color:#94a3b8}
-.ht-checkin__btns{display:flex;gap:.4rem}
-.ht-checkin__btn{padding:.45rem .85rem;border-radius:999px;border:1px solid #e2e8f0;background:#fff;color:#334155;font:700 .8rem 'DM Sans',system-ui,sans-serif;cursor:pointer}
-.ht-checkin__btn--primary{border-color:transparent;background:var(--ci,#16a34a);color:#fff}
-.ht-checkin__btn:focus-visible{outline:3px solid rgba(249,115,22,.35);outline-offset:2px}
-@media (max-width:600px){.ht-checkin{left:1rem;right:1rem;bottom:1rem;width:auto}}
-@media (prefers-reduced-motion:reduce){.ht-checkin{transition:none}}`;
-    document.head.appendChild(style);
-}
-
-function ensureCheckinCard() {
-    let card = document.getElementById('htCheckin');
-    if (card) return card;
-    ensureCheckinStyles();
-    card = document.createElement('section');
-    card.id = 'htCheckin';
-    card.className = 'ht-checkin';
-    card.setAttribute('role', 'status');
-    card.setAttribute('aria-live', 'polite');
-    card.setAttribute('aria-label', '10-minute check-in');
-    card.innerHTML = `
-        <div class="ht-checkin__body">
-            <div class="ht-checkin__head">
-                <span class="ht-checkin__title"><i data-lucide="clock"></i> 10-minute check-in</span>
-                <span class="ht-checkin__level" data-ci="level"></span>
-            </div>
-            <p class="ht-checkin__stats" data-ci="stats"></p>
-            <p class="ht-checkin__stale" data-ci="stale" hidden>No new sensor reading in the last 15 minutes. Check the device.</p>
-            <p class="ht-checkin__det" data-ci="det" hidden></p>
-            <p class="ht-checkin__action" data-ci="action"></p>
-        </div>
-        <div class="ht-checkin__foot">
-            <span class="ht-checkin__time" data-ci="time"></span>
-            <span class="ht-checkin__btns">
-                <button type="button" class="ht-checkin__btn" data-ci="dismiss">Dismiss</button>
-                <button type="button" class="ht-checkin__btn ht-checkin__btn--primary" data-ci="details">View details</button>
-            </span>
-        </div>`;
-    document.body.appendChild(card);
-    card.querySelector('[data-ci="dismiss"]').addEventListener('click', hideCheckinCard);
-    card.querySelector('[data-ci="details"]').addEventListener('click', () => {
-        const checkin = card.__checkin;
-        hideCheckinCard();
-        if (checkin) {
-            if (checkin.alertId) markAlertAsViewed(checkin.alertId);
-            openRecommendationModal(checkin.rec, checkin.temp);
-        }
-    });
-    return card;
-}
-
-function hideCheckinCard() {
-    document.getElementById('htCheckin')?.classList.remove('is-visible');
-}
-
-const CHECKIN_COLORS = { LOW: '#16a34a', MODERATE: '#d97706', HIGH: '#ea580c', CRITICAL: '#dc2626' };
-
-function showCheckinCard(checkin) {
-    const card = ensureCheckinCard();
-    const set = (key, text) => { card.querySelector(`[data-ci="${key}"]`).textContent = text; };
-    card.style.setProperty('--ci', CHECKIN_COLORS[checkin.level] || CHECKIN_COLORS.LOW);
-    set('level', CHECKIN_LEVEL_TEXT[checkin.level] || checkin.level);
-
-    const stats = card.querySelector('[data-ci="stats"]');
-    stats.innerHTML = '';
-    const addStat = (label, value) => {
-        const span = document.createElement('span');
-        span.append(`${label} `);
-        const b = document.createElement('b');
-        b.textContent = value;
-        span.appendChild(b);
-        stats.appendChild(span);
-    };
-    addStat('Temperature', checkin.temp != null ? `${Number(checkin.temp).toFixed(1)}°C` : '--');
-    addStat('Humidity', checkin.humidity != null ? `${Number(checkin.humidity).toFixed(0)}%` : '--');
-
-    card.querySelector('[data-ci="stale"]').hidden = !checkin.stale;
-    const det = card.querySelector('[data-ci="det"]');
-    if (checkin.detection) {
-        const d = checkin.detection;
-        det.textContent = `Latest detection: ${d.status} · ${d.bodyTemp}°C body temp · ${d.count} duck${d.count === 1 ? '' : 's'} · ${formatRelativeTime(d.timestamp)}`;
-        det.hidden = false;
-    } else {
-        det.hidden = true;
-    }
-    set('action', checkin.rec.action);
-    set('time', checkin.at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }));
-    card.__checkin = checkin;
-    lucide.createIcons();
-    card.classList.add('is-visible');
-}
-
 function runCheckin(now = new Date()) {
     if (!checkinUserActive()) return null;
 
@@ -4646,11 +4600,11 @@ function runCheckin(now = new Date()) {
     renderLiveDetections();
     updateStats();
 
-    if (!state.alertsEnabled) { hideCheckinCard(); return null; }
+    if (!state.alertsEnabled) return null;
     const checkin = buildCheckin(now);
     if (!checkin) return null;
 
-    // Moderate or worse also goes into the bell list (Normal check-ins stay card-only)
+    // Moderate or worse goes into the bell list; only High / Critical also pops up
     if (checkin.level !== 'LOW') {
         const alertId = `checkin-${now.getTime()}`;
         showAlert({
@@ -4663,7 +4617,7 @@ function runCheckin(now = new Date()) {
         });
         checkin.alertId = alertId;
     }
-    showCheckinCard(checkin);
+    showCheckinToast(checkin);
     return checkin;
 }
 
@@ -4679,10 +4633,6 @@ function scheduleCheckin() {
 
 document.addEventListener('DOMContentLoaded', () => {
     scheduleCheckin();
-    // Turning Alert Notifications off hides an open check-in
-    document.getElementById('alertToggle')?.addEventListener('change', (e) => {
-        if (!e.target.checked) hideCheckinCard();
-    });
 });
 
 // ============================================
@@ -4839,7 +4789,6 @@ function resetDashboardData() {
     state.lastToastDetection = null;
     state.lastSensorAt = null;
     state.lastDhtAt = null;
-    hideCheckinCard();
     document.getElementById('alertBadge')?.classList.add('u-hidden');
     refreshDashboard();
 }
