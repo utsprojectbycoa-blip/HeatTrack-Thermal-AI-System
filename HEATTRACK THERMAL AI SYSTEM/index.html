@@ -1826,17 +1826,25 @@
         </footer>
 
         <!-- TOAST -->
-        <div id="alertToast" class="ht-toast" role="status">
-            <div class="ht-toast__card">
-                <div class="ht-toast__icon"><i data-lucide="alert-triangle"></i></div>
-                <div class="ht-toast__body">
-                    <div class="ht-toast__title">HEAT STRESS DETECTED</div>
-                    <div id="toastMessage" class="ht-toast__msg">Heat stress detected. Body temp: 42.8°C</div>
-                    <div id="toastTime" class="ht-toast__time">Just now</div>
+        <!-- One pop-up for heat stress alerts and the 10-minute check-in (filled by renderToast in script.js) -->
+        <section id="alertToast" class="ht-toast" role="status" aria-live="polite" aria-label="Notification">
+            <div class="ht-toast__body">
+                <div class="ht-toast__head">
+                    <span class="ht-toast__title"><span class="ht-toast__icon"><i data-lucide="alert-triangle"></i></span><span id="toastTitle">Heat stress detected</span></span>
+                    <span id="toastLevel" class="ht-toast__level"></span>
                 </div>
-                <button type="button" id="closeToast" class="ht-toast__close" aria-label="Close"><i data-lucide="x"></i></button>
+                <p id="toastStats" class="ht-toast__stats"></p>
+                <p id="toastStale" class="ht-toast__stale" hidden>No new sensor reading in the last 15 minutes. Check the device.</p>
+                <p id="toastMessage" class="ht-toast__action"></p>
             </div>
-        </div>
+            <div class="ht-toast__foot">
+                <span id="toastTime" class="ht-toast__time"></span>
+                <span class="ht-toast__btns">
+                    <button type="button" id="closeToast" class="ht-toast__btn">Dismiss</button>
+                    <button type="button" id="toastDetails" class="ht-toast__btn ht-toast__btn--primary">View details</button>
+                </span>
+            </div>
+        </section>
 
         <!-- RECOMMENDATION MODAL -->
         <div id="recommendationModal" class="ht-modal" role="dialog" aria-modal="true" aria-labelledby="recommendation-modal-title">
