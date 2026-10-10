@@ -334,6 +334,19 @@
                                 </tr>
                             </thead>
                             <tbody id="adminPendingBody"></tbody>
+                            <!-- Hidden sizing row (same in Account Requests and Approved Accounts, so
+                                 both tables line up): the maximum width of each column -->
+                            <tfoot class="ht-admin-sizer" aria-hidden="true">
+                                <tr>
+                                    <td><div class="ht-admin-sizer__cell"></div></td>
+                                    <td><div class="ht-admin-sizer__cell"></div></td>
+                                    <td><div class="ht-admin-sizer__cell"></div></td>
+                                    <td><div class="ht-admin-sizer__cell"></div></td>
+                                    <td><div class="ht-admin-sizer__cell">Not provided</div></td>
+                                    <td><div class="ht-admin-sizer__cell"><span class="ht-adash__chip ht-adash__chip--approved">Approved</span></div></td>
+                                    <td><div class="ht-admin-sizer__cell"><div class="ht-admin-ui__actions"><button type="button" class="ht-btn ht-btn--small ht-btn--ghost" tabindex="-1"><i data-lucide="check"></i>Accept</button><button type="button" class="ht-btn ht-btn--small ht-btn--ghost" tabindex="-1"><i data-lucide="x"></i>Reject</button></div></div></td>
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
                     <div class="ht-panel__foot">
@@ -387,6 +400,19 @@
                                 </tr>
                             </thead>
                             <tbody id="adminUsersBody"></tbody>
+                            <!-- Hidden sizing row (same in Account Requests and Approved Accounts, so
+                                 both tables line up): the maximum width of each column -->
+                            <tfoot class="ht-admin-sizer" aria-hidden="true">
+                                <tr>
+                                    <td><div class="ht-admin-sizer__cell"></div></td>
+                                    <td><div class="ht-admin-sizer__cell"></div></td>
+                                    <td><div class="ht-admin-sizer__cell"></div></td>
+                                    <td><div class="ht-admin-sizer__cell"></div></td>
+                                    <td><div class="ht-admin-sizer__cell">Not provided</div></td>
+                                    <td><div class="ht-admin-sizer__cell"><span class="ht-adash__chip ht-adash__chip--approved">Approved</span></div></td>
+                                    <td><div class="ht-admin-sizer__cell"><div class="ht-admin-ui__actions"><button type="button" class="ht-btn ht-btn--small ht-btn--ghost" tabindex="-1"><i data-lucide="check"></i>Accept</button><button type="button" class="ht-btn ht-btn--small ht-btn--ghost" tabindex="-1"><i data-lucide="x"></i>Reject</button></div></div></td>
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
                     <div class="ht-panel__foot">
@@ -752,22 +778,22 @@
                                         <li>
                                             <span class="ht-about-highlight__icon ht-about-highlight__icon--thermal"><i data-lucide="scan-eye"></i></span>
                                             <div>
-                                                <strong>Thermal imaging</strong>
-                                                <p>Detect surface temperature changes before visible distress.</p>
+                                                <strong>Thermal detection</strong>
+                                                <p>Find each duck in view and estimate its body temperature.</p>
                                             </div>
                                         </li>
                                         <li>
                                             <span class="ht-about-highlight__icon ht-about-highlight__icon--sensor"><i data-lucide="gauge"></i></span>
                                             <div>
                                                 <strong>Environmental sensing</strong>
-                                                <p>Track temperature and humidity in the barn.</p>
+                                                <p>Track barn temperature and humidity with the DHT22 sensor.</p>
                                             </div>
                                         </li>
                                         <li>
                                             <span class="ht-about-highlight__icon ht-about-highlight__icon--ai"><i data-lucide="lightbulb"></i></span>
                                             <div>
                                                 <strong>AI-guided actions</strong>
-                                                <p>Heat stress alerts and recommended actions.</p>
+                                                <p>AI-rated heat stress risk, with alerts and recommended actions.</p>
                                             </div>
                                         </li>
                                     </ul>
@@ -791,7 +817,7 @@
                                     <i data-lucide="video"></i>
                                 </div>
                                 <h3 class="ht-jump-card__title">Live Monitoring</h3>
-                                <p class="ht-jump-card__text">Real-time RGB and thermal streams with live detection and sensor readings.</p>
+                                <p class="ht-jump-card__text">Live RGB and thermal camera feeds with duck detection, plus DHT22 temperature and humidity readings.</p>
                                 <span class="ht-jump-card__cta">Open Live <i data-lucide="chevron-right"></i></span>
                             </a>
                             <a href="#analytics" class="ht-jump-card">
@@ -799,7 +825,7 @@
                                     <i data-lucide="line-chart"></i>
                                 </div>
                                 <h3 class="ht-jump-card__title">Analytics</h3>
-                                <p class="ht-jump-card__text">Review detection history, trends, and severity distributions with Excel report export.</p>
+                                <p class="ht-jump-card__text">Review the Detection Log History, Severity Levels, and Detection Distribution charts, and export Excel reports.</p>
                                 <span class="ht-jump-card__cta">Open Analytics <i data-lucide="chevron-right"></i></span>
                             </a>
                             <a href="#insights" class="ht-jump-card">
@@ -807,7 +833,7 @@
                                     <i data-lucide="layout-dashboard"></i>
                                 </div>
                                 <h3 class="ht-jump-card__title">Insights &amp; Actions</h3>
-                                <p class="ht-jump-card__text">Summary KPIs and AI recommendations with full detection details.</p>
+                                <p class="ht-jump-card__text">Duck counts by status and AI recommendations. Open any result for its full detection details.</p>
                                 <span class="ht-jump-card__cta">Open Insights <i data-lucide="chevron-right"></i></span>
                             </a>
                             <a href="#about" class="ht-jump-card">
@@ -815,7 +841,7 @@
                                     <i data-lucide="info"></i>
                                 </div>
                                 <h3 class="ht-jump-card__title">About HeatTrack</h3>
-                                <p class="ht-jump-card__text">System overview, heat stress guide, capabilities, and operation benefits.</p>
+                                <p class="ht-jump-card__text">Heat stress guide, features, AI recommendations, how monitoring works, and system benefits.</p>
                                 <span class="ht-jump-card__cta">Learn More <i data-lucide="chevron-right"></i></span>
                             </a>
                         </div>
@@ -835,7 +861,7 @@
                                 <div class="ht-article-card__icon ht-article-card__icon--thermal"><i data-lucide="eye"></i></div>
                                 <h3 class="ht-article-card__h">Thermal Color Spectrum</h3>
                             </div>
-                            <p class="ht-prose ht-quickref-intro">The thermal camera shows each duck's surface heat as a color. Green means the ducks are comfortable, yellow is an early warning, orange calls for cooling, and red is an emergency.</p>
+                            <p class="ht-prose ht-quickref-intro">The Thermal Monitor on the Live page shows surface heat on a fixed 25–45°C color scale: dark purple is coolest and pale yellow is hottest. Each duck the system finds gets a box. A green box shows the duck's estimated body temperature, taken from its hottest spot (marked with a white cross). A gray box means the duck could not be measured, for example when it is at the edge of the frame, too far away, or overlapping another duck. The colors show heat only; the heat stress rating comes from the Status &amp; Severity levels below.</p>
                             <div class="ht-spectrum" role="region" aria-label="Thermal Color Spectrum">
                                 <div class="ht-spectrum__scale" aria-hidden="true">
                                     <div class="ht-spectrum__bar">
@@ -844,10 +870,10 @@
                                         <span class="ht-spectrum__tick"></span>
                                     </div>
                                     <div class="ht-spectrum__labels">
-                                        <span class="ht-spectrum__label--mid">Low</span>
-                                        <span class="ht-spectrum__label--warm">Moderate</span>
-                                        <span class="ht-spectrum__label--hot">High</span>
-                                        <span class="ht-spectrum__label--critical">Critical</span>
+                                        <span class="ht-spectrum__label--mid">25–30°C</span>
+                                        <span class="ht-spectrum__label--warm">30–35°C</span>
+                                        <span class="ht-spectrum__label--hot">35–40°C</span>
+                                        <span class="ht-spectrum__label--critical">40–45°C</span>
                                     </div>
                                     <div class="ht-spectrum__axis">
                                         <span><i data-lucide="thermometer-snowflake"></i> Cooler</span>
@@ -858,38 +884,38 @@
                                     <li class="ht-spectrum__item ht-spectrum__item--mid">
                                         <div class="ht-spectrum__item-head">
                                             <span class="ht-spectrum__dot ht-spectrum__dot--mid" aria-hidden="true"></span>
-                                            <span class="ht-spectrum__level">Level 1</span>
+                                            <span class="ht-spectrum__level">25–30°C</span>
                                         </div>
-                                        <strong>Green — Low Risk</strong>
-                                        <p>Thermal readings are within a safe, normal range. No intervention needed. Continue routine monitoring and maintain current operating conditions.</p>
-                                        <span class="ht-spectrum__action"><i data-lucide="circle-check"></i> Routine monitoring</span>
+                                        <strong>Black to Purple — Coolest</strong>
+                                        <p>The coolest surfaces in view, usually the background: floor, water, and shaded areas. Anything at or below 25°C shows as black.</p>
+                                        <span class="ht-spectrum__action"><i data-lucide="thermometer-snowflake"></i> Background</span>
                                     </li>
                                     <li class="ht-spectrum__item ht-spectrum__item--warm">
                                         <div class="ht-spectrum__item-head">
                                             <span class="ht-spectrum__dot ht-spectrum__dot--warm" aria-hidden="true"></span>
-                                            <span class="ht-spectrum__level">Level 2</span>
+                                            <span class="ht-spectrum__level">30–35°C</span>
                                         </div>
-                                        <strong>Yellow — Moderate Risk</strong>
-                                        <p>Heat levels are rising and approaching concern thresholds. Monitor closely and consider activating preventive cooling measures if conditions continue to climb.</p>
-                                        <span class="ht-spectrum__action"><i data-lucide="eye"></i> Watch closely</span>
+                                        <strong>Red — Warm</strong>
+                                        <p>Warm surfaces, such as a duck's feathered body, where feathers hold most of the heat in, or areas warmed by the sun.</p>
+                                        <span class="ht-spectrum__action"><i data-lucide="feather"></i> Feathered body</span>
                                     </li>
                                     <li class="ht-spectrum__item ht-spectrum__item--hot">
                                         <div class="ht-spectrum__item-head">
                                             <span class="ht-spectrum__dot ht-spectrum__dot--hot" aria-hidden="true"></span>
-                                            <span class="ht-spectrum__level">Level 3</span>
+                                            <span class="ht-spectrum__level">35–40°C</span>
                                         </div>
-                                        <strong>Orange — High Risk</strong>
-                                        <p>Significant heat stress is present and animals may show behavioral signs. Activate cooling systems immediately and observe animals closely for distress indicators.</p>
-                                        <span class="ht-spectrum__action"><i data-lucide="fan"></i> Activate cooling</span>
+                                        <strong>Orange — Hot</strong>
+                                        <p>Hot spots where heat leaves the body, such as the head, eyes, bill, and legs. HeatTrack reads the hottest spot on each duck to estimate its body temperature.</p>
+                                        <span class="ht-spectrum__action"><i data-lucide="scan-eye"></i> Measured spots</span>
                                     </li>
                                     <li class="ht-spectrum__item ht-spectrum__item--critical">
                                         <div class="ht-spectrum__item-head">
                                             <span class="ht-spectrum__dot ht-spectrum__dot--critical" aria-hidden="true"></span>
-                                            <span class="ht-spectrum__level">Level 4</span>
+                                            <span class="ht-spectrum__level">40–45°C</span>
                                         </div>
-                                        <strong>Red — Critical Risk</strong>
-                                        <p>Critical heat stress has been detected and animals are at immediate risk. Emergency intervention is required now. Deploy all available cooling resources and seek veterinary guidance.</p>
-                                        <span class="ht-spectrum__action"><i data-lucide="siren"></i> Emergency response</span>
+                                        <strong>Yellow to White — Hottest</strong>
+                                        <p>The hottest spots in view. Anything at or above 45°C shows as the palest color. Check the box labels for each duck's estimated body temperature.</p>
+                                        <span class="ht-spectrum__action"><i data-lucide="thermometer-sun"></i> Hottest spots</span>
                                     </li>
                                 </ol>
                             </div>
@@ -900,7 +926,7 @@
                                 <div class="ht-article-card__icon ht-article-card__icon--thermal"><i data-lucide="gauge"></i></div>
                                 <h3 class="ht-article-card__h">Status &amp; Severity Levels</h3>
                             </div>
-                            <p class="ht-prose ht-quickref-intro">Every reading gets two labels. The <strong>Status</strong> tells you whether a duck is under heat stress: Normal, Mild, or Heat Stress. The <strong>Severity Level</strong> tells you how urgent it is: Low, Moderate, High, or Critical. Check the status at a glance, then let the severity tell you how fast to act.</p>
+                            <p class="ht-prose ht-quickref-intro">Every 10 and 30 minutes, HeatTrack saves a detection record with two labels. An AI model sets the <strong>Severity Level</strong> (Low, Moderate, High, or Critical) from the highest barn temperature in that period and the humidity at that moment, both measured by the DHT22 sensor. The <strong>Status</strong> (Normal, Mild, or Heat Stress) follows from the severity, as shown below. The temperatures listed are barn air temperatures and serve as a guide; because the model also weighs humidity, a very humid barn can be rated higher at the same temperature. Each record also lists the ducks' lowest, average, and highest body temperatures from the thermal camera. Check the status at a glance, then let the severity tell you how fast to act.</p>
                             <div class="ht-status-guide">
                                 <!-- Mapping: 4 severity levels grouped under 3 statuses -->
                                 <div class="ht-status-map" role="img" aria-label="Low is Normal, Moderate is Mild, High and Critical are Heat Stress">
@@ -929,7 +955,7 @@
                                             </div>
                                         </div>
                                         <div class="ht-tier-card__body">
-                                            <p>Body temperatures are in the safe range and ducks are shedding heat normally. No intervention is needed.</p>                                        </div>
+                                            <p>Barn temperature is <strong>34°C or below</strong> and humidity is in a safe range, so the ducks can shed heat normally. No intervention is needed.</p>                                        </div>
                                         <div class="ht-tier-card__action"><i data-lucide="circle-check"></i> Keep routine monitoring</div>
                                     </li>
                                     <li class="ht-tier-card ht-tier-card--mild">
@@ -941,7 +967,7 @@
                                             </div>
                                         </div>
                                         <div class="ht-tier-card__body">
-                                            <p>Heat is building up and early signs may appear. Act early so conditions do not climb into heat stress.</p>                                        </div>
+                                            <p>Barn temperature is <strong>above 34°C, up to 37°C</strong>. Heat and humidity are building up, and early signs may appear. Act early so conditions do not climb into heat stress.</p>                                        </div>
                                         <div class="ht-tier-card__action"><i data-lucide="shield"></i> Take preventive steps</div>
                                     </li>
                                     <li class="ht-tier-card ht-tier-card--stress">
@@ -954,7 +980,7 @@
                                             </div>
                                         </div>
                                         <div class="ht-tier-card__body">
-                                            <p>Ducks are struggling to shed heat. At <strong>High</strong>, start cooling now; at <strong>Critical</strong>, take emergency action and contact a veterinarian.</p>                                        </div>
+                                            <p>Barn conditions make it hard for the ducks to shed heat. At <strong>High</strong> (above 37°C, up to 40°C), start cooling now; at <strong>Critical</strong> (above 40°C), take emergency action and contact a veterinarian.</p>                                        </div>
                                         <div class="ht-tier-card__action"><i data-lucide="siren"></i> Cool down immediately</div>
                                     </li>
                                 </ol>
@@ -991,7 +1017,7 @@
                                     <span class="ht-guide-card__icon"><i data-lucide="thermometer-sun"></i></span>
                                     <h3 class="ht-guide-card__title">What is heat stress?</h3>
                                 </div>
-                                <p class="ht-guide-card__text">Heat stress occurs when a duck's body cannot dissipate heat fast enough and internal temperature rises above safe limits. Early signs are subtle behavioral changes — not just hot air temperatures — which is why thermal imaging is critical for early detection.</p>
+                                <p class="ht-guide-card__text">Heat stress occurs when a duck cannot shed heat fast enough and its body temperature rises above safe limits. Hot, humid air is the main driver, so HeatTrack rates the risk from barn conditions and tracks body temperatures with a thermal camera.</p>
                                 <div class="ht-guide-card__box">
                                     <p class="ht-guide-card__label">Signs to watch for</p>
                                     <ul class="ht-guide-card__list">
@@ -1023,7 +1049,7 @@
                                     <span class="ht-guide-card__icon"><i data-lucide="shield-check"></i></span>
                                     <h3 class="ht-guide-card__title">Why early detection matters</h3>
                                 </div>
-                                <p class="ht-guide-card__text">Catching heat stress early gives farm operators a window to act before performance drops, welfare is compromised, or mortality risk increases. Use Live behavior cues, Analytics trends, and Insights alerts together for the fastest response.</p>
+                                <p class="ht-guide-card__text">Catching heat stress early gives farm operators a window to act before performance drops, welfare is compromised, or mortality risk increases. Use the Live feeds, Analytics records, alerts, and Insights together.</p>
                                 <div class="ht-guide-card__box">
                                     <p class="ht-guide-card__label">What you gain</p>
                                     <ul class="ht-guide-card__list">
@@ -1051,7 +1077,7 @@
                                     <span class="ht-cap-card__icon"><i data-lucide="scan-eye"></i></span>
                                     <h3 class="ht-cap-card__title">Dual-Camera Detection</h3>
                                 </div>
-                                <p class="ht-cap-card__text">Synchronized RGB and thermal streams with AI overlays highlight at-risk ducks before visible distress spreads to other ducks.</p>
+                                <p class="ht-cap-card__text">An AI model finds and counts the ducks on the RGB feed, while the thermal feed boxes each duck with its estimated body temperature in real time.</p>
                                 <a href="#live" class="ht-cap-card__link">Open Live <i data-lucide="arrow-right"></i></a>
                             </article>
                             <article class="ht-cap-card ht-cap-card--sensor">
@@ -1059,7 +1085,7 @@
                                     <span class="ht-cap-card__icon"><i data-lucide="gauge"></i></span>
                                     <h3 class="ht-cap-card__title">Environmental Sensing</h3>
                                 </div>
-                                <p class="ht-cap-card__text">DHT22 readings for temperature and humidity are logged continuously and charted for trend-based decisions.</p>
+                                <p class="ht-cap-card__text">DHT22 temperature and humidity readings are saved every 10 seconds and charted live, so you can see how barn conditions change over time.</p>
                                 <a href="#live" class="ht-cap-card__link">View sensor readings <i data-lucide="arrow-right"></i></a>
                             </article>
                             <article class="ht-cap-card ht-cap-card--alert">
@@ -1067,7 +1093,7 @@
                                     <span class="ht-cap-card__icon"><i data-lucide="bell-ring"></i></span>
                                     <h3 class="ht-cap-card__title">Severity-Based Alerts</h3>
                                 </div>
-                                <p class="ht-cap-card__text">Heat Stress alerts show the severity (High or Critical), body temperature, and time, so you can prioritize your response and match it to the actual risk.</p>
+                                <p class="ht-cap-card__text">Heat Stress alerts show the severity, body temperature, and time so you can act first where it matters. A 10-minute check-in tracks the barn.</p>
                                 <a href="#insights" class="ht-cap-card__link">View recommendations <i data-lucide="arrow-right"></i></a>
                             </article>
                             <article class="ht-cap-card ht-cap-card--insight">
@@ -1075,7 +1101,7 @@
                                     <span class="ht-cap-card__icon"><i data-lucide="lightbulb"></i></span>
                                     <h3 class="ht-cap-card__title">Actionable Insights</h3>
                                 </div>
-                                <p class="ht-cap-card__text">Context-aware recommendations suggest cooling steps, hydration checks, and monitoring intervals tailored to current barn conditions.</p>
+                                <p class="ht-cap-card__text">Each record comes with cooling, hydration, and recheck steps matched to its severity, rewritten by AI for current conditions when available.</p>
                                 <a href="#insights" class="ht-cap-card__link">Open Insights <i data-lucide="arrow-right"></i></a>
                             </article>
                         </div>
@@ -1089,28 +1115,28 @@
                         <header class="ht-section-head ht-section-head--center">
                             <p class="ht-section-eyebrow">Smart Guidance</p>
                             <h2 id="rec-preview-heading" class="ht-section-title">AI Recommendations at a Glance</h2>
-                            <p class="ht-section-sub">The Insights view organizes guidance into clear categories so every alert comes with practical next steps.</p>
+                            <p class="ht-section-sub">Open any result on the Insights page, or any row in the Detection Log History, to see its full guidance in four parts.</p>
                         </header>
                         <div class="ht-rec-preview-grid">
+                            <article class="ht-rec-preview-card ht-rec-preview-card--thermal">
+                                <div class="ht-rec-preview-card__icon"><i data-lucide="clipboard-list"></i></div>
+                                <h3 class="ht-rec-preview-card__title">Detection Details</h3>
+                                <p class="ht-rec-preview-card__text">The record's status, severity, body and barn temperatures, duck count, and time.</p>
+                            </article>
+                            <article class="ht-rec-preview-card ht-rec-preview-card--info">
+                                <div class="ht-rec-preview-card__icon"><i data-lucide="file-text"></i></div>
+                                <h3 class="ht-rec-preview-card__title">Summary</h3>
+                                <p class="ht-rec-preview-card__text">What was found, such as how many ducks show signs of heat stress and the overall risk.</p>
+                            </article>
                             <article class="ht-rec-preview-card ht-rec-preview-card--urgent">
                                 <div class="ht-rec-preview-card__icon"><i data-lucide="zap"></i></div>
                                 <h3 class="ht-rec-preview-card__title">Suggested Actions</h3>
-                                <p class="ht-rec-preview-card__text">Immediate cooling, relocation, and hydration steps matched to each severity level.</p>
+                                <p class="ht-rec-preview-card__text">Cooling, relocation, and hydration steps matched to the record's severity level.</p>
                             </article>
                             <article class="ht-rec-preview-card ht-rec-preview-card--caution">
                                 <div class="ht-rec-preview-card__icon"><i data-lucide="shield"></i></div>
-                                <h3 class="ht-rec-preview-card__title">Prevention Tips</h3>
-                                <p class="ht-rec-preview-card__text">Ventilation checks, shade deployment, and feeding schedule adjustments to reduce heat load proactively.</p>
-                            </article>
-                            <article class="ht-rec-preview-card ht-rec-preview-card--info">
-                                <div class="ht-rec-preview-card__icon"><i data-lucide="cloud-sun"></i></div>
-                                <h3 class="ht-rec-preview-card__title">Environmental Insights</h3>
-                                <p class="ht-rec-preview-card__text">Humidity-aware guidance that explains how ambient conditions amplify or reduce heat stress risk.</p>
-                            </article>
-                            <article class="ht-rec-preview-card ht-rec-preview-card--thermal">
-                                <div class="ht-rec-preview-card__icon"><i data-lucide="thermometer"></i></div>
-                                <h3 class="ht-rec-preview-card__title">Temperature Guidance</h3>
-                                <p class="ht-rec-preview-card__text">Body temperature context, recheck intervals, and thermal image interpretation for each detection.</p>
+                                <h3 class="ht-rec-preview-card__title">Heat Stress Prevention</h3>
+                                <p class="ht-rec-preview-card__text">Ventilation, shade, water, and feeding-time steps that lower heat load early.</p>
                             </article>
                         </div>
                         <div class="ht-rec-preview-cta">
@@ -1141,16 +1167,16 @@
                                 <p class="ht-monitor-card__text">Side-by-side RGB and thermal feeds with detection boxes, FPS counters, and per-camera duck statistics updated in real time.</p>
                                 <ul class="ht-monitor-card__list">
                                     <li>Fullscreen zoom on both cameras</li>
-                                    <li>Heat stress vs. normal counts</li>
+                                    <li>Normal, Mild, and Heat Stress counts</li>
                                     <li>Thermal color scale reference</li>
                                 </ul>
                             </article>
                             <article class="ht-monitor-card">
                                 <div class="ht-monitor-card__head">
                                     <i data-lucide="line-chart"></i>
-                                    <h3 class="ht-monitor-card__title">Trend Analytics</h3>
+                                    <h3 class="ht-monitor-card__title">Detection Analytics</h3>
                                 </div>
-                                <p class="ht-monitor-card__text">Historical logs, severity charts, and distribution views help you spot patterns across shifts, weather changes, and duck density.</p>
+                                <p class="ht-monitor-card__text">Records saved every 10 and 30 minutes, with severity and distribution charts, help you spot patterns over days and weather changes.</p>
                                 <ul class="ht-monitor-card__list">
                                     <li>Filterable detection history</li>
                                     <li>Excel report export for records</li>
@@ -1162,7 +1188,7 @@
                                     <i data-lucide="activity"></i>
                                     <h3 class="ht-monitor-card__title">Sensor Dashboard</h3>
                                 </div>
-                                <p class="ht-monitor-card__text">Temperature and humidity tiles with trend indicators and a 60-reading environmental chart.</p>
+                                <p class="ht-monitor-card__text">Temperature and humidity tiles with trend indicators, level meters, and a chart of the last 60 environmental readings.</p>
                                 <ul class="ht-monitor-card__list">
                                     <li>Live DHT22 readings</li>
                                     <li>Visual progress meters</li>
@@ -1186,7 +1212,7 @@
                             <div class="ht-benefit-item">
                                 <span class="ht-benefit-item__num">01</span>
                                 <h3 class="ht-benefit-item__title">Earlier Intervention</h3>
-                                <p class="ht-benefit-item__text">Thermal imaging surfaces temperature anomalies before behavioral signs, giving operators a critical head start.</p>
+                                <p class="ht-benefit-item__text">Conditions are rated every 10 and 30 minutes, and Heat Stress records raise an alert right away for a head start.</p>
                             </div>
                             <div class="ht-benefit-item">
                                 <span class="ht-benefit-item__num">02</span>
@@ -1228,7 +1254,7 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>HeatTrack combines three sources: a live RGB camera where an AI model detects and counts your ducks, a thermal camera that shows their surface heat, and a DHT22 sensor that measures barn temperature and humidity. Every 30 minutes, a heat-stress model rates the barn conditions and records a <strong>Status</strong> and <strong>Severity Level</strong>, so you can act before conditions get worse.</p>
+                                        <p>HeatTrack combines three sources: a live RGB camera where an AI model detects and counts your ducks, a thermal camera that estimates each duck's body temperature, and a DHT22 sensor that measures barn temperature and humidity. Every 10 minutes, and again every 30 minutes for the peak of that window, a heat-stress model rates the barn conditions and records a <strong>Status</strong> and <strong>Severity Level</strong>, so you can act before conditions get worse.</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
@@ -1239,18 +1265,18 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>Thermal detection uses an infrared camera to read the surface temperature of the ducks in view. The Thermal Monitor shows that heat as an image on a 25–45°C scale, from cooler to hotter. HeatTrack then rates the risk using the four levels of the Thermal Color Spectrum: <strong>Green</strong> (Low), <strong>Yellow</strong> (Moderate), <strong>Orange</strong> (High), and <strong>Red</strong> (Critical). Infrared can show rising heat before panting or weakness becomes visible, giving you an earlier warning.</p>
+                                        <p>Thermal detection uses an infrared camera to read the surface temperature of everything in view. HeatTrack finds each duck, reads its hottest spot, and uses that to estimate its body temperature. On the Thermal Monitor, a <strong>green box</strong> shows a duck's estimated body temperature, and a <strong>gray box</strong> means that duck could not be measured (at the edge of the frame, too far away, or overlapping another duck). The ducks' lowest, average, and highest body temperatures are saved with every detection record.</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
                                     <summary class="ht-faq__trigger">
                                         <span class="ht-faq__tag ht-faq__tag--thermal">Thermal</span>
                                         <span class="ht-faq__icon ht-faq__icon--thermal" aria-hidden="true"><i data-lucide="palette"></i></span>
-                                        <span class="ht-faq__question">What do the thermal color spectrum levels mean?</span>
+                                        <span class="ht-faq__question">What do the thermal colors mean?</span>
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>Colors show relative surface temperature, not an exact clinical body temperature. There are four levels: <strong>Green (Level 1, Low Risk)</strong> means readings are in the safe range, so keep routine monitoring. <strong>Yellow (Level 2, Moderate Risk)</strong> means heat is rising, so watch closely and prepare cooling. <strong>Orange (Level 3, High Risk)</strong> means heat stress is present, so start cooling now. <strong>Red (Level 4, Critical Risk)</strong> means the ducks are at immediate risk and need emergency action. Green matches the Normal status, Yellow matches Mild, and Orange and Red match Heat Stress. Always check the colors together with the ducks' behavior on the RGB feed.</p>
+                                        <p>The colors show surface heat on a fixed 25–45°C scale, not a risk rating. <strong>Black to purple (25–30°C)</strong> is the coolest, usually the floor, water, and shade. <strong>Red (30–35°C)</strong> is warm, such as a duck's feathered body. <strong>Orange (35–40°C)</strong> is hot, such as the head, eyes, bill, and legs. <strong>Yellow to white (40–45°C)</strong> is the hottest spot in view. The heat stress rating comes from the Status and Severity Level, not from the colors. Always check the thermal view together with the ducks' behavior on the RGB feed.</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
@@ -1261,7 +1287,7 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>The Insights page turns your readings into recommendations. Some are based on the current barn temperature, and others on recent Heat Stress records. Each one is labeled with its Severity Level, from Low to Critical, and falls under suggested actions (cooling, moving ducks, hydration), prevention (water, shade, feeding times), environmental steps (airflow, humidity), or temperature follow-ups. The newest recommendations appear first. Tap any card for full details.</p>
+                                        <p>The Insights page shows one recommendation for every 10-minute record in which ducks were detected, newest first. Each one is labeled with its Severity Level, from Low to Critical, and its steps are matched to that level. When available, AI rewrites them for the current conditions, marked with an <strong>AI</strong> badge. Tap any card for its Detection Details, Summary, Suggested Actions (cooling, moving ducks, hydration), and Heat Stress Prevention (airflow, shade, water, feeding times).</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
@@ -1272,7 +1298,7 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p><strong>Status</strong> tells you whether a duck is under heat stress: Normal, Mild, or Heat Stress. <strong>Severity Level</strong> shows how urgent it is, on four levels: Low, Moderate, High, or Critical. Both come from the same reading: Low means Normal, Moderate means Mild, and High or Critical means Heat Stress. Use the status for a quick check and the severity to decide how fast to act.</p>
+                                        <p>Both labels rate the heat stress risk of each record. An AI model sets the <strong>Severity Level</strong> (Low, Moderate, High, or Critical) from the barn's highest temperature and its humidity, and the <strong>Status</strong> follows from it: Low means Normal (34°C or below), Moderate means Mild (above 34°C, up to 37°C), and High (above 37°C, up to 40°C) or Critical (above 40°C) means Heat Stress. The temperatures are a guide, since humidity also counts. Use the status for a quick check and the severity to decide how fast to act.</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
@@ -1283,7 +1309,7 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>HeatTrack alerts you when a new record has the <strong>Heat Stress</strong> status, meaning a High or Critical severity. The alert is added to the <strong>Alerts &amp; Notifications</strong> panel under the bell icon, and a pop-up appears on screen for a few seconds. Each alert shows the body temperature, severity, and time so you can handle the most urgent cases first. Normal and Mild records do not trigger alerts.</p>
+                                        <p>HeatTrack alerts you when a new record has the <strong>Heat Stress</strong> status, meaning a High or Critical severity. The alert is added to the <strong>Alerts &amp; Notifications</strong> panel under the bell icon, and a pop-up appears on screen for about 5 seconds. Each alert shows the body temperature, severity, and time so you can handle the most urgent cases first. Normal and Mild records do not trigger alerts. A <strong>10-minute check-in</strong> also appears in the same panel with the latest barn temperature and a recommendation.</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
@@ -1294,7 +1320,7 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>Yes. Open the <strong>Settings</strong> panel from the top bar and switch <strong>Alert Notifications</strong> on or off. The same panel also turns <strong>Camera Streams</strong> and the <strong>AI Detection Model</strong> on or off. Keep alerts on during the hottest hours so you can respond quickly when conditions change.</p>
+                                        <p>Yes. Open the <strong>Settings</strong> panel from the top bar and switch <strong>Alert Notifications</strong> on or off; this also turns the 10-minute check-ins on or off. The same panel turns <strong>Camera Streams</strong> and the <strong>AI Detection Model</strong> on or off. Alerts work only while both of those are on. Keep alerts on during the hottest hours so you can respond quickly when conditions change.</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
@@ -1305,7 +1331,7 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>The camera feed streams continuously while monitoring is on. DHT22 readings appear as soon as the sensor sends them, updating the Temperature and Humidity tiles and the Environmental Trend chart. Every 30 minutes, a new Status and Severity record is added to the Detection Log History and Analytics charts, and the recommendations update to match.</p>
+                                        <p>The camera feeds stream continuously while Camera Streams is on. DHT22 readings are saved about every 10 seconds, updating the Temperature and Humidity tiles and the Environmental Trend chart. Every 10 minutes, a new Status and Severity record is added to the Detection Log History and Analytics charts, with a 30-minute peak record every half hour, and the recommendations update to match. Periods with no ducks detected add no record.</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
@@ -1316,7 +1342,7 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>HeatTrack gives poultry and duck farmers earlier visibility into heat risk—combining thermal imaging, environmental sensing, and AI guidance in one dashboard. Teams can intervene sooner, reduce mortality risk during heat spikes, export records for management review, and make data-informed decisions instead of relying on observation alone during the hottest shifts.</p>
+                                        <p>HeatTrack gives poultry and duck farmers earlier visibility into heat risk—combining thermal detection, environmental sensing, and AI guidance in one dashboard. Teams can intervene sooner, reduce mortality risk during heat spikes, export records for management review, and make data-informed decisions instead of relying on observation alone during the hottest shifts.</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
@@ -1557,6 +1583,20 @@
                                     </tr>
                                 </thead>
                                 <tbody id="detectionLogBody"></tbody>
+                                <!-- Hidden sizing row: the widest value each column can show, so column
+                                     widths stay fixed and the gaps between columns are equal -->
+                                <tfoot class="ht-log-sizer" aria-hidden="true">
+                                    <tr>
+                                        <td class="ht-log-cell--mono"><div class="ht-log-sizer__cell">September 30, 2026, 12:00:00 PM <span style="display:inline-block;margin-left:.4rem;padding:.05rem .45rem;border-radius:999px;font:700 .68rem 'DM Sans',system-ui,sans-serif;vertical-align:middle">30 min · peak</span></div></td>
+                                        <td><div class="ht-log-sizer__cell"><div class="ht-log-status"><i data-lucide="alert-triangle"></i><span>HEAT STRESS</span></div></div></td>
+                                        <td class="ht-log-cell--mono"><div class="ht-log-sizer__cell">00.0°C</div></td>
+                                        <td class="ht-log-cell--mono"><div class="ht-log-sizer__cell">00.0°C</div></td>
+                                        <td class="ht-log-cell--mono"><div class="ht-log-sizer__cell">00.0°C</div></td>
+                                        <td class="ht-log-cell--mono"><div class="ht-log-sizer__cell">999 ducks</div></td>
+                                        <td class="ht-log-cell--mono"><div class="ht-log-sizer__cell">9999</div></td>
+                                        <td><div class="ht-log-sizer__cell"><span class="ht-pill ht-pill--moderate">MODERATE</span></div></td>
+                                    </tr>
+                                </tfoot>
                             </table>
                         </div>
                         <div class="ht-panel__foot">
