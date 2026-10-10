@@ -5705,7 +5705,7 @@ function initAdminProfile() {
     });
 
     document.getElementById('adminProfileEditBtn').addEventListener('click', () => {
-        if (adminSelf) setAdmin ProfileEditing(true);
+        if (adminSelf) setAdminProfileEditing(true);
     });
     document.getElementById('adminProfileCancelBtn').addEventListener('click', () => {
         renderAdminSelf();
