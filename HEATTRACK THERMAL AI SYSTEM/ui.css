@@ -1,4 +1,4 @@
-﻿:root {
+:root {
     --ht-thermal-400: #fb923c;
     --ht-thermal-500: #f97316;
     --ht-thermal-600: #ea580c;
@@ -1036,7 +1036,7 @@ img { max-width: 100%; height: auto; display: block; }
     font-size: 0.75rem;
     font-weight: 500;
     color: var(--ht-thermal-600);
-    text-decoration: underline;
+    text-decoration: none;
     text-underline-offset: 2px;
     cursor: pointer;
     padding: 0.2rem 0.35rem;
@@ -1044,7 +1044,7 @@ img { max-width: 100%; height: auto; display: block; }
     transition: color 0.15s, background 0.15s;
 }
 .ht-linkbtn:hover:not(:disabled) {
-    color: var(--ht-thermal-700);
+    text-decoration: underline;
 }
 .ht-linkbtn:disabled {
     color: var(--ht-surface-400);
@@ -1752,11 +1752,13 @@ img { max-width: 100%; height: auto; display: block; }
     .ht-article-card__split .ht-bullets { padding-top: 0.25rem; }
 }
 
+/* Colors follow the thermal feed's INFERNO color map (heatstress_logger.py,
+   fixed 25-45°C scale): black/purple -> red -> orange -> pale yellow */
 .ht-spectrum {
-    --ht-spec-mid: #22c55e;
-    --ht-spec-warm: #eab308;
-    --ht-spec-hot: #f97316;
-    --ht-spec-critical: #ef4444;
+    --ht-spec-mid: #56106e;
+    --ht-spec-warm: #bb3754;
+    --ht-spec-hot: #f98c0a;
+    --ht-spec-critical: #f3d44a;
     margin-top: 2rem;
     display: grid;
     gap: 2rem;
@@ -1780,15 +1782,15 @@ img { max-width: 100%; height: auto; display: block; }
     border-radius: 999px;
     background: linear-gradient(
         90deg,
-        var(--ht-spec-mid) 0%,
-        var(--ht-spec-mid) 15%,
-        var(--ht-spec-warm) 37.5%,
-        var(--ht-spec-hot) 62.5%,
-        var(--ht-spec-critical) 85%,
-        var(--ht-spec-critical) 100%
+        #000004 0%,
+        #420a68 20%,
+        #932667 40%,
+        #dd513a 60%,
+        #fca50a 80%,
+        #fcffa4 100%
     );
     box-shadow:
-        0 6px 16px -6px rgba(239, 68, 68, 0.45),
+        0 6px 16px -6px rgba(221, 81, 58, 0.45),
         inset 0 1px 1px rgba(255, 255, 255, 0.45);
 }
 
@@ -1812,10 +1814,10 @@ img { max-width: 100%; height: auto; display: block; }
 }
 
 .ht-spectrum__labels span { text-align: center; }
-.ht-spectrum__label--mid { color: #15803d; }
-.ht-spectrum__label--warm { color: #a16207; }
-.ht-spectrum__label--hot { color: #c2410c; }
-.ht-spectrum__label--critical { color: #b91c1c; }
+.ht-spectrum__label--mid { color: #56106e; }
+.ht-spectrum__label--warm { color: #a3284b; }
+.ht-spectrum__label--hot { color: #c2570c; }
+.ht-spectrum__label--critical { color: #a16207; }
 
 .ht-spectrum__axis {
     display: flex;
@@ -3313,6 +3315,26 @@ input[type="date"] {
 }
 .ht-table tbody tr { transition: background 0.15s; }
 .ht-table tbody tr:hover { background: rgba(30, 41, 59, 0.05); }
+
+/* Detection Log History: static column widths with equal gaps between columns.
+   Each column is exactly as wide as its widest possible value (the hidden
+   .ht-log-sizer row) plus the same cell padding, so widths don't change with
+   the data. The last column takes any extra space; on narrow screens
+   .ht-table-scroll scrolls sideways instead of squeezing the columns. */
+.ht-log-panel .ht-table {
+    table-layout: auto;
+    width: 100%;
+}
+.ht-log-panel .ht-table th,
+.ht-log-panel .ht-table td:not([colspan]) { white-space: nowrap; }
+.ht-log-panel .ht-table th:not(:last-child) { width: 1%; }
+.ht-log-sizer { visibility: hidden; }
+.ht-log-panel .ht-table .ht-log-sizer td {
+    padding-top: 0;
+    padding-bottom: 0;
+    border: 0;
+}
+.ht-log-sizer__cell { height: 0; overflow: hidden; }
 
 .ht-panel__foot {
     display: flex;
@@ -6013,7 +6035,7 @@ html[data-boot-route="insights"] #view-analytics {
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 0.85rem;
+    margin: 0 auto 0.85rem;   /* centered horizontally in the card */
     background: rgba(15, 23, 42, 0.04);
 }
 .ht-rec-preview-card__icon svg { width: 1.1rem; height: 1.1rem; }
@@ -6024,6 +6046,7 @@ html[data-boot-route="insights"] #view-analytics {
 
 .ht-rec-preview-card__title {
     margin: 0;
+    text-align: center;
     font-family: var(--ht-font-display);
     font-size: var(--ht-text-lg);
     font-weight: 700;
@@ -7603,23 +7626,33 @@ html[data-boot-route="insights"] #view-analytics {
 .ht-admin-ui__view .ht-table { table-layout: fixed; }
 .ht-admin-ui__view .ht-table td:not([colspan]) { white-space: nowrap; }
 .ht-admin-ui__view .ht-table td:not([colspan]):not(:last-child) { overflow: hidden; text-overflow: ellipsis; }
-/* Account Requests and Approved Accounts share one set of column widths, so both
-   tables line up: Username 12% · Full Name 14% · Email 17% · Device ID 11% ·
-   Date 10% · Status 8% · Actions 28% (room for Approved Accounts' three buttons) */
+/* Account Requests and Approved Accounts: static column widths with equal gaps
+   between columns (same idea as the Detection Log). Each column is exactly its
+   maximum width (the hidden .ht-admin-sizer row) plus the same cell padding;
+   both tables have the same sizer row, so they line up. Free text longer than
+   its column's maximum is cut with "…" (full value on hover). Actions takes any
+   extra space; on narrow screens the table scrolls sideways. */
 .ht-admin-ui__view[data-admin-view="pending"] .ht-table,
-.ht-admin-ui__view[data-admin-view="users"] .ht-table { min-width: 76rem; }
-.ht-admin-ui__view[data-admin-view="pending"] .ht-table th:nth-child(1),
-.ht-admin-ui__view[data-admin-view="users"] .ht-table th:nth-child(1) { width: 12%; }
-.ht-admin-ui__view[data-admin-view="pending"] .ht-table th:nth-child(2),
-.ht-admin-ui__view[data-admin-view="users"] .ht-table th:nth-child(2) { width: 14%; }
-.ht-admin-ui__view[data-admin-view="pending"] .ht-table th:nth-child(3),
-.ht-admin-ui__view[data-admin-view="users"] .ht-table th:nth-child(3) { width: 17%; }
-.ht-admin-ui__view[data-admin-view="pending"] .ht-table th:nth-child(4),
-.ht-admin-ui__view[data-admin-view="users"] .ht-table th:nth-child(4) { width: 11%; }
-.ht-admin-ui__view[data-admin-view="pending"] .ht-table th:nth-child(5),
-.ht-admin-ui__view[data-admin-view="users"] .ht-table th:nth-child(5) { width: 10%; }
-.ht-admin-ui__view[data-admin-view="pending"] .ht-table th:nth-child(6),
-.ht-admin-ui__view[data-admin-view="users"] .ht-table th:nth-child(6) { width: 8%; }
+.ht-admin-ui__view[data-admin-view="users"] .ht-table { table-layout: auto; width: 100%; }
+.ht-admin-ui__view[data-admin-view="pending"] .ht-table th:not(:last-child),
+.ht-admin-ui__view[data-admin-view="users"] .ht-table th:not(:last-child) { width: 1%; }
+.ht-admin-ui__clip { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Maximum widths: Username · Full Name · Email · Device ID */
+.ht-admin-ui__view .ht-table td:nth-child(1) .ht-admin-ui__clip,
+.ht-admin-sizer td:nth-child(1) .ht-admin-sizer__cell { width: 14ch; }
+.ht-admin-ui__view .ht-table td:nth-child(2) .ht-admin-ui__clip,
+.ht-admin-sizer td:nth-child(2) .ht-admin-sizer__cell { width: 20ch; }
+.ht-admin-ui__view .ht-table td:nth-child(3) .ht-admin-ui__clip,
+.ht-admin-sizer td:nth-child(3) .ht-admin-sizer__cell { width: 26ch; }
+.ht-admin-ui__view .ht-table td:nth-child(4) .ht-admin-ui__clip,
+.ht-admin-sizer td:nth-child(4) .ht-admin-sizer__cell { width: 14ch; }
+.ht-admin-sizer { visibility: hidden; }
+.ht-admin-ui__view .ht-table .ht-admin-sizer td {
+    padding-top: 0;
+    padding-bottom: 0;
+    border: 0;
+}
+.ht-admin-sizer__cell { height: 0; overflow: hidden; white-space: nowrap; }
 
 /* ---- Shared logout confirmation ------------------------------------------- */
 body.ht-logout-modal-open { overflow: hidden; }
