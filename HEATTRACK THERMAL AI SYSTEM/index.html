@@ -1,0 +1,1845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HeatTrack - Thermal AI System</title>
+    <link rel="icon" href="HEATTRACK_ORANGE.ico" type="image/x-icon">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="ui.css">
+    <script>
+        (function () {
+            var map = { '#live': 'live', '#dashboard': 'live', '#analytics': 'analytics', '#insights': 'insights', '#about': 'about', '#faq': 'faq', '#about-faq': 'faq', '#home-guide': 'home' };
+            var h = (location.hash || '').toLowerCase();
+            if (h === '#admin' || h === '#admin-ui') document.documentElement.setAttribute('data-boot-auth', h.slice(1));
+            var route = map[h];
+            if (!route && h.indexOf('#about-') === 0) route = 'about';
+            if (route) document.documentElement.setAttribute('data-boot-route', route);
+        })();
+    </script>
+</head>
+<body class="ht-body ht-auth-mode">
+
+    <main id="authApp" class="ht-auth" aria-label="HeatTrack account access">
+        <section class="ht-auth__card" aria-label="Account access">
+            <div id="authSignup" class="ht-auth__form-panel ht-auth__form-panel--signup" aria-labelledby="signupTitle">
+                <h2 id="signupTitle">Create Account</h2>
+                <p class="ht-auth__subtitle">Register your information to manage monitoring system.</p>
+                <form class="ht-auth__form" data-auth-form="signup">
+                   <div class="ht-auth__two-col">
+                        <label><span>First Name <span class="ht-auth__required-mark" aria-hidden="true">*</span></span><input name="firstName" type="text" placeholder="first name" maxlength="25" pattern="[\p{L}\p{M}]+(?: [\p{L}\p{M}]+)* ?" title="Letters and spaces only (max 20 characters)" autocomplete="given-name" required></label>
+                        <label><span>Last Name <span class="ht-auth__required-mark" aria-hidden="true">*</span></span><input name="lastName" type="text" placeholder="last name" maxlength="25" pattern="[\p{L}\p{M}]+(?: [\p{L}\p{M}]+)* ?" title="Letters and spaces only (max 20 characters)" autocomplete="family-name" required></label>
+                    </div>
+                    <label><span>Username <span class="ht-auth__required-mark" aria-hidden="true">*</span></span><input name="username" type="text" placeholder="username" maxlength="20" autocomplete="username" required></label>
+                    <label><span>Email <span class="ht-auth__required-mark" aria-hidden="true">*</span></span><input name="email" type="email" placeholder="example@gmail.com" maxlength="40" autocomplete="email" required></label>
+                    <label><span>Device ID <span class="ht-auth__required-mark" aria-hidden="true">*</span></span><span class="ht-auth__device-id"><span class="ht-auth__device-prefix" aria-hidden="true">HT-PDCK-</span><input name="deviceNumber" type="text" inputmode="numeric" placeholder="001" maxlength="3" pattern="(?!000)[0-9]{3}" title="3-digit device number from 001 to 999, e.g. 001" autocomplete="off" aria-label="Device ID number (HT-PDCK- followed by 3 digits)" required></span></label>
+                    <label><span>Device API Key <span class="ht-auth__required-mark" aria-hidden="true">*</span></span><span class="ht-auth__password"><input name="deviceApiKey" type="password" placeholder="device API key" minlength="8" maxlength="64" pattern="[A-Za-z0-9_\-]{8,64}" title="8-64 characters: letters, numbers, - and _" autocomplete="off" required><button type="button" class="ht-auth__eye" aria-label="Show API key" data-password-toggle data-password-group="device"><i data-lucide="eye"></i></button></span></label>
+                    <label><span>Password <span class="ht-auth__required-mark" aria-hidden="true">*</span></span><span class="ht-auth__password" data-password-strength-wrapper><input name="password" type="password" placeholder="password" minlength="8" maxlength="16" aria-describedby="signupPasswordRequirements signupPasswordStrength" required><button type="button" class="ht-auth__eye" aria-label="Show password" data-password-toggle><i data-lucide="eye"></i></button></span></label>
+                    <ul id="signupPasswordRequirements" class="ht-auth__requirements" aria-label="Password requirements">
+                        <li data-password-requirement="length"><span aria-hidden="true"></span>8-16 characters</li>
+                        <li data-password-requirement="uppercase"><span aria-hidden="true"></span>At least 1 uppercase letter</li>
+                        <li data-password-requirement="lowercase"><span aria-hidden="true"></span>At least 1 lowercase letter</li>
+                        <li data-password-requirement="special"><span aria-hidden="true"></span>At least 1 special character</li>
+                        <li data-password-requirement="digit"><span aria-hidden="true"></span>At least 1 numerical digit</li>
+                    </ul>
+                    <p id="signupPasswordStrength" class="ht-auth__strength" role="status" aria-live="polite">Password strength: <span>Not entered</span></p>
+                    <label><span>Confirm Password <span class="ht-auth__required-mark" aria-hidden="true">*</span></span><span class="ht-auth__password"><input name="confirmPassword" type="password" placeholder="confirm password" minlength="8" maxlength="16" required><button type="button" class="ht-auth__eye" aria-label="Show password" data-password-toggle><i data-lucide="eye"></i></button></span></label>
+                    <button class="ht-auth__submit" type="submit">Sign up</button>
+                </form>
+            </div>
+            <div id="authLogin" class="ht-auth__form-panel ht-auth__form-panel--login" aria-labelledby="loginTitle">
+                <h2 id="loginTitle">Sign In</h2>
+                <p class="ht-auth__subtitle">Log in to manage heat stress detection.</p>
+                <form class="ht-auth__form" data-auth-form="login">
+                    <label>Username or Email<input name="username" type="text" placeholder="username or example@gmail.com" maxlength="40" required></label>
+                    <label>Password<span class="ht-auth__password"><input name="password" type="password" placeholder="password" required><button type="button" class="ht-auth__eye" aria-label="Show password" data-password-toggle><i data-lucide="eye"></i></button></span></label>
+                    <button type="button" class="ht-auth__forgot" data-auth-view="forgot">Forgot password?</button>
+                    <button class="ht-auth__submit" type="submit">Log in</button>
+                </form>
+            </div>
+            <div id="authWelcome" class="ht-auth__welcome">
+                <div class="ht-auth__welcome-content" data-auth-welcome-content="signup">
+                    <h1>Hello, Quack!</h1>
+                    <img src="LOGIN_SIGNUP.png" alt="HeatTrack" class="ht-auth__logo">
+                    <p class="ht-auth__brand">HEATTRACK <span>THERMAL AI SYSTEM</span></p>
+                    <p class="ht-auth__switch-copy">Already have an account?</p>
+                    <button type="button" class="ht-auth__outline-btn" data-auth-view="login">Log in</button>
+                </div>
+                <div class="ht-auth__welcome-content is-active" data-auth-welcome-content="login">
+                    <h1>Welcome Back!</h1>
+                    <img src="LOGIN_SIGNUP.png" alt="HeatTrack" class="ht-auth__logo">
+                    <p class="ht-auth__brand">HEATTRACK <span>THERMAL AI SYSTEM</span></p>
+                    <p class="ht-auth__switch-copy">Don't have an account yet?</p>
+                    <button type="button" class="ht-auth__outline-btn" data-auth-view="signup">Sign up</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="authForgot" class="ht-auth__forgot-card u-hidden" aria-labelledby="forgotTitle">
+            <h2 id="forgotTitle">Forgot Password?</h2>
+            <form class="ht-auth__form" data-auth-form="forgot">
+                <label data-auth-field="email" for="forgotEmail">Email<input id="forgotEmail" name="email" type="email" placeholder="example@gmail.com" aria-describedby="forgotEmailError" required></label>
+                <p id="forgotEmailError" class="ht-auth__field-error" role="alert" hidden></p>
+                <label data-auth-field="password" for="forgotPassword" class="u-hidden">New Password<span class="ht-auth__password"><input id="forgotPassword" name="password" type="password" placeholder="password" minlength="8" maxlength="16" aria-describedby="forgotPasswordHint forgotPasswordError" required><button type="button" class="ht-auth__eye" aria-label="Show password" data-password-toggle><i data-lucide="eye"></i></button></span></label>
+                <p id="forgotPasswordHint" class="ht-auth__hint u-hidden">8-16 characters, with 1 uppercase letter, 1 number, and 1 special character.</p>
+                <p id="forgotPasswordError" class="ht-auth__field-error" role="alert" hidden></p>
+                <label data-auth-field="confirmPassword" for="forgotConfirmPassword" class="u-hidden">Confirm Password<span class="ht-auth__password"><input id="forgotConfirmPassword" name="confirmPassword" type="password" placeholder="confirm password" minlength="8" maxlength="16" aria-describedby="forgotConfirmError" required><button type="button" class="ht-auth__eye" aria-label="Show password" data-password-toggle><i data-lucide="eye"></i></button></span></label>
+                <p id="forgotConfirmError" class="ht-auth__field-error" role="alert" hidden></p>
+                <button class="ht-auth__submit" type="submit">Send Reset Link</button>
+            </form>
+            <p class="ht-auth__back">Remember your password? <button type="button" data-auth-view="login">Log in</button></p>
+        </section>
+    </main>
+
+    <!-- ADMIN INTERFACE -->
+
+    <main id="admin-ui" class="ht-admin-ui u-hidden" aria-label="HeatTrack admin interface">
+        <nav class="ht-topnav ht-admin-ui__nav" aria-label="Admin navigation">
+            <div class="ht-wrap ht-topnav__inner">
+                <div class="ht-topnav__row">
+                    <button type="button" id="adminMenuToggle" class="ht-nav-menu-btn" aria-label="Toggle admin navigation" aria-expanded="false" aria-controls="adminNav" data-tooltip="Menu">
+                        <i data-lucide="menu"></i>
+                    </button>
+
+                    <div class="ht-brand">
+                        <div class="ht-brand__mark">
+                            <div class="ht-brand__logo">
+                                <img src="HEATTRACK_WHITE.ico" alt="" class="ht-brand__logo-img">
+                            </div>
+                        </div>
+                        <div class="ht-brand__titles">
+                            <h1 class="ht-brand__name">HEATTRACK <span class="ht-admin-ui__brand-suffix">Admin</span></h1>
+                            <p class="ht-brand__tag">Thermal AI System</p>
+                        </div>
+                    </div>
+
+                    <nav class="ht-nav" aria-label="Admin primary" id="adminNav">
+                        <button type="button" data-admin-route="overview" class="ht-nav__link ht-nav__link--active is-active">Dashboard</button>
+                        <button type="button" data-admin-route="pending" class="ht-nav__link">Pending</button>
+                        <button type="button" data-admin-route="users" class="ht-nav__link">Users</button>
+                        <button type="button" data-admin-route="profile" class="ht-nav__link">Profile</button>
+                    </nav>
+
+                    <div class="ht-topnav__tools">
+                        <button type="button" id="adminAlertBtn" class="ht-iconbtn" aria-label="Pending requests" aria-expanded="false" aria-controls="adminAlertPanel" data-tooltip="Pending Requests">
+                            <i data-lucide="bell"></i>
+                            <span id="adminAlertBadge" class="ht-alert-badge u-hidden">0</span>
+                        </button>
+                        <div class="ht-clock">
+                            <i data-lucide="clock"></i>
+                            <span id="adminLiveTime"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <div id="adminAlertPanel" class="ht-alert-panel ht-admin-notif" role="dialog" aria-label="Pending requests" inert>
+            <div class="ht-alert-panel__head">
+                <h3 class="ht-alert-panel__title">Pending Requests</h3>
+                <button type="button" id="adminReadAll" class="ht-linkbtn" disabled>Read all</button>
+            </div>
+            <div id="adminAlertList" class="ht-alert-panel__list">
+                <p class="ht-alert-panel__empty">No pending requests</p>
+            </div>
+        </div>
+
+        <div class="ht-main ht-admin-ui__body">
+            <section data-admin-view="overview" class="ht-admin-ui__view ht-adash" aria-labelledby="adminOverviewTitle">
+                <div class="ht-wrap ht-adash__wrap">
+                    <!-- Welcome / console banner -->
+                    <div class="ht-adash__banner">
+                        <div class="ht-adash__banner-glow" aria-hidden="true"></div>
+                        <div class="ht-adash__banner-main">
+                            <div>
+                                <p class="ht-kicker ht-adash__kicker"><span class="ht-kicker__dot"></span>Admin · User Management</p>
+                                <h1 id="adminOverviewTitle" class="ht-adash__title">Welcome back, <span id="adminDashName">Admin</span></h1>
+                                <p class="ht-adash__lead">Review sign-up requests and keep the user list accurate and secure.</p>
+                            </div>
+                        </div>
+                        <div class="ht-adash__banner-side">
+                            <span class="ht-date" data-date-today></span>
+                        </div>
+                    </div>
+
+                    <!-- KPI stats -->
+                    <div class="ht-adash__stats" aria-label="Account summary">
+                        <article class="ht-adash__stat">
+                            <div class="ht-adash__stat-icon ht-adash__stat-icon--devices"><i data-lucide="cpu"></i></div>
+                            <div class="ht-adash__stat-body">
+                                <span class="ht-adash__stat-label">Registered Devices</span>
+                                <b id="adminRegisteredDevices" class="ht-adash__stat-value">0</b>
+                                <span id="adminDashDevicesNote" class="ht-adash__stat-note">Devices in the registry</span>
+                            </div>
+                        </article>
+                        <article class="ht-adash__stat">
+                            <div class="ht-adash__stat-icon ht-adash__stat-icon--total"><i data-lucide="users"></i></div>
+                            <div class="ht-adash__stat-body">
+                                <span class="ht-adash__stat-label">Total Users</span>
+                                <b id="adminTotalUsers" class="ht-adash__stat-value">0</b>
+                                <span id="adminDashTotalNote" class="ht-adash__stat-note">All accounts in the system</span>
+                            </div>
+                        </article>
+                        <article class="ht-adash__stat">
+                            <div class="ht-adash__stat-icon ht-adash__stat-icon--approved"><i data-lucide="user-check"></i></div>
+                            <div class="ht-adash__stat-body">
+                                <span class="ht-adash__stat-label">Approved Users</span>
+                                <b id="adminApprovedUsers" class="ht-adash__stat-value">0</b>
+                                <span class="ht-adash__stat-note">Accounts cleared for access</span>
+                            </div>
+                        </article>
+                        <article class="ht-adash__stat">
+                            <div class="ht-adash__stat-icon ht-adash__stat-icon--pending"><i data-lucide="hourglass"></i></div>
+                            <div class="ht-adash__stat-body">
+                                <span class="ht-adash__stat-label">Pending Requests</span>
+                                <b id="adminPendingUsers" class="ht-adash__stat-value">0</b>
+                                <span id="adminDashPendingNote" class="ht-adash__stat-note">Accounts waiting for review</span>
+                            </div>
+                        </article>
+                    </div>
+
+                    <div class="ht-adash__grid">
+                        <div class="ht-adash__main">
+                        <!-- Pending requests queue -->
+                        <section class="ht-adash__card ht-adash__card--pending" aria-labelledby="adminDashPendingTitle">
+                            <div class="ht-adash__card-head">
+                                <div>
+                                    <h2 id="adminDashPendingTitle" class="ht-adash__card-title">Pending Requests</h2>
+                                    <p class="ht-adash__card-sub">Sign-ups waiting for your approval</p>
+                                </div>
+                                <button type="button" data-admin-route="pending" class="ht-adash__link">Review all <i data-lucide="arrow-right"></i></button>
+                            </div>
+                            <ul id="adminDashPending" class="ht-adash__recent"></ul>
+                        </section>
+
+                        <!-- Recent sign-ups -->
+                        <section class="ht-adash__card ht-adash__card--recent" aria-labelledby="adminDashRecentTitle">
+                            <div class="ht-adash__card-head">
+                                <div>
+                                    <h2 id="adminDashRecentTitle" class="ht-adash__card-title">Recent Sign-ups</h2>
+                                    <p class="ht-adash__card-sub">Latest accounts registered in HeatTrack</p>
+                                </div>
+                                <button type="button" data-admin-route="users" class="ht-adash__link">View all <i data-lucide="arrow-right"></i></button>
+                            </div>
+                            <ul id="adminDashRecent" class="ht-adash__recent"></ul>
+                        </section>
+                        </div>
+
+                        <div class="ht-adash__side">
+                            <!-- Status breakdown -->
+                            <section class="ht-adash__card ht-adash__card--status" aria-labelledby="adminDashStatusTitle">
+                                <div class="ht-adash__card-head">
+                                    <div>
+                                        <h2 id="adminDashStatusTitle" class="ht-adash__card-title">Account Status</h2>
+                                        <p class="ht-adash__card-sub">Breakdown of approved and pending accounts</p>
+                                    </div>
+                                </div>
+                                <div class="ht-adash__status">
+                                    <div class="ht-adash__rate">
+                                        <b id="adminDashRate">0%</b>
+                                        <span>of accounts approved</span>
+                                    </div>
+                                    <!-- id kept as adminDashDonut: the script sets --rate on it -->
+                                    <div id="adminDashDonut" class="ht-adash__bar" role="img" aria-label="Approval rate">
+                                        <span class="ht-adash__bar-fill"></span>
+                                    </div>
+                                    <div class="ht-adash__tiles">
+                                        <div class="ht-adash__tile ht-adash__tile--approved">
+                                            <span class="ht-adash__tile-label"><span class="ht-adash__dot ht-adash__dot--approved"></span>Approved</span>
+                                            <b id="adminDashLegendApproved">0</b>
+                                        </div>
+                                        <div class="ht-adash__tile ht-adash__tile--pending">
+                                            <span class="ht-adash__tile-label"><span class="ht-adash__dot ht-adash__dot--pending"></span>Pending</span>
+                                            <b id="adminDashLegendPending">0</b>
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+
+                            <!-- Heat stress weather: live local conditions + risk level guide -->
+                            <section class="ht-adash__card ht-adash__card--tools ht-adash__weather" aria-labelledby="adminDashWeatherTitle">
+                                <div class="ht-adash__card-head">
+                                    <div>
+                                        <h2 id="adminDashWeatherTitle" class="ht-adash__card-title">Weather</h2>
+                                        <p class="ht-adash__card-sub"><i data-lucide="map-pin" class="ht-adash__wx-pin"></i><span id="adminWeatherPlace">Locating…</span></p>
+                                    </div>
+                                    <span id="adminWeatherUpdated" class="ht-adash__wx-updated">Loading…</span>
+                                </div>
+                                <div class="ht-adash__wx">
+                                    <div class="ht-adash__wx-now">
+                                        <span id="adminWeatherIcon" class="ht-adash__wx-icon"><i data-lucide="cloud-sun"></i></span>
+                                        <div>
+                                            <b id="adminWeatherTemp" class="ht-adash__wx-temp">--°C</b>
+                                            <span id="adminWeatherDesc" class="ht-adash__wx-desc">Fetching weather…</span>
+                                        </div>
+                                    </div>
+                                    <div class="ht-adash__wx-metrics">
+                                        <div><span><i data-lucide="thermometer-sun"></i>Heat index</span><b id="adminWeatherFeels">--°C</b></div>
+                                        <div><span><i data-lucide="droplets"></i>Humidity</span><b id="adminWeatherHumid">--%</b></div>                                    </div>
+                                </div>
+                                <div class="ht-adash__guide">
+                                    <p class="ht-adash__guide-title">Risk levels by heat index</p>
+                                    <ul class="ht-adash__guide-list">
+                                        <li data-risk="low"><span class="ht-adash__guide-dot"></span><strong>Low</strong><small>Below 27°C</small></li>
+                                        <li data-risk="moderate"><span class="ht-adash__guide-dot"></span><strong>Moderate</strong><small>27–32°C</small></li>
+                                        <li data-risk="high"><span class="ht-adash__guide-dot"></span><strong>High</strong><small>33–41°C</small></li>
+                                        <li data-risk="critical"><span class="ht-adash__guide-dot"></span><strong>Critical</strong><small>42°C and above</small></li>
+                                    </ul>
+                                    <p class="ht-adash__wx-note"><i data-lucide="info"></i><span><strong>Disclaimer:</strong> Forecast-based data from Open-Meteo, refreshed at most every 15 minutes. It may differ from actual conditions. Use it as a general guide only.</span></p>
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <section data-admin-view="pending" class="ht-admin-ui__view u-hidden" aria-labelledby="adminPendingTitle">
+                <header class="page-section-header">
+                    <div class="ht-wrap ht-page-head">
+                        <div class="ht-page-head__row">
+                            <div>
+                                <h2 id="adminPendingTitle" class="page-section-title">Pending Requests</h2>
+                                <p class="page-section-subtitle">Review accounts waiting for approval.</p>
+                            </div>
+                            <span class="ht-date" data-date-today></span>
+                        </div>
+                    </div>
+                </header>
+                <div class="ht-wrap ht-page-body ht-stack-lg">
+                <section class="ht-panel ht-log-panel ht-admin-ui__panel">
+                    <div class="ht-panel__head">
+                        <div class="ht-panel__label">
+                            <i data-lucide="user-plus"></i>
+                            <span>Account Requests</span>
+                        </div>
+                        <div class="ht-toolbar ht-toolbar--wrap">
+                            <label class="ht-select ht-admin-ui__search">
+                                <i data-lucide="search"></i>
+                                <input id="adminPendingSearch" type="search" placeholder="Search" aria-label="Search requests">
+                            </label>
+                        </div>
+                    </div>
+                    <div class="ht-table-scroll">
+                        <table class="ht-table">
+                            <thead>
+                                <tr>
+                                    <th>Username</th>
+                                    <th>Full Name</th>
+                                    <th>Email</th>
+                                    <th>Device ID</th>
+                                    <th>Date Registered</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminPendingBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="ht-panel__foot">
+                        <span id="adminPendingCount" class="ht-footnote">Showing 0 of 0 requests</span>
+                        <div class="ht-pagination">
+                            <button type="button" data-admin-page="pending" data-admin-page-step="-1">Prev</button>
+                            <span id="adminPendingPageInfo">1/1</span>
+                            <button type="button" data-admin-page="pending" data-admin-page-step="1">Next</button>
+                        </div>
+                    </div>
+                </section>
+                </div>
+            </section>
+            <section data-admin-view="users" class="ht-admin-ui__view u-hidden" aria-labelledby="adminUsersTitle">
+                <header class="page-section-header">
+                    <div class="ht-wrap ht-page-head">
+                        <div class="ht-page-head__row">
+                            <div>
+                                <h2 id="adminUsersTitle" class="page-section-title">User Accounts</h2>
+                                <p class="page-section-subtitle">Manage approved HeatTrack users.</p>
+                            </div>
+                            <span class="ht-date" data-date-today></span>
+                        </div>
+                    </div>
+                </header>
+                <div class="ht-wrap ht-page-body ht-stack-lg">
+                <section class="ht-panel ht-log-panel ht-admin-ui__panel">
+                    <div class="ht-panel__head">
+                        <div class="ht-panel__label">
+                            <i data-lucide="users"></i>
+                            <span>Approved Accounts</span>
+                        </div>
+                        <div class="ht-toolbar ht-toolbar--wrap">
+                            <label class="ht-select ht-admin-ui__search">
+                                <i data-lucide="search"></i>
+                                <input id="adminUserSearch" type="search" placeholder="Search" aria-label="Search users">
+                            </label>
+                        </div>
+                    </div>
+                    <div class="ht-table-scroll">
+                        <table class="ht-table">
+                            <thead>
+                                <tr>
+                                    <th>Username</th>
+                                    <th>Full Name</th>
+                                    <th>Email</th>
+                                    <th>Device ID</th>
+                                    <th>Date Registered</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminUsersBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="ht-panel__foot">
+                        <span id="adminUsersCount" class="ht-footnote">Showing 0 of 0 users</span>
+                        <div class="ht-pagination">
+                            <button type="button" data-admin-page="users" data-admin-page-step="-1">Prev</button>
+                            <span id="adminUsersPageInfo">1/1</span>
+                            <button type="button" data-admin-page="users" data-admin-page-step="1">Next</button>
+                        </div>
+                    </div>
+                </section>
+                <section class="ht-panel ht-admin-device" aria-labelledby="adminDeviceTitle">
+                    <div class="ht-panel__head">
+                        <div class="ht-panel__label">
+                            <i data-lucide="cpu"></i>
+                            <span id="adminDeviceTitle">Device Registry</span>
+                        </div>
+                    </div>
+                    <div class="ht-panel__body ht-admin-device__layout">
+                        <!-- Register form. autocomplete="off" + new-password and the readonly-until-focus
+                             trick stop the browser from filling the admin's saved login into these fields. -->
+                        <form id="adminDeviceForm" class="ht-admin-device__form" autocomplete="off" novalidate aria-labelledby="adminDeviceFormTitle">
+                            <h3 id="adminDeviceFormTitle" class="ht-admin-device__title">Register a New Device</h3>
+
+                            <div class="ht-admin-device__field">
+                                <label for="adminDeviceNumber">Device ID<span class="ht-admin-device__required" aria-hidden="true">*</span></label>
+                                <span class="ht-auth__device-id">
+                                    <span class="ht-auth__device-prefix" aria-hidden="true">HT-PDCK-</span>
+                                    <input id="adminDeviceNumber" name="deviceNumber" type="text" inputmode="numeric" placeholder="001" maxlength="3"
+                                        pattern="(?!000)[0-9]{3}" title="3-digit device number from 001 to 999, e.g. 001"
+                                        autocomplete="off" data-lpignore="true" data-1p-ignore readonly data-unlock-on-focus required>
+                                </span>
+                            </div>
+
+                            <div class="ht-admin-device__field">
+                                <label for="adminDeviceKey">Device API Key<span class="ht-admin-device__required" aria-hidden="true">*</span></label>
+                                <span class="ht-auth__password">
+                                    <input id="adminDeviceKey" name="deviceKey" type="password" placeholder="Enter the device API key" minlength="8" maxlength="64"
+                                        pattern="[A-Za-z0-9_\-]{8,64}" title="8-64 characters: letters, numbers, - and _"
+                                        autocomplete="new-password" data-lpignore="true" data-1p-ignore readonly data-unlock-on-focus required>
+                                    <button type="button" class="ht-auth__eye" aria-label="Show API key" data-password-toggle><i data-lucide="eye"></i></button>
+                                </span>
+                            </div>
+
+                            <div class="ht-admin-device__field">
+                                <label for="adminDeviceUrl">Device URL</label>
+                                <input id="adminDeviceUrl" name="deviceUrl" type="url" class="ht-admin-device__input" placeholder="https://..." maxlength="255"
+                                    title="Starts with http:// or https:// (max 255 characters)"
+                                    autocomplete="off" data-lpignore="true" data-1p-ignore>
+                            </div>
+
+                            <div class="ht-admin-device__actions">
+                                <button type="reset" class="ht-btn ht-btn--secondary">Clear</button>
+                                <button type="submit" class="ht-btn ht-btn--primary">Register Device</button>
+                            </div>
+
+                            <p id="adminDeviceStatus" class="ht-profile__status u-hidden" role="status"></p>
+                        </form>
+
+                        <!-- Registered devices -->
+                        <section class="ht-admin-device__list-wrap" aria-labelledby="adminDeviceListTitle">
+                            <div class="ht-admin-device__list-head">
+                                <h3 id="adminDeviceListTitle" class="ht-admin-device__title">Registered Devices</h3>
+                                <label class="ht-select ht-admin-ui__search ht-admin-device__search">
+                                    <i data-lucide="search"></i>
+                                    <input id="adminDeviceSearch" type="search" placeholder="Search" aria-label="Search devices" autocomplete="off">
+                                </label>
+                            </div>
+                            <div class="ht-admin-device__filters" role="group" aria-label="Filter devices">
+                                <button type="button" class="is-active" data-device-filter="all" aria-pressed="true">All <b data-device-count="all">0</b></button>
+                                <button type="button" data-device-filter="linked" aria-pressed="false">Linked <b data-device-count="linked">0</b></button>
+                                <button type="button" data-device-filter="available" aria-pressed="false">Available <b data-device-count="available">0</b></button>
+                                <button type="button" class="ht-admin-device__filter--trash" data-device-filter="trash" aria-pressed="false"><i data-lucide="trash-2"></i>Trash <b data-device-count="trash">0</b></button>
+                            </div>
+                            <ul id="adminDeviceList" class="ht-admin-device__list"></ul>
+                        </section>
+                    </div>
+                </section>
+                </div>
+            </section>
+            <section data-admin-view="profile" class="ht-admin-ui__view ht-admin-profile u-hidden" aria-labelledby="adminProfileTitle">
+                <header class="page-section-header">
+                    <div class="ht-wrap ht-page-head">
+                        <div class="ht-page-head__row">
+                            <div>
+                                <h2 id="adminProfileTitle" class="page-section-title">Profile</h2>
+                                <p class="page-section-subtitle">View and update your admin account.</p>
+                            </div>
+                            <span class="ht-date" data-date-today></span>
+                        </div>
+                    </div>
+                </header>
+                <div class="ht-wrap ht-page-body ht-stack-lg">
+                <section class="ht-panel ht-profile">
+                    <div class="ht-panel__head">
+                        <div class="ht-panel__label">
+                            <i data-lucide="user-cog"></i>
+                            <span>Account Information</span>
+                        </div>
+                        <button type="button" id="adminProfileEditBtn" class="ht-btn ht-btn--small ht-btn--ghost">
+                            <i data-lucide="pencil"></i> Edit Profile
+                        </button>
+                    </div>
+                    <div class="ht-panel__body">
+                        <div class="ht-profile__summary">
+                            <div id="adminProfileAvatar" class="ht-profile__avatar">?</div>
+                            <div>
+                                <div id="adminProfileFullName" class="ht-profile__name">--</div>
+                                <div id="adminProfileHandle" class="ht-profile__handle"></div>
+                                <div id="adminProfileSince" class="ht-profile__since"></div>
+                            </div>
+                        </div>
+
+                        <form id="adminProfileForm" autocomplete="off" novalidate>
+                            <div class="ht-profile__grid">
+                                <label class="ht-profile__field">First Name
+                                    <input name="firstName" type="text" maxlength="25" placeholder="Not set"
+                                        pattern="[\p{L}\p{M}]+( [\p{L}\p{M}]+)*" title="Letters and spaces only (max 25 characters)"
+                                        readonly required>
+                                </label>
+                                <label class="ht-profile__field">Last Name
+                                    <input name="lastName" type="text" maxlength="25" placeholder="Not set"
+                                        pattern="[\p{L}\p{M}]+( [\p{L}\p{M}]+)*" title="Letters and spaces only (max 25 characters)"
+                                        readonly required>
+                                </label>
+                                <label class="ht-profile__field">Username
+                                    <input name="username" type="text" maxlength="20" placeholder="Not set" autocomplete="username"
+                                        title="No spaces (max 20 characters)" readonly required>
+                                </label>
+                                <label class="ht-profile__field">Email
+                                    <input name="email" type="email" placeholder="Not set" data-locked readonly>
+                                </label>
+                            </div>
+                            <div id="adminProfilePasswordSection" class="ht-profile__password u-hidden">
+                                <div class="ht-profile__password-head">
+                                    <span class="ht-profile__password-title"><i data-lucide="key-round"></i> Change Password</span>
+                                    <span class="ht-profile__password-hint">Optional. Leave these empty to keep your current password.</span>
+                                </div>
+                                <div class="ht-profile__grid">
+                                    <label class="ht-profile__field">Current Password
+                                        <span class="ht-auth__password">
+                                            <input name="currentPassword" type="password" placeholder="current password" autocomplete="current-password">
+                                            <button type="button" class="ht-auth__eye" aria-label="Show password" data-password-toggle><i data-lucide="eye"></i></button>
+                                        </span>
+                                    </label>
+                                    <label class="ht-profile__field">New Password
+                                        <span class="ht-auth__password" data-password-strength-wrapper>
+                                            <input name="newPassword" type="password" placeholder="new password" autocomplete="new-password" aria-describedby="adminProfilePasswordRequirements adminProfilePasswordStrength">
+                                            <button type="button" class="ht-auth__eye" aria-label="Show password" data-password-toggle><i data-lucide="eye"></i></button>
+                                        </span>
+                                    </label>
+                                    <div class="ht-profile__pw-feedback">
+                                        <ul id="adminProfilePasswordRequirements" class="ht-auth__requirements" aria-label="Password requirements">
+                                            <li data-password-requirement="length"><span aria-hidden="true"></span>8-16 characters</li>
+                                            <li data-password-requirement="uppercase"><span aria-hidden="true"></span>At least 1 uppercase letter</li>
+                                            <li data-password-requirement="lowercase"><span aria-hidden="true"></span>At least 1 lowercase letter</li>
+                                            <li data-password-requirement="special"><span aria-hidden="true"></span>At least 1 special character</li>
+                                            <li data-password-requirement="digit"><span aria-hidden="true"></span>At least 1 numerical digit</li>
+                                        </ul>
+                                        <p id="adminProfilePasswordStrength" class="ht-auth__strength" role="status" aria-live="polite">Password strength: <span>Not entered</span></p>
+                                    </div>
+                                    <label class="ht-profile__field">Confirm New Password
+                                        <span class="ht-auth__password">
+                                            <input name="confirmNewPassword" type="password" placeholder="Re-enter new password" autocomplete="new-password">
+                                            <button type="button" class="ht-auth__eye" aria-label="Show password" data-password-toggle><i data-lucide="eye"></i></button>
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div id="adminProfileActions" class="ht-profile__actions u-hidden">
+                                <button type="button" id="adminProfileCancelBtn" class="ht-btn ht-btn--secondary">Cancel</button>
+                                <button type="submit" class="ht-btn ht-btn--primary"><i data-lucide="check"></i><span>Save Changes</span></button>
+                            </div>
+                            <p id="adminProfileStatus" class="ht-profile__status u-hidden" role="status"></p>
+                        </form>
+                    </div>
+                </section>
+                <div class="ht-profile-logout">
+                    <button type="button" id="adminLogoutBtn" class="ht-btn ht-profile-logout__btn" data-logout-trigger="admin">
+                        <i data-lucide="log-out"></i>
+                        <span>Log Out</span>
+                    </button>
+                </div>
+                </div>
+            </section>
+        </div>
+
+        <footer class="ht-footer">
+            <div class="ht-wrap ht-footer__inner">
+                <div class="ht-footer__row">
+                    <div class="ht-footer__brand">
+                        <img src="HEATTRACK_ORANGE.ico" alt="" class="ht-footer__brand-img">
+                        <span>HeatTrack — Thermal AI System</span>
+                    </div>
+                    <p class="ht-footer__copy">Pateros Duckery AI-Integrated Assistive Monitoring System for Heat Stress Detection &copy; 2026</p>
+                </div>
+            </div>
+        </footer>
+        <div id="adminUiToast" class="ht-admin-ui__toast" role="status" aria-live="polite"></div>
+    </main>
+
+    <div id="adminUserModal" class="ht-admin-ui__modal u-hidden" role="dialog" aria-modal="true" aria-labelledby="adminUserModalTitle">
+        <div class="ht-admin-ui__modal-card"><div class="ht-admin-ui__modal-head"><h2 id="adminUserModalTitle"><i data-lucide="user-pen"></i><span>Edit User</span></h2><button type="button" class="ht-iconbtn ht-iconbtn--muted" data-admin-modal-close aria-label="Close"><i data-lucide="x"></i></button></div><form id="adminUserForm" class="ht-admin-ui__form"><input type="hidden" name="id"><label>First Name<input name="firstName" required></label><label>Last Name<input name="lastName" required></label><label>Username<input name="username" required></label><label>Email<input name="email" type="email" required></label><p id="adminUserFormError" class="ht-admin-ui__form-error u-hidden" role="alert"></p><div class="ht-admin-ui__modal-actions"><button type="button" class="ht-btn ht-btn--secondary" data-admin-modal-close>Cancel</button><button type="submit" class="ht-btn ht-btn--primary">Save Changes</button></div></form></div>
+    </div>
+    <div id="adminDeviceModal" class="ht-admin-ui__modal u-hidden" role="dialog" aria-modal="true" aria-labelledby="adminDeviceModalTitle">
+        <div class="ht-admin-ui__modal-card"><div class="ht-admin-ui__modal-head"><h2 id="adminDeviceModalTitle"><i data-lucide="cpu"></i><span>Edit Device</span></h2><button type="button" class="ht-iconbtn ht-iconbtn--muted" data-admin-modal-close aria-label="Close"><i data-lucide="x"></i></button></div><form id="adminDeviceEditForm" class="ht-admin-ui__form" autocomplete="off" novalidate><input type="hidden" name="deviceCode"><label>Device ID<span class="ht-auth__device-id"><span class="ht-auth__device-prefix" aria-hidden="true">HT-PDCK-</span><input name="deviceNumber" type="text" inputmode="numeric" placeholder="001" maxlength="3" pattern="(?!000)[0-9]{3}" title="3-digit device number from 001 to 999, e.g. 001" autocomplete="off" data-lpignore="true" data-1p-ignore required></span><small id="adminDeviceCodeHint" class="ht-admin-ui__form-hint"></small></label><label>New Device API Key<span class="ht-auth__password"><input name="deviceKey" type="password" placeholder="Leave blank to keep the current key" minlength="8" maxlength="64" pattern="[A-Za-z0-9_\-]{8,64}" title="8-64 characters: letters, numbers, - and _" autocomplete="new-password" data-lpignore="true" data-1p-ignore><button type="button" class="ht-auth__eye" aria-label="Show API key" data-password-toggle><i data-lucide="eye"></i></button></span><small id="adminDeviceKeyHint" class="ht-admin-ui__form-hint"></small></label><label>Device URL<input name="deviceUrl" type="url" placeholder="https://..." maxlength="255" title="Starts with http:// or https:// (max 255 characters)" autocomplete="off" data-lpignore="true" data-1p-ignore></label><p id="adminDeviceEditError" class="ht-admin-ui__form-error u-hidden" role="alert"></p><div class="ht-admin-ui__modal-actions"><button type="button" class="ht-btn ht-btn--secondary" data-admin-modal-close>Cancel</button><button type="submit" class="ht-btn ht-btn--primary">Save Changes</button></div></form></div>
+    </div>
+    <div id="adminConfirmModal" class="ht-admin-ui__modal u-hidden" role="dialog" aria-modal="true" aria-labelledby="adminConfirmTitle">
+        <div class="ht-admin-ui__modal-card"><div class="ht-admin-ui__modal-head"><h2 id="adminConfirmTitle"><i data-lucide="circle-alert"></i><span>Confirm action</span></h2><button type="button" class="ht-iconbtn ht-iconbtn--muted" data-admin-confirm-cancel aria-label="Close"><i data-lucide="x"></i></button></div><p id="adminConfirmMessage"></p><div class="ht-admin-ui__modal-actions"><button type="button" class="ht-btn ht-btn--secondary" data-admin-confirm-cancel>Cancel</button><button type="button" id="adminConfirmSubmit" class="ht-btn ht-btn--primary">Confirm</button></div></div>
+    </div>
+
+    <!-- USER INTERFACE -->
+
+    <main id="user-ui">
+        <nav class="ht-topnav" aria-label="Site">
+            <div class="ht-wrap ht-topnav__inner">
+                <div class="ht-topnav__row">
+                    <button type="button" id="navMenuToggle" class="ht-nav-menu-btn" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="mobileNav" data-tooltip="Menu">
+                        <i data-lucide="menu"></i>
+                    </button>
+
+                    <div class="ht-brand">
+                        <div class="ht-brand__mark">
+                            <div class="ht-brand__logo">
+                                <img src="HEATTRACK_WHITE.ico" alt="" class="ht-brand__logo-img">
+                            </div>
+                        </div>
+                        <div class="ht-brand__titles">
+                            <h1 class="ht-brand__name">HEATTRACK</h1>
+                            <p class="ht-brand__tag">Thermal AI System</p>
+                        </div>
+                    </div>
+
+                    <nav class="ht-nav" aria-label="Primary" id="mobileNav">
+                        <a href="#home" data-nav="home" class="ht-nav__link">Home</a>
+                        <a href="#live" data-nav="live" class="ht-nav__link">Live</a>
+                        <a href="#analytics" data-nav="analytics" class="ht-nav__link">Analytics</a>
+                        <a href="#insights" data-nav="insights" class="ht-nav__link">Insights</a>
+                        <a href="#about" data-nav="about" class="ht-nav__link">About</a>
+                        <a href="#profile" data-nav="profile" class="ht-nav__link">Profile</a>
+                    </nav>
+
+                    <div class="ht-topnav__tools">
+                        <button type="button" id="settingsBtn" class="ht-iconbtn" aria-label="Settings" data-tooltip="Settings">
+                            <i data-lucide="settings"></i>
+                        </button>
+                        <button type="button" id="alertBtn" class="ht-iconbtn" aria-label="Alerts" data-tooltip="Alerts & Notifications">
+                            <i data-lucide="bell"></i>
+                            <span id="alertBadge" class="ht-alert-badge u-hidden">0</span>
+                        </button>
+                        <div class="ht-clock">
+                            <i data-lucide="clock"></i>
+                            <span id="liveTime"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <div id="alertPanel" class="ht-alert-panel u-hidden" role="dialog" aria-label="Alerts">
+            <div class="ht-alert-panel__head">
+                <h3 class="ht-alert-panel__title">Alerts &amp; Notifications</h3>
+                <button type="button" id="readAllAlerts" class="ht-linkbtn" disabled>Read all</button>
+            </div>
+            <div id="alertList" class="ht-alert-panel__list">
+                <p class="ht-alert-panel__empty">No alerts yet</p>
+            </div>        </div>
+
+        <div id="settingsPanel" class="ht-settings-panel u-hidden" role="dialog" aria-label="Settings">
+            <div class="ht-settings-panel__head">
+                <h3 class="ht-settings-panel__title">Settings</h3>
+            </div>
+            <div class="ht-settings-panel__body ht-switch-list">
+                <div class="ht-switch-row">
+                    <div class="ht-switch-row__text">
+                        <div class="ht-switch-row__icon ht-switch-row__icon--green"><i data-lucide="video"></i></div>
+                        <div>
+                            <div class="ht-switch-row__title">Camera Streams</div>
+
+                            <div class="ht-switch-row__sub">Both cameras active</div>
+                        </div>
+                    </div>
+                    <label class="ht-switch ht-switch--green">
+                        <input type="checkbox" id="cameraToggle" checked>
+                        <span class="ht-switch__track" aria-hidden="true"></span>
+                    </label>
+                </div>
+                <div class="ht-switch-row">
+                    <div class="ht-switch-row__text">
+                        <div class="ht-switch-row__icon ht-switch-row__icon--thermal"><i data-lucide="brain"></i></div>
+                        <div>
+                            <div class="ht-switch-row__title">AI Detection Model</div>
+                            <div class="ht-switch-row__sub">MLX90 + Thermal Analysis</div>
+                        </div>
+                    </div>
+                    <label class="ht-switch ht-switch--thermal">
+                        <input type="checkbox" id="aiToggle" checked>
+                        <span class="ht-switch__track" aria-hidden="true"></span>
+                    </label>
+                </div>
+                <div class="ht-switch-row">
+                    <div class="ht-switch-row__text">
+                        <div class="ht-switch-row__icon ht-switch-row__icon--blue"><i data-lucide="bell-ring"></i></div>
+                        <div>
+                            <div class="ht-switch-row__title">Alert Notifications</div>
+                            <div class="ht-switch-row__sub">Push &amp; Sound alerts</div>
+                        </div>
+                    </div>
+                    <label class="ht-switch ht-switch--blue">
+                        <input type="checkbox" id="alertToggle" checked>
+                        <span class="ht-switch__track" aria-hidden="true"></span>
+                    </label>
+                </div>
+                <a href="#faq" class="ht-switch-row ht-settings-faq-link">
+                    <div class="ht-switch-row__text">
+                        <div class="ht-switch-row__icon ht-switch-row__icon--violet"><i data-lucide="circle-help"></i></div>
+                        <div>
+                            <div class="ht-switch-row__title">Frequently Asked Questions</div>
+                            <div class="ht-switch-row__sub">Help &amp; common questions</div>
+                        </div>
+                    </div>
+                    <i data-lucide="chevron-right" class="ht-settings-faq-link__chev"></i>
+                </a>
+            </div>
+        </div>
+
+        <div class="ht-main">
+            <!-- HOME VIEW -->
+            <section id="view-home" class="ht-view" aria-label="Home">
+
+                <!-- HERO SECTION -->
+                <div class="ht-hero">
+                    <div class="ht-hero__glow ht-hero__glow--a" aria-hidden="true"></div>
+                    <div class="ht-hero__glow ht-hero__glow--b" aria-hidden="true"></div>
+                    <div class="ht-hero__glow ht-hero__glow--c" aria-hidden="true"></div>
+                    <div class="ht-wrap ht-hero__inner">
+                        <div class="ht-hero__grid">
+                            <p class="ht-kicker ht-hero__kicker">
+                                <span class="ht-kicker__dot"></span>
+                                Pateros Duckery · Assistive Monitoring
+                            </p>
+                            <div class="ht-hero__copy">
+                                <h2 class="ht-hero__title">
+                                    AI-Powered Heat Stress Monitoring<br>
+                                    <span class="ht-hero__title-accent">for Healthier Ducks</span>
+                                </h2>
+                                <p class="ht-lead">Real-time thermal monitoring to detect heat stress early and protect duck welfare.</p>
+                                <div class="ht-hero__actions">
+                                    <a href="#live" class="ht-btn ht-btn--primary">
+                                        <i data-lucide="video"></i>
+                                        <span>Open Live Monitoring</span>
+                                        <i data-lucide="arrow-right" class="ht-btn__chev"></i>
+                                    </a>
+                                    <a href="#about" class="ht-btn ht-btn--secondary">
+                                        <i data-lucide="book-open"></i>
+                                        <span>About</span>
+                                    </a>
+                                </div>
+                            </div>
+                            <aside class="ht-hero__aside" aria-label="System highlights">
+                                <div class="ht-about-highlight">
+                                    <ul class="ht-about-highlight__list">
+                                        <li>
+                                            <span class="ht-about-highlight__icon ht-about-highlight__icon--thermal"><i data-lucide="scan-eye"></i></span>
+                                            <div>
+                                                <strong>Thermal imaging</strong>
+                                                <p>Detect surface temperature changes before visible distress.</p>
+                                            </div>
+                                        </li>
+                                        <li>
+                                            <span class="ht-about-highlight__icon ht-about-highlight__icon--sensor"><i data-lucide="gauge"></i></span>
+                                            <div>
+                                                <strong>Environmental sensing</strong>
+                                                <p>Track temperature and humidity in the barn.</p>
+                                            </div>
+                                        </li>
+                                        <li>
+                                            <span class="ht-about-highlight__icon ht-about-highlight__icon--ai"><i data-lucide="lightbulb"></i></span>
+                                            <div>
+                                                <strong>AI-guided actions</strong>
+                                                <p>Heat stress alerts and recommended actions.</p>
+                                            </div>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </aside>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DASHBOARD NAVIGATION BAND -->
+                <div class="ht-band">
+                    <div class="ht-wrap ht-band__inner">
+                        <header class="ht-section-head">
+                            <p class="ht-section-eyebrow">Quick Navigation</p>
+                            <h2 class="ht-section-title">Explore the Dashboard</h2>
+                            <p class="ht-section-sub">Jump to Live, Analytics, Insights, or About — each area covers a different part of monitoring and learning how HeatTrack works.</p>
+                        </header>
+                        <div class="ht-jump-grid">
+                            <a href="#live" class="ht-jump-card">
+                                <div class="ht-jump-card__icon ht-jump-card__icon--live">
+                                    <i data-lucide="video"></i>
+                                </div>
+                                <h3 class="ht-jump-card__title">Live Monitoring</h3>
+                                <p class="ht-jump-card__text">Real-time RGB and thermal streams with live detection and sensor readings.</p>
+                                <span class="ht-jump-card__cta">Open Live <i data-lucide="chevron-right"></i></span>
+                            </a>
+                            <a href="#analytics" class="ht-jump-card">
+                                <div class="ht-jump-card__icon ht-jump-card__icon--analytics">
+                                    <i data-lucide="line-chart"></i>
+                                </div>
+                                <h3 class="ht-jump-card__title">Analytics</h3>
+                                <p class="ht-jump-card__text">Review detection history, trends, and severity distributions with Excel report export.</p>
+                                <span class="ht-jump-card__cta">Open Analytics <i data-lucide="chevron-right"></i></span>
+                            </a>
+                            <a href="#insights" class="ht-jump-card">
+                                <div class="ht-jump-card__icon ht-jump-card__icon--insights">
+                                    <i data-lucide="layout-dashboard"></i>
+                                </div>
+                                <h3 class="ht-jump-card__title">Insights &amp; Actions</h3>
+                                <p class="ht-jump-card__text">Summary KPIs and AI recommendations with full detection details.</p>
+                                <span class="ht-jump-card__cta">Open Insights <i data-lucide="chevron-right"></i></span>
+                            </a>
+                            <a href="#about" class="ht-jump-card">
+                                <div class="ht-jump-card__icon ht-jump-card__icon--about">
+                                    <i data-lucide="info"></i>
+                                </div>
+                                <h3 class="ht-jump-card__title">About HeatTrack</h3>
+                                <p class="ht-jump-card__text">System overview, heat stress guide, capabilities, and operation benefits.</p>
+                                <span class="ht-jump-card__cta">Learn More <i data-lucide="chevron-right"></i></span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- QUICK REFERENCE: Thermal Color Spectrum + Status & Severity -->
+                <section class="ht-home-section ht-spectrum-section-simple">
+                    <div class="ht-wrap">
+                        <header class="ht-section-head ht-section-head--center">
+                            <p class="ht-section-eyebrow">Quick Reference</p>
+                            <h2 class="ht-section-title">Understand Every Reading</h2>
+                            <p class="ht-section-sub">What the thermal colors mean, and how HeatTrack rates heat stress in your ducks.</p>
+                        </header>
+                        <article class="ht-article-card ht-article-card--wide">
+                            <div class="ht-article-card__row ht-quickref-head">
+                                <div class="ht-article-card__icon ht-article-card__icon--thermal"><i data-lucide="eye"></i></div>
+                                <h3 class="ht-article-card__h">Thermal Color Spectrum</h3>
+                            </div>
+                            <p class="ht-prose ht-quickref-intro">The thermal camera shows each duck's surface heat as a color. Green means the ducks are comfortable, yellow is an early warning, orange calls for cooling, and red is an emergency.</p>
+                            <div class="ht-spectrum" role="region" aria-label="Thermal Color Spectrum">
+                                <div class="ht-spectrum__scale" aria-hidden="true">
+                                    <div class="ht-spectrum__bar">
+                                        <span class="ht-spectrum__tick"></span>
+                                        <span class="ht-spectrum__tick"></span>
+                                        <span class="ht-spectrum__tick"></span>
+                                    </div>
+                                    <div class="ht-spectrum__labels">
+                                        <span class="ht-spectrum__label--mid">Low</span>
+                                        <span class="ht-spectrum__label--warm">Moderate</span>
+                                        <span class="ht-spectrum__label--hot">High</span>
+                                        <span class="ht-spectrum__label--critical">Critical</span>
+                                    </div>
+                                    <div class="ht-spectrum__axis">
+                                        <span><i data-lucide="thermometer-snowflake"></i> Cooler</span>
+                                        <span>Hotter <i data-lucide="thermometer-sun"></i></span>
+                                    </div>
+                                </div>
+                                <ol class="ht-spectrum__keys">
+                                    <li class="ht-spectrum__item ht-spectrum__item--mid">
+                                        <div class="ht-spectrum__item-head">
+                                            <span class="ht-spectrum__dot ht-spectrum__dot--mid" aria-hidden="true"></span>
+                                            <span class="ht-spectrum__level">Level 1</span>
+                                        </div>
+                                        <strong>Green — Low Risk</strong>
+                                        <p>Thermal readings are within a safe, normal range. No intervention needed. Continue routine monitoring and maintain current operating conditions.</p>
+                                        <span class="ht-spectrum__action"><i data-lucide="circle-check"></i> Routine monitoring</span>
+                                    </li>
+                                    <li class="ht-spectrum__item ht-spectrum__item--warm">
+                                        <div class="ht-spectrum__item-head">
+                                            <span class="ht-spectrum__dot ht-spectrum__dot--warm" aria-hidden="true"></span>
+                                            <span class="ht-spectrum__level">Level 2</span>
+                                        </div>
+                                        <strong>Yellow — Moderate Risk</strong>
+                                        <p>Heat levels are rising and approaching concern thresholds. Monitor closely and consider activating preventive cooling measures if conditions continue to climb.</p>
+                                        <span class="ht-spectrum__action"><i data-lucide="eye"></i> Watch closely</span>
+                                    </li>
+                                    <li class="ht-spectrum__item ht-spectrum__item--hot">
+                                        <div class="ht-spectrum__item-head">
+                                            <span class="ht-spectrum__dot ht-spectrum__dot--hot" aria-hidden="true"></span>
+                                            <span class="ht-spectrum__level">Level 3</span>
+                                        </div>
+                                        <strong>Orange — High Risk</strong>
+                                        <p>Significant heat stress is present and animals may show behavioral signs. Activate cooling systems immediately and observe animals closely for distress indicators.</p>
+                                        <span class="ht-spectrum__action"><i data-lucide="fan"></i> Activate cooling</span>
+                                    </li>
+                                    <li class="ht-spectrum__item ht-spectrum__item--critical">
+                                        <div class="ht-spectrum__item-head">
+                                            <span class="ht-spectrum__dot ht-spectrum__dot--critical" aria-hidden="true"></span>
+                                            <span class="ht-spectrum__level">Level 4</span>
+                                        </div>
+                                        <strong>Red — Critical Risk</strong>
+                                        <p>Critical heat stress has been detected and animals are at immediate risk. Emergency intervention is required now. Deploy all available cooling resources and seek veterinary guidance.</p>
+                                        <span class="ht-spectrum__action"><i data-lucide="siren"></i> Emergency response</span>
+                                    </li>
+                                </ol>
+                            </div>
+                        </article>
+
+                        <article class="ht-article-card ht-article-card--wide ht-status-guide-card">
+                            <div class="ht-article-card__row ht-quickref-head">
+                                <div class="ht-article-card__icon ht-article-card__icon--thermal"><i data-lucide="gauge"></i></div>
+                                <h3 class="ht-article-card__h">Status &amp; Severity Levels</h3>
+                            </div>
+                            <p class="ht-prose ht-quickref-intro">Every reading gets two labels. The <strong>Status</strong> tells you whether a duck is under heat stress: Normal, Mild, or Heat Stress. The <strong>Severity Level</strong> tells you how urgent it is: Low, Moderate, High, or Critical. Check the status at a glance, then let the severity tell you how fast to act.</p>
+                            <div class="ht-status-guide">
+                                <!-- Mapping: 4 severity levels grouped under 3 statuses -->
+                                <div class="ht-status-map" role="img" aria-label="Low is Normal, Moderate is Mild, High and Critical are Heat Stress">
+                                    <span class="ht-status-map__caption">Severity Level</span>
+                                    <div class="ht-status-map__levels" aria-hidden="true">
+                                        <span class="ht-status-map__level ht-status-map__level--low">Low</span>
+                                        <span class="ht-status-map__level ht-status-map__level--moderate">Moderate</span>
+                                        <span class="ht-status-map__level ht-status-map__level--high">High</span>
+                                        <span class="ht-status-map__level ht-status-map__level--critical">Critical</span>
+                                    </div>
+                                    <div class="ht-status-map__groups" aria-hidden="true">
+                                        <span class="ht-status-map__group ht-status-map__group--normal"><i data-lucide="check-circle"></i>Normal</span>
+                                        <span class="ht-status-map__group ht-status-map__group--mild"><i data-lucide="sun"></i>Mild</span>
+                                        <span class="ht-status-map__group ht-status-map__group--stress"><i data-lucide="alert-triangle"></i>Heat Stress</span>
+                                    </div>
+                                    <span class="ht-status-map__caption">Status</span>
+                                </div>
+
+                                <ol class="ht-status-guide__cards">
+                                    <li class="ht-tier-card ht-tier-card--normal">
+                                        <div class="ht-tier-card__head">
+                                            <i data-lucide="check-circle" class="ht-tier-card__icon" aria-hidden="true"></i>
+                                            <strong class="ht-tier-card__title">Normal</strong>
+                                            <div class="ht-tier-card__pills">
+                                                <span class="ht-pill ht-pill--low">LOW</span>
+                                            </div>
+                                        </div>
+                                        <div class="ht-tier-card__body">
+                                            <p>Body temperatures are in the safe range and ducks are shedding heat normally. No intervention is needed.</p>                                        </div>
+                                        <div class="ht-tier-card__action"><i data-lucide="circle-check"></i> Keep routine monitoring</div>
+                                    </li>
+                                    <li class="ht-tier-card ht-tier-card--mild">
+                                        <div class="ht-tier-card__head">
+                                            <i data-lucide="sun" class="ht-tier-card__icon" aria-hidden="true"></i>
+                                            <strong class="ht-tier-card__title">Mild</strong>
+                                            <div class="ht-tier-card__pills">
+                                                <span class="ht-pill ht-pill--moderate">MODERATE</span>
+                                            </div>
+                                        </div>
+                                        <div class="ht-tier-card__body">
+                                            <p>Heat is building up and early signs may appear. Act early so conditions do not climb into heat stress.</p>                                        </div>
+                                        <div class="ht-tier-card__action"><i data-lucide="shield"></i> Take preventive steps</div>
+                                    </li>
+                                    <li class="ht-tier-card ht-tier-card--stress">
+                                        <div class="ht-tier-card__head">
+                                            <i data-lucide="alert-triangle" class="ht-tier-card__icon" aria-hidden="true"></i>
+                                            <strong class="ht-tier-card__title">Heat Stress</strong>
+                                            <div class="ht-tier-card__pills">
+                                                <span class="ht-pill ht-pill--high">HIGH</span>
+                                                <span class="ht-pill ht-pill--critical">CRITICAL</span>
+                                            </div>
+                                        </div>
+                                        <div class="ht-tier-card__body">
+                                            <p>Ducks are struggling to shed heat. At <strong>High</strong>, start cooling now; at <strong>Critical</strong>, take emergency action and contact a veterinarian.</p>                                        </div>
+                                        <div class="ht-tier-card__action"><i data-lucide="siren"></i> Cool down immediately</div>
+                                    </li>
+                                </ol>
+                            </div>
+                        </article>
+                    </div>
+                </section>
+
+                <div class="ht-disclaimer-band">
+                    <div class="ht-wrap">
+                        <div class="ht-disclaimer">
+                            <i data-lucide="info"></i>
+                            <p class="ht-disclaimer__label">Important Disclaimer</p>
+                            <p class="ht-prose">This page is for orientation only. AI detections, charts, and recommendations in the app are assistive tools and may contain errors. Always confirm findings with on-site observation and follow your farm or veterinarian protocols before taking critical action.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ABOUT VIEW -->
+            <section id="view-about" class="ht-view ht-about-page u-hidden" aria-label="About HeatTrack">
+
+                <!-- FIELD GUIDE -->
+                <section id="about-guide" class="ht-about-section ht-about-section--guide" aria-labelledby="guide-heading">
+                    <div class="ht-wrap">
+                        <header class="ht-section-head ht-section-head--center">
+                            <p class="ht-section-eyebrow">Field Guide</p>
+                            <h2 id="guide-heading" class="ht-section-title">Understanding Heat Stress</h2>
+                            <p class="ht-section-sub">Learn what heat stress is, what causes it, and why early detection matters.</p>
+                        </header>
+                        <div class="ht-guide-grid">
+                            <article class="ht-guide-card ht-guide-card--thermal">
+                                <div class="ht-guide-card__top">
+                                    <span class="ht-guide-card__icon"><i data-lucide="thermometer-sun"></i></span>
+                                    <h3 class="ht-guide-card__title">What is heat stress?</h3>
+                                </div>
+                                <p class="ht-guide-card__text">Heat stress occurs when a duck's body cannot dissipate heat fast enough and internal temperature rises above safe limits. Early signs are subtle behavioral changes — not just hot air temperatures — which is why thermal imaging is critical for early detection.</p>
+                                <div class="ht-guide-card__box">
+                                    <p class="ht-guide-card__label">Signs to watch for</p>
+                                    <ul class="ht-guide-card__list">
+                                        <li><i data-lucide="wind"></i><div><strong>Open-mouth breathing</strong><span>Cooling is no longer sufficient through normal respiratory mechanisms.</span></div></li>
+                                        <li><i data-lucide="feather"></i><div><strong>Wings held away from body</strong><span>Birds spread their wings to release more body heat.</span></div></li>
+                                        <li><i data-lucide="bed"></i><div><strong>Reduced activity</strong><span>Ducks rest more, eat less, and crowd toward the coolest space.</span></div></li>
+                                    </ul>
+                                </div>
+                            </article>
+
+                            <article class="ht-guide-card ht-guide-card--sky">
+                                <div class="ht-guide-card__top">
+                                    <span class="ht-guide-card__icon"><i data-lucide="droplets"></i></span>
+                                    <h3 class="ht-guide-card__title">Causes of heat stress</h3>
+                                </div>
+                                <p class="ht-guide-card__text">Heat stress is driven by more than temperature alone. Humidity, poor airflow, stocking density, and limited water access all interact to determine whether birds can effectively cool themselves down.</p>
+                                <div class="ht-guide-card__box">
+                                    <p class="ht-guide-card__label">Main contributors</p>
+                                    <ul class="ht-guide-card__list">
+                                        <li><i data-lucide="cloud-drizzle"></i><div><strong>High humidity</strong><span>Traps heat and reduces the effectiveness of evaporative cooling.</span></div></li>
+                                        <li><i data-lucide="fan"></i><div><strong>Poor ventilation</strong><span>Creates hot pockets and stale air where birds struggle most.</span></div></li>
+                                        <li><i data-lucide="users"></i><div><strong>Overcrowding</strong><span>Raises collective body heat and leaves fewer cool resting spots.</span></div></li>
+                                    </ul>
+                                </div>
+                            </article>
+
+                            <article class="ht-guide-card ht-guide-card--emerald">
+                                <div class="ht-guide-card__top">
+                                    <span class="ht-guide-card__icon"><i data-lucide="shield-check"></i></span>
+                                    <h3 class="ht-guide-card__title">Why early detection matters</h3>
+                                </div>
+                                <p class="ht-guide-card__text">Catching heat stress early gives farm operators a window to act before performance drops, welfare is compromised, or mortality risk increases. Use Live behavior cues, Analytics trends, and Insights alerts together for the fastest response.</p>
+                                <div class="ht-guide-card__box">
+                                    <p class="ht-guide-card__label">What you gain</p>
+                                    <ul class="ht-guide-card__list">
+                                        <li><i data-lucide="clock"></i><div><strong>Early warning</strong><span>Act before feed intake and growth begin to decline.</span></div></li>
+                                        <li><i data-lucide="bar-chart-3"></i><div><strong>Data-driven decisions</strong><span>Match thermal readings with barn conditions to prioritize correctly.</span></div></li>
+                                        <li><i data-lucide="heart-pulse"></i><div><strong>Better welfare</strong><span>Shorten heat events and lower mortality risk across your ducks.</span></div></li>
+                                    </ul>
+                                </div>
+                            </article>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- KEY FEATURES -->
+                <section id="about-features" class="ht-about-section ht-about-section--features" aria-labelledby="features-heading">
+                    <div class="ht-wrap">
+                        <header class="ht-section-head ht-section-head--center">
+                            <p class="ht-section-eyebrow">Core Capabilities</p>
+                            <h2 id="features-heading" class="ht-section-title">What HeatTrack Delivers</h2>
+                            <p class="ht-section-sub">Purpose-built tools that combine visual, thermal, and environmental data into one clear monitoring workflow.</p>
+                        </header>
+                        <div class="ht-cap-grid">
+                            <article class="ht-cap-card ht-cap-card--thermal">
+                                <div class="ht-cap-card__head">
+                                    <span class="ht-cap-card__icon"><i data-lucide="scan-eye"></i></span>
+                                    <h3 class="ht-cap-card__title">Dual-Camera Detection</h3>
+                                </div>
+                                <p class="ht-cap-card__text">Synchronized RGB and thermal streams with AI overlays highlight at-risk ducks before visible distress spreads to other ducks.</p>
+                                <a href="#live" class="ht-cap-card__link">Open Live <i data-lucide="arrow-right"></i></a>
+                            </article>
+                            <article class="ht-cap-card ht-cap-card--sensor">
+                                <div class="ht-cap-card__head">
+                                    <span class="ht-cap-card__icon"><i data-lucide="gauge"></i></span>
+                                    <h3 class="ht-cap-card__title">Environmental Sensing</h3>
+                                </div>
+                                <p class="ht-cap-card__text">DHT22 readings for temperature and humidity are logged continuously and charted for trend-based decisions.</p>
+                                <a href="#live" class="ht-cap-card__link">View sensor readings <i data-lucide="arrow-right"></i></a>
+                            </article>
+                            <article class="ht-cap-card ht-cap-card--alert">
+                                <div class="ht-cap-card__head">
+                                    <span class="ht-cap-card__icon"><i data-lucide="bell-ring"></i></span>
+                                    <h3 class="ht-cap-card__title">Severity-Based Alerts</h3>
+                                </div>
+                                <p class="ht-cap-card__text">Heat Stress alerts show the severity (High or Critical), body temperature, and time, so you can prioritize your response and match it to the actual risk.</p>
+                                <a href="#insights" class="ht-cap-card__link">View recommendations <i data-lucide="arrow-right"></i></a>
+                            </article>
+                            <article class="ht-cap-card ht-cap-card--insight">
+                                <div class="ht-cap-card__head">
+                                    <span class="ht-cap-card__icon"><i data-lucide="lightbulb"></i></span>
+                                    <h3 class="ht-cap-card__title">Actionable Insights</h3>
+                                </div>
+                                <p class="ht-cap-card__text">Context-aware recommendations suggest cooling steps, hydration checks, and monitoring intervals tailored to current barn conditions.</p>
+                                <a href="#insights" class="ht-cap-card__link">Open Insights <i data-lucide="arrow-right"></i></a>
+                            </article>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- RECOMMENDATIONS PREVIEW -->
+                <section id="about-rec" class="ht-about-section ht-about-section--rec" aria-labelledby="rec-preview-heading">
+                    <div class="ht-wrap">
+                        <div class="ht-about-panel ht-about-panel--rec">
+                        <header class="ht-section-head ht-section-head--center">
+                            <p class="ht-section-eyebrow">Smart Guidance</p>
+                            <h2 id="rec-preview-heading" class="ht-section-title">AI Recommendations at a Glance</h2>
+                            <p class="ht-section-sub">The Insights view organizes guidance into clear categories so every alert comes with practical next steps.</p>
+                        </header>
+                        <div class="ht-rec-preview-grid">
+                            <article class="ht-rec-preview-card ht-rec-preview-card--urgent">
+                                <div class="ht-rec-preview-card__icon"><i data-lucide="zap"></i></div>
+                                <h3 class="ht-rec-preview-card__title">Suggested Actions</h3>
+                                <p class="ht-rec-preview-card__text">Immediate cooling, relocation, and hydration steps matched to each severity level.</p>
+                            </article>
+                            <article class="ht-rec-preview-card ht-rec-preview-card--caution">
+                                <div class="ht-rec-preview-card__icon"><i data-lucide="shield"></i></div>
+                                <h3 class="ht-rec-preview-card__title">Prevention Tips</h3>
+                                <p class="ht-rec-preview-card__text">Ventilation checks, shade deployment, and feeding schedule adjustments to reduce heat load proactively.</p>
+                            </article>
+                            <article class="ht-rec-preview-card ht-rec-preview-card--info">
+                                <div class="ht-rec-preview-card__icon"><i data-lucide="cloud-sun"></i></div>
+                                <h3 class="ht-rec-preview-card__title">Environmental Insights</h3>
+                                <p class="ht-rec-preview-card__text">Humidity-aware guidance that explains how ambient conditions amplify or reduce heat stress risk.</p>
+                            </article>
+                            <article class="ht-rec-preview-card ht-rec-preview-card--thermal">
+                                <div class="ht-rec-preview-card__icon"><i data-lucide="thermometer"></i></div>
+                                <h3 class="ht-rec-preview-card__title">Temperature Guidance</h3>
+                                <p class="ht-rec-preview-card__text">Body temperature context, recheck intervals, and thermal image interpretation for each detection.</p>
+                            </article>
+                        </div>
+                        <div class="ht-rec-preview-cta">
+                            <a href="#insights" class="ht-btn ht-btn--primary">
+                                <i data-lucide="layout-dashboard"></i>
+                                <span>View Live Recommendations</span>
+                                <i data-lucide="arrow-right" class="ht-btn__chev"></i>
+                            </a>
+                        </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- MONITORING CAPABILITIES -->
+                <section id="about-monitor" class="ht-about-section ht-about-section--monitor" aria-labelledby="monitor-heading">
+                    <div class="ht-wrap">
+                        <header class="ht-section-head ht-section-head--center">
+                            <p class="ht-section-eyebrow">Monitoring Capabilities</p>
+                            <h2 id="monitor-heading" class="ht-section-title">Continuous Heat Monitoring</h2>
+                            <p class="ht-section-sub">HeatTrack watches environmental and thermal signals around the clock so operators can intervene while conditions are still manageable.</p>
+                        </header>
+                        <div class="ht-monitor-grid">
+                            <article class="ht-monitor-card">
+                                <div class="ht-monitor-card__head">
+                                    <i data-lucide="video"></i>
+                                    <h3 class="ht-monitor-card__title">Live Streams</h3>
+                                </div>
+                                <p class="ht-monitor-card__text">Side-by-side RGB and thermal feeds with detection boxes, FPS counters, and per-camera duck statistics updated in real time.</p>
+                                <ul class="ht-monitor-card__list">
+                                    <li>Fullscreen zoom on both cameras</li>
+                                    <li>Heat stress vs. normal counts</li>
+                                    <li>Thermal color scale reference</li>
+                                </ul>
+                            </article>
+                            <article class="ht-monitor-card">
+                                <div class="ht-monitor-card__head">
+                                    <i data-lucide="line-chart"></i>
+                                    <h3 class="ht-monitor-card__title">Trend Analytics</h3>
+                                </div>
+                                <p class="ht-monitor-card__text">Historical logs, severity charts, and distribution views help you spot patterns across shifts, weather changes, and duck density.</p>
+                                <ul class="ht-monitor-card__list">
+                                    <li>Filterable detection history</li>
+                                    <li>Excel report export for records</li>
+                                    <li>Severity level and status distribution charts</li>
+                                </ul>
+                            </article>
+                            <article class="ht-monitor-card">
+                                <div class="ht-monitor-card__head">
+                                    <i data-lucide="activity"></i>
+                                    <h3 class="ht-monitor-card__title">Sensor Dashboard</h3>
+                                </div>
+                                <p class="ht-monitor-card__text">Temperature and humidity tiles with trend indicators and a 60-reading environmental chart.</p>
+                                <ul class="ht-monitor-card__list">
+                                    <li>Live DHT22 readings</li>
+                                    <li>Visual progress meters</li>
+                                    <li>Temperature and humidity trend chart</li>
+                                </ul>
+                            </article>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- SYSTEM BENEFITS -->
+                <section id="about-benefits" class="ht-about-section ht-about-section--benefits" aria-labelledby="benefits-heading">
+                    <div class="ht-wrap">
+                        <div class="ht-about-panel ht-about-panel--benefits">
+                        <header class="ht-section-head ht-section-head--center">
+                            <p class="ht-section-eyebrow">Why It Matters</p>
+                            <h2 id="benefits-heading" class="ht-section-title">System Benefits for Your Operation</h2>
+                            <p class="ht-section-sub">HeatTrack supports faster decisions, better welfare outcomes, and more consistent farm management practices.</p>
+                        </header>
+                        <div class="ht-benefits-grid">
+                            <div class="ht-benefit-item">
+                                <span class="ht-benefit-item__num">01</span>
+                                <h3 class="ht-benefit-item__title">Earlier Intervention</h3>
+                                <p class="ht-benefit-item__text">Thermal imaging surfaces temperature anomalies before behavioral signs, giving operators a critical head start.</p>
+                            </div>
+                            <div class="ht-benefit-item">
+                                <span class="ht-benefit-item__num">02</span>
+                                <h3 class="ht-benefit-item__title">Reduced Mortality Risk</h3>
+                                <p class="ht-benefit-item__text">Timely alerts and graded recommendations help teams act within the minutes that matter most during heat events.</p>
+                            </div>
+                            <div class="ht-benefit-item">
+                                <span class="ht-benefit-item__num">03</span>
+                                <h3 class="ht-benefit-item__title">Data-Informed Decisions</h3>
+                                <p class="ht-benefit-item__text">Combine live feeds, sensor trends, and detection logs instead of relying on observation alone during peak heat.</p>
+                            </div>
+                            <div class="ht-benefit-item">
+                                <span class="ht-benefit-item__num">04</span>
+                                <h3 class="ht-benefit-item__title">Operational Confidence</h3>
+                                <p class="ht-benefit-item__text">A single dashboard for monitoring, analytics, and insights keeps your team aligned on what to check and when to escalate.</p>
+                            </div>
+                        </div>
+                        </div>
+                    </div>
+                </section>
+            </section>
+
+            <!-- FAQ VIEW (opened from Settings) -->
+            <div id="view-faq" class="ht-view ht-about-page ht-faq-page u-hidden" aria-label="Frequently Asked Questions">
+                <section class="ht-about-section ht-about-section--faq" aria-labelledby="faq-heading">
+                    <div class="ht-wrap">
+                        <div class="ht-faq-panel">
+                            <header class="ht-section-head ht-section-head--center">
+                                <p class="ht-section-eyebrow">Support</p>
+                                <h2 id="faq-heading" class="ht-section-title">Frequently Asked Questions</h2>
+                                <p class="ht-section-sub">Common questions about monitoring, thermal detection, AI guidance, alerts, and duck protection.</p>
+                            </header>
+                            <div class="ht-faq">
+                                <details class="ht-faq__item">
+                                    <summary class="ht-faq__trigger">
+                                        <span class="ht-faq__tag ht-faq__tag--monitor">Monitoring</span>
+                                        <span class="ht-faq__icon ht-faq__icon--monitor" aria-hidden="true"><i data-lucide="activity"></i></span>
+                                        <span class="ht-faq__question">How does HeatTrack monitor heat stress in real time?</span>
+                                        <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
+                                    </summary>
+                                    <div class="ht-faq__panel">
+                                        <p>HeatTrack combines three sources: a live RGB camera where an AI model detects and counts your ducks, a thermal camera that shows their surface heat, and a DHT22 sensor that measures barn temperature and humidity. Every 30 minutes, a heat-stress model rates the barn conditions and records a <strong>Status</strong> and <strong>Severity Level</strong>, so you can act before conditions get worse.</p>
+                                    </div>
+                                </details>
+                                <details class="ht-faq__item">
+                                    <summary class="ht-faq__trigger">
+                                        <span class="ht-faq__tag ht-faq__tag--thermal">Thermal</span>
+                                        <span class="ht-faq__icon ht-faq__icon--thermal" aria-hidden="true"><i data-lucide="scan-eye"></i></span>
+                                        <span class="ht-faq__question">What is thermal detection and how does it work?</span>
+                                        <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
+                                    </summary>
+                                    <div class="ht-faq__panel">
+                                        <p>Thermal detection uses an infrared camera to read the surface temperature of the ducks in view. The Thermal Monitor shows that heat as an image on a 25–45°C scale, from cooler to hotter. HeatTrack then rates the risk using the four levels of the Thermal Color Spectrum: <strong>Green</strong> (Low), <strong>Yellow</strong> (Moderate), <strong>Orange</strong> (High), and <strong>Red</strong> (Critical). Infrared can show rising heat before panting or weakness becomes visible, giving you an earlier warning.</p>
+                                    </div>
+                                </details>
+                                <details class="ht-faq__item">
+                                    <summary class="ht-faq__trigger">
+                                        <span class="ht-faq__tag ht-faq__tag--thermal">Thermal</span>
+                                        <span class="ht-faq__icon ht-faq__icon--thermal" aria-hidden="true"><i data-lucide="palette"></i></span>
+                                        <span class="ht-faq__question">What do the thermal color spectrum levels mean?</span>
+                                        <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
+                                    </summary>
+                                    <div class="ht-faq__panel">
+                                        <p>Colors show relative surface temperature, not an exact clinical body temperature. There are four levels: <strong>Green (Level 1, Low Risk)</strong> means readings are in the safe range, so keep routine monitoring. <strong>Yellow (Level 2, Moderate Risk)</strong> means heat is rising, so watch closely and prepare cooling. <strong>Orange (Level 3, High Risk)</strong> means heat stress is present, so start cooling now. <strong>Red (Level 4, Critical Risk)</strong> means the ducks are at immediate risk and need emergency action. Green matches the Normal status, Yellow matches Mild, and Orange and Red match Heat Stress. Always check the colors together with the ducks' behavior on the RGB feed.</p>
+                                    </div>
+                                </details>
+                                <details class="ht-faq__item">
+                                    <summary class="ht-faq__trigger">
+                                        <span class="ht-faq__tag ht-faq__tag--ai">AI</span>
+                                        <span class="ht-faq__icon ht-faq__icon--ai" aria-hidden="true"><i data-lucide="lightbulb"></i></span>
+                                        <span class="ht-faq__question">How do AI recommendations work?</span>
+                                        <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
+                                    </summary>
+                                    <div class="ht-faq__panel">
+                                        <p>The Insights page turns your readings into recommendations. Some are based on the current barn temperature, and others on recent Heat Stress records. Each one is labeled with its Severity Level, from Low to Critical, and falls under suggested actions (cooling, moving ducks, hydration), prevention (water, shade, feeding times), environmental steps (airflow, humidity), or temperature follow-ups. The newest recommendations appear first. Tap any card for full details.</p>
+                                    </div>
+                                </details>
+                                <details class="ht-faq__item">
+                                    <summary class="ht-faq__trigger">
+                                        <span class="ht-faq__tag ht-faq__tag--monitor">Monitoring</span>
+                                        <span class="ht-faq__icon ht-faq__icon--monitor" aria-hidden="true"><i data-lucide="gauge"></i></span>
+                                        <span class="ht-faq__question">What is the difference between Status and Severity Level?</span>
+                                        <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
+                                    </summary>
+                                    <div class="ht-faq__panel">
+                                        <p><strong>Status</strong> tells you whether a duck is under heat stress: Normal, Mild, or Heat Stress. <strong>Severity Level</strong> shows how urgent it is, on four levels: Low, Moderate, High, or Critical. Both come from the same reading: Low means Normal, Moderate means Mild, and High or Critical means Heat Stress. Use the status for a quick check and the severity to decide how fast to act.</p>
+                                    </div>
+                                </details>
+                                <details class="ht-faq__item">
+                                    <summary class="ht-faq__trigger">
+                                        <span class="ht-faq__tag ht-faq__tag--alerts">Alerts</span>
+                                        <span class="ht-faq__icon ht-faq__icon--alerts" aria-hidden="true"><i data-lucide="bell-ring"></i></span>
+                                        <span class="ht-faq__question">What notifications and alerts does HeatTrack send?</span>
+                                        <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
+                                    </summary>
+                                    <div class="ht-faq__panel">
+                                        <p>HeatTrack alerts you when a new record has the <strong>Heat Stress</strong> status, meaning a High or Critical severity. The alert is added to the <strong>Alerts &amp; Notifications</strong> panel under the bell icon, and a pop-up appears on screen for a few seconds. Each alert shows the body temperature, severity, and time so you can handle the most urgent cases first. Normal and Mild records do not trigger alerts.</p>
+                                    </div>
+                                </details>
+                                <details class="ht-faq__item">
+                                    <summary class="ht-faq__trigger">
+                                        <span class="ht-faq__tag ht-faq__tag--alerts">Alerts</span>
+                                        <span class="ht-faq__icon ht-faq__icon--alerts" aria-hidden="true"><i data-lucide="settings-2"></i></span>
+                                        <span class="ht-faq__question">Can I control when alerts are delivered?</span>
+                                        <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
+                                    </summary>
+                                    <div class="ht-faq__panel">
+                                        <p>Yes. Open the <strong>Settings</strong> panel from the top bar and switch <strong>Alert Notifications</strong> on or off. The same panel also turns <strong>Camera Streams</strong> and the <strong>AI Detection Model</strong> on or off. Keep alerts on during the hottest hours so you can respond quickly when conditions change.</p>
+                                    </div>
+                                </details>
+                                <details class="ht-faq__item">
+                                    <summary class="ht-faq__trigger">
+                                        <span class="ht-faq__tag ht-faq__tag--monitor">Monitoring</span>
+                                        <span class="ht-faq__icon ht-faq__icon--monitor" aria-hidden="true"><i data-lucide="refresh-cw"></i></span>
+                                        <span class="ht-faq__question">How often is monitoring data updated?</span>
+                                        <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
+                                    </summary>
+                                    <div class="ht-faq__panel">
+                                        <p>The camera feed streams continuously while monitoring is on. DHT22 readings appear as soon as the sensor sends them, updating the Temperature and Humidity tiles and the Environmental Trend chart. Every 30 minutes, a new Status and Severity record is added to the Detection Log History and Analytics charts, and the recommendations update to match.</p>
+                                    </div>
+                                </details>
+                                <details class="ht-faq__item">
+                                    <summary class="ht-faq__trigger">
+                                        <span class="ht-faq__tag ht-faq__tag--farmers">Farmers</span>
+                                        <span class="ht-faq__icon ht-faq__icon--farmers" aria-hidden="true"><i data-lucide="bird"></i></span>
+                                        <span class="ht-faq__question">How does HeatTrack help poultry farmers protect their ducks?</span>
+                                        <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
+                                    </summary>
+                                    <div class="ht-faq__panel">
+                                        <p>HeatTrack gives poultry and duck farmers earlier visibility into heat risk—combining thermal imaging, environmental sensing, and AI guidance in one dashboard. Teams can intervene sooner, reduce mortality risk during heat spikes, export records for management review, and make data-informed decisions instead of relying on observation alone during the hottest shifts.</p>
+                                    </div>
+                                </details>
+                                <details class="ht-faq__item">
+                                    <summary class="ht-faq__trigger">
+                                        <span class="ht-faq__tag ht-faq__tag--farmers">Farmers</span>
+                                        <span class="ht-faq__icon ht-faq__icon--farmers" aria-hidden="true"><i data-lucide="shield-check"></i></span>
+                                        <span class="ht-faq__question">Should I still check my ducks manually if HeatTrack is running?</span>
+                                        <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
+                                    </summary>
+                                    <div class="ht-faq__panel">
+                                        <p>Absolutely. HeatTrack is an assistive monitoring tool—not a replacement for on-site welfare checks or veterinarian guidance. AI detections and recommendations may contain errors. Always confirm alerts with direct observation and follow your farm protocols before taking critical action, especially for High or Critical severity.</p>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- LIVE VIEW -->
+            <div id="view-live" class="ht-view u-hidden" aria-label="Live Monitoring">
+                <header class="page-section-header">
+                    <div class="ht-wrap ht-page-head">
+                        <div class="ht-page-head__row">
+                            <div>
+                                <h2 class="page-section-title">Live Monitoring</h2>
+                                <p class="page-section-subtitle">Monitor camera feeds, sensor data, and track environmental conditions in real time.</p>
+                            </div>
+                            <span class="ht-date" data-date-today></span>
+                        </div>
+                    </div>
+                </header>
+                <div class="ht-wrap ht-page-body ht-stack-lg">
+                    <div class="ht-feed-grid">
+                        <div class="ht-panel">
+                            <div class="ht-panel__head">
+                                <div class="ht-panel__label">
+                                    <span>RGB Monitor</span>
+                                </div>
+                                <div class="ht-live-badge ht-live-badge--green ht-live-badge--disabled">LIVE</div>
+                            </div>
+                            <div class="ht-camera camera-feed" id="normalCameraContainer" data-tooltip="Click to expand fullscreen" data-tooltip-follow>
+                                <div class="camera-zoom-layer ht-camera__layer">
+                                    <!-- RGB feed image removed to avoid static fallback when no camera is connected -->
+                                    <canvas id="normalOverlay"></canvas>
+                                    <div id="normalAnnotations" class="ht-camera__annotations"></div>
+                                </div>
+                                <div class="ht-camera__hud ht-camera__hud--tl">
+                                    <div class="ht-chip ht-chip--green">CAM-01 | RGB</div>
+                                    <div class="ht-chip" id="normalTimestamp">--</div>
+                                    <div class="ht-chip ht-chip--stack" id="normalDuckStats">
+                                        <div>Ducks: --</div>
+                                        <div>Normal: --</div>
+                                        <div>Heat Stress: --</div>
+                                    </div>
+                                </div>
+                                <div class="ht-camera__hud ht-camera__hud--bl">
+                                    <div class="ht-chip" id="normalFps">--</div>
+                                </div>
+                                <div class="ht-camera__hud ht-camera__hud--tr ht-chip">Click to expand</div>
+                            </div>
+                        </div>
+                        <div class="ht-panel">
+                            <div class="ht-panel__head">
+                                <div class="ht-panel__label">
+                                    <span>Thermal Monitor</span>
+                                </div>
+                                <div class="ht-live-badge ht-live-badge--thermal ht-live-badge--disabled">LIVE</div>
+                            </div>
+                            <div class="ht-camera camera-feed" id="thermalCameraContainer" data-tooltip="Click to expand fullscreen" data-tooltip-follow>
+                                <div class="camera-zoom-layer ht-camera__layer">
+                                    <!-- Thermal feed image removed to avoid static fallback when no camera is connected -->
+                                    <canvas id="thermalOverlay"></canvas>
+                                    <div id="thermalAnnotations" class="ht-camera__annotations"></div>
+                                </div>
+                                <div class="ht-camera__hud ht-camera__hud--tl">
+                                    <div class="ht-chip ht-chip--thermal">CAM-02 | THERMAL</div>
+                                    <div class="ht-chip" id="thermalTimestamp">--</div>
+                                    <div class="ht-chip ht-chip--stack" id="thermalDuckStats">
+                                        <div>Ducks: --</div>
+                                        <div>Normal: --</div>
+                                        <div>Heat Stress: --</div>
+                                    </div>
+                                </div>
+                                <div class="ht-camera__hud ht-camera__hud--bl">
+                                    <div class="ht-chip" id="thermalFps">--</div>
+                                </div>
+                                <div class="ht-camera__hud ht-camera__hud--tr ht-chip">Click to expand</div>
+                                <div class="ht-thermal-scale">
+                                    <div class="ht-thermal-scale__bar" aria-hidden="true">
+                                        <span></span><span></span><span></span><span></span>
+                                    </div>
+                                    <div class="ht-thermal-scale__labels"><span>25°C</span><span>45°C</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <section class="ht-panel">
+                        <div class="ht-panel__head">
+                            <div class="ht-panel__label">
+                                <i data-lucide="gauge"></i>
+                                <span>DHT22 Sensor Readings</span>
+                            </div>
+                            <div class="ht-rec-indicator">
+                                <span class="ht-live-dot ht-live-dot--inactive"></span>
+                                <span class="ht-mono-label ht-mono-label--inactive">INACTIVE</span>
+                            </div>
+                        </div>
+                        <div class="ht-panel__body">
+                            <div class="ht-sensor-grid">
+                                <div class="ht-sensor-tile ht-sensor-tile--temp">
+                                    <div class="ht-sensor-tile__head">
+                                        <i data-lucide="thermometer"></i>
+                                        <span>Temperature</span>
+                                    </div>
+                                    <div class="ht-sensor-tile__value">
+                                        <span id="tempValue">--</span><span class="ht-unit">°C</span>
+                                    </div>
+                                    <div id="tempTrend" class="ht-trend">
+                                        <i data-lucide="trending-up"></i><span>--</span>
+                                    </div>
+                                    <div id="tempMeter" class="ht-meter ht-meter--temp" role="meter" aria-label="Temperature level" aria-valuemin="20" aria-valuemax="50">
+                                        <div id="tempBar" class="ht-meter__fill"></div>
+                                    </div>
+                                    <div class="ht-meter__scale">
+                                        <span>20°C</span>
+                                        <span id="tempLevel" class="ht-meter__level">--</span>
+                                        <span>50°C</span>
+                                    </div>
+                                </div>
+                                <div class="ht-sensor-tile ht-sensor-tile--humid">
+                                    <div class="ht-sensor-tile__head">
+                                        <i data-lucide="droplets"></i>
+                                        <span>Humidity</span>
+                                    </div>
+                                    <div class="ht-sensor-tile__value">
+                                        <span id="humidValue">--</span><span class="ht-unit">%</span>
+                                    </div>
+                                    <div id="humidTrend" class="ht-trend">
+                                        <i data-lucide="trending-down"></i><span>--</span>
+                                    </div>
+                                    <div id="humidMeter" class="ht-meter ht-meter--humid" role="meter" aria-label="Humidity level" aria-valuemin="0" aria-valuemax="100">
+                                        <div id="humidBar" class="ht-meter__fill"></div>
+                                    </div>
+                                    <div class="ht-meter__scale">
+                                        <span>0%</span>
+                                        <span id="humidLevel" class="ht-meter__level">--</span>
+                                        <span>100%</span>
+                                    </div>
+                                </div>
+                                <!-- Heat Index and THI tiles removed per user request -->
+                            </div>
+                            <div class="ht-chart-box">
+                                <div class="ht-chart-box__head">
+                                    <span>Environmental Trend (Last 60 Readings)</span>
+                                    <div class="ht-legend">
+                                        <span><i class="ht-legend__sw ht-legend__sw--temp"></i> Temperature</span>
+                                        <span><i class="ht-legend__sw ht-legend__sw--humid"></i> Humidity</span>
+                                    </div>
+                                </div>
+                                <div class="ht-chart-box__canvas">
+                                    <canvas id="envChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <!-- ANALYTICS VIEW -->
+            <div id="view-analytics" class="ht-view u-hidden" aria-label="Analytics">
+                <header class="page-section-header">
+                    <div class="ht-wrap ht-page-head">
+                        <div class="ht-page-head__row">
+                            <div>
+                                <h2 class="page-section-title">Analytics</h2>
+                                <p class="page-section-subtitle">Review detection records, analyze trends, and generate reports.</p>
+                            </div>
+                            <span class="ht-date" data-date-today></span>
+                        </div>
+                    </div>
+                </header>
+                <div class="ht-wrap ht-page-body ht-stack-lg">
+                    <section class="ht-panel ht-log-panel">
+                        <div class="ht-panel__head">
+                            <div class="ht-panel__label">
+                                <i data-lucide="clipboard-list"></i>
+                                <span>Detection Log History</span>
+                            </div>
+                            <div class="ht-toolbar ht-toolbar--wrap">
+                                <select id="logFilter" class="ht-select">
+                                    <option value="all">All Events</option>
+                                    <option value="heatstress">Heat Stress Only</option>
+                                    <option value="mild">Mild Only</option>
+                                    <option value="normal">Normal Only</option>
+                                </select>
+                                <select id="logDateRange" class="ht-select">
+                                    <option value="all">All Times</option>
+                                    <option value="today">Today</option>
+                                    <option value="last7">Last 7 days</option>
+                                    <option value="last30">Last 30 days</option>
+                                    <option value="custom">Custom range</option>
+                                </select>
+                                <div id="logCustomRange" class="u-hidden ht-custom-range">
+                                    <div class="ht-custom-range__item">
+                                        <span class="ht-select-label">From</span>
+                                        <div class="ht-select ht-select--date">
+                                            <input type="date" id="logCustomStart" placeholder="mm/dd/yyyy" aria-label="Custom start date" data-has-value="false">
+                                            <span class="ht-custom-range__placeholder">mm/dd/yyyy</span>
+                                        </div>
+                                    </div>
+                                    <div class="ht-custom-range__item">
+                                        <span class="ht-select-label">To</span>
+                                        <div class="ht-select ht-select--date">
+                                            <input type="date" id="logCustomEnd" placeholder="mm/dd/yyyy" aria-label="Custom end date" data-has-value="false">
+                                            <span class="ht-custom-range__placeholder">mm/dd/yyyy</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="button" id="exportLogs" class="ht-btn ht-btn--small ht-btn--ghost">
+                                    <i data-lucide="download"></i> Generate Report
+                                </button>
+                            </div>
+                        </div>
+                        <div class="ht-table-scroll">
+                            <table class="ht-table">
+                                <thead>
+                                    <tr>
+                                        <th>Timestamp</th>
+                                        <th>Status</th>
+                                        <th>Lowest Body Temp</th>
+                                        <th>Average Body Temp</th>
+                                        <th>Highest Body Temp</th>
+                                        <th>Duck Count</th>
+                                        <th>Batch Count</th>
+                                        <th>Severity</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="detectionLogBody"></tbody>
+                            </table>
+                        </div>
+                        <div class="ht-panel__foot">
+                            <span id="logCount" class="ht-footnote">Showing 0 records</span>
+                            <div class="ht-pagination">
+                                <button type="button" id="prevPage">Prev</button>
+                                <span id="pageInfo">1/1</span>
+                                <button type="button" id="nextPage">Next</button>
+                            </div>
+                        </div>
+                    </section>
+                    <div class="ht-layout-2fr-1fr">
+                        <section class="ht-panel">
+                            <div class="ht-panel__head">
+                                <div class="ht-panel__label">
+                                    <i data-lucide="bar-chart-3"></i>
+                                    <span>Severity Levels</span>
+                                </div>
+                            </div>
+                            <div class="ht-panel__pad">
+                                <div class="ht-chart-tall">
+                                    <canvas id="severityChart"></canvas>
+                                </div>
+                            </div>
+                        </section>
+                        <section class="ht-panel ht-panel--chart">
+                            <div class="ht-panel__head">
+                                <div class="ht-panel__label">
+                                    <i data-lucide="pie-chart"></i>
+                                    <span>Detection Distribution</span>
+                                </div>
+                            </div>
+                            <div class="ht-panel__pad ht-panel__pad--chart-layout">
+                                <div class="ht-chart-frame">
+                                    <canvas id="detectionChart"></canvas>
+                                </div>
+                                <div id="detectionLegend" class="ht-detection-legend"></div>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </div>
+
+            <!-- INSIGHTS VIEW -->
+            <div id="view-insights" class="ht-view u-hidden" aria-label="Insights">
+                <header class="page-section-header">
+                    <div class="ht-wrap ht-page-head">
+                        <div class="ht-page-head__row">
+                            <div>
+                                <h2 class="page-section-title">Insights &amp; Actions</h2>
+                                <p class="page-section-subtitle">Review duck KPIs and follow AI-guided recommendations.</p>
+                            </div>
+                            <span class="ht-date" data-date-today></span>
+                        </div>
+                    </div>
+                </header>
+                <div class="ht-wrap ht-page-body ht-stack-lg">
+                    <div class="ht-kpi-grid" aria-label="Summary KPIs">
+                        <div class="ht-kpi">
+                            <div class="ht-kpi__icon ht-kpi__icon--low"><i data-lucide="check-circle"></i></div>
+                            <div id="normalCount" class="ht-kpi__value">0</div>
+                            <div class="ht-kpi__label">Normal Ducks</div>
+                        </div>
+                        <div class="ht-kpi">
+                            <div class="ht-kpi__icon ht-kpi__icon--moderate"><i data-lucide="sun-medium"></i></div>
+                            <div id="mildCount" class="ht-kpi__value">0</div>
+                            <div class="ht-kpi__label">Mild Detections</div>
+                        </div>
+                        <div class="ht-kpi">
+                            <div class="ht-kpi__icon ht-kpi__icon--high"><i data-lucide="alert-triangle"></i></div>
+                            <div id="stressCount" class="ht-kpi__value">0</div>
+                            <div class="ht-kpi__label">Heat Stress Detected</div>
+                        </div>
+                        <div class="ht-kpi">
+                            <div class="ht-kpi__icon ht-kpi__icon--critical"><i data-lucide="siren"></i></div>
+                            <div id="criticalCount" class="ht-kpi__value">0</div>
+                            <div class="ht-kpi__label">Critical Cases</div>
+                        </div>
+                    </div>
+
+                    <section class="ht-panel ht-insights-panel-grow ht-panel--stack">
+                        <div class="ht-panel__head">
+                            <div class="ht-panel__label">
+                                <i data-lucide="lightbulb"></i>
+                                <span>Results &amp; Recommendations</span>
+                            </div>
+                            
+                        </div>
+                        <div id="recommendationsList" class="ht-rec-list" role="list"></div>                        <div id="recommendationsDisclaimer" class="ht-panel__note">
+                            <div class="ht-panel__note-title">
+                                <i data-lucide="info"></i>
+                                <span>Disclaimer</span>
+                            </div>
+                            <p>AI recommendations are assistive only. Confirm with on-site observation and follow farm protocol before critical actions.</p>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </div>
+
+        <!-- PROFILE VIEW -->
+        <div id="view-profile" class="ht-view u-hidden" aria-label="Profile">
+            <header class="page-section-header">
+                <div class="ht-wrap ht-page-head">
+                    <div class="ht-page-head__row">
+                        <div>
+                            <h2 class="page-section-title">Profile</h2>
+                            <p class="page-section-subtitle">View and update your account information.</p>
+                        </div>
+                        <span class="ht-date" data-date-today></span>
+                    </div>
+                </div>
+            </header>
+            <div class="ht-wrap ht-page-body ht-stack-lg">
+                <section class="ht-panel ht-profile">
+                    <div class="ht-panel__head">
+                        <div class="ht-panel__label">
+                            <i data-lucide="user"></i>
+                            <span>Account Information</span>
+                        </div>
+                        <button type="button" id="profileEditBtn" class="ht-btn ht-btn--small ht-btn--ghost">
+                            <i data-lucide="pencil"></i> Edit Profile
+                        </button>
+                    </div>
+                    <div class="ht-panel__body">
+                        <div class="ht-profile__summary">
+                            <div id="profileAvatar" class="ht-profile__avatar">?</div>
+                            <div>
+                                <div id="profileFullName" class="ht-profile__name">--</div>
+                                <div id="profileHandle" class="ht-profile__handle"></div>
+                                <div id="profileSince" class="ht-profile__since"></div>
+                            </div>
+                        </div>
+
+                        <form id="profileForm" autocomplete="off">
+                            <div class="ht-profile__grid">
+                                <label class="ht-profile__field">First Name
+                                    <input name="firstName" type="text" maxlength="30" placeholder="Not set"
+                                        pattern="[\p{L}\p{M}]+( [\p{L}\p{M}]+)*" title="Letters and spaces only (max 30 characters)"
+                                        readonly required>
+                                </label>
+                                <label class="ht-profile__field">Last Name
+                                    <input name="lastName" type="text" maxlength="30" placeholder="Not set"
+                                        pattern="[\p{L}\p{M}]+( [\p{L}\p{M}]+)*" title="Letters and spaces only (max 30 characters)"
+                                        readonly required>
+                                </label>
+                                <label class="ht-profile__field">Username
+                                    <input name="username" type="text" maxlength="20" placeholder="Not set" autocomplete="username"
+                                        title="No spaces (max 20 characters)" readonly required>
+                                </label>
+                                <label class="ht-profile__field">Email
+                                    <input name="email" type="email" maxlength="50" placeholder="Not set" data-locked readonly>
+                                </label>
+                                <!-- Device details: view only, never unlocked by Edit Profile -->
+                                <label class="ht-profile__field">Device ID
+                                    <input name="deviceCode" type="text" placeholder="Not linked" autocomplete="off"
+                                        title="The Device ID cannot be changed" data-locked readonly>
+                                </label>
+                                <label class="ht-profile__field">Device API Key
+                                    <input name="deviceKey" type="text" value="••••••••••" autocomplete="off"
+                                        title="The API key is hidden and cannot be changed" data-locked readonly>
+                                </label>
+                            </div>
+                            <div id="profilePasswordSection" class="ht-profile__password u-hidden">
+                                <div class="ht-profile__password-head">
+                                    <span class="ht-profile__password-title"><i data-lucide="key-round"></i> Change Password</span>
+                                    <span class="ht-profile__password-hint">Optional. Leave these empty to keep your current password.</span>
+                                </div>
+                                <div class="ht-profile__grid">
+                                    <label class="ht-profile__field">Current Password
+                                        <span class="ht-auth__password">
+                                            <input name="currentPassword" type="password" placeholder="current password" autocomplete="current-password">
+                                            <button type="button" class="ht-auth__eye" aria-label="Show password" data-password-toggle><i data-lucide="eye"></i></button>
+                                        </span>
+                                    </label>
+                                    <label class="ht-profile__field">New Password
+                                        <span class="ht-auth__password" data-password-strength-wrapper>
+                                            <input name="newPassword" type="password" placeholder="new password" autocomplete="new-password" aria-describedby="profilePasswordRequirements profilePasswordStrength">
+                                            <button type="button" class="ht-auth__eye" aria-label="Show password" data-password-toggle><i data-lucide="eye"></i></button>
+                                        </span>
+                                    </label>
+                                    <div class="ht-profile__pw-feedback">
+                                        <ul id="profilePasswordRequirements" class="ht-auth__requirements" aria-label="Password requirements">
+                                            <li data-password-requirement="length"><span aria-hidden="true"></span>8-16 characters</li>
+                                            <li data-password-requirement="uppercase"><span aria-hidden="true"></span>At least 1 uppercase letter</li>
+                                            <li data-password-requirement="lowercase"><span aria-hidden="true"></span>At least 1 lowercase letter</li>
+                                            <li data-password-requirement="special"><span aria-hidden="true"></span>At least 1 special character</li>
+                                            <li data-password-requirement="digit"><span aria-hidden="true"></span>At least 1 numerical digit</li>
+                                        </ul>
+                                        <p id="profilePasswordStrength" class="ht-auth__strength" role="status" aria-live="polite">Password strength: <span>Not entered</span></p>
+                                    </div>
+                                    <label class="ht-profile__field">Confirm New Password
+                                        <span class="ht-auth__password">
+                                            <input name="confirmNewPassword" type="password" placeholder="Re-enter new password" autocomplete="new-password">
+                                            <button type="button" class="ht-auth__eye" aria-label="Show password" data-password-toggle><i data-lucide="eye"></i></button>
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div id="profileActions" class="ht-profile__actions u-hidden">
+                                <button type="button" id="profileCancelBtn" class="ht-btn ht-btn--secondary">Cancel</button>
+                                <button type="submit" class="ht-btn ht-btn--primary"><i data-lucide="check"></i><span>Save Changes</span></button>
+                            </div>
+                            <p id="profileStatus" class="ht-profile__status u-hidden" role="status"></p>
+                        </form>
+                    </div>
+                </section>
+                <div class="ht-profile-logout">
+                    <button type="button" id="logoutBtn" class="ht-btn ht-profile-logout__btn" data-logout-trigger="user">
+                        <i data-lucide="log-out"></i>
+                        <span>Log Out</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <footer class="ht-footer">
+            <div class="ht-wrap ht-footer__inner">
+                <div class="ht-footer__row">
+                    <div class="ht-footer__brand">
+                        <img src="HEATTRACK_ORANGE.ico" alt="" class="ht-footer__brand-img">
+                        <span>HeatTrack — Thermal AI System</span>
+                    </div>
+                    <p class="ht-footer__copy">Pateros Duckery AI-Integrated Assistive Monitoring System for Heat Stress Detection &copy; 2026</p>
+                </div>
+            </div>
+        </footer>
+
+        <!-- TOAST -->
+        <div id="alertToast" class="ht-toast" role="status">
+            <div class="ht-toast__card">
+                <div class="ht-toast__icon"><i data-lucide="alert-triangle"></i></div>
+                <div class="ht-toast__body">
+                    <div class="ht-toast__title">HEAT STRESS DETECTED</div>
+                    <div id="toastMessage" class="ht-toast__msg">Heat stress detected. Body temp: 42.8°C</div>
+                    <div id="toastTime" class="ht-toast__time">Just now</div>
+                </div>
+                <button type="button" id="closeToast" class="ht-toast__close" aria-label="Close"><i data-lucide="x"></i></button>
+            </div>
+        </div>
+
+        <!-- RECOMMENDATION MODAL -->
+        <div id="recommendationModal" class="ht-modal" role="dialog" aria-modal="true" aria-labelledby="recommendation-modal-title">
+            <div id="recommendationModalBackdrop" class="ht-modal__backdrop"></div>
+            <div class="ht-modal__dialog">
+                <div class="ht-modal__head">
+                    <div class="ht-modal__title-row">
+                        <i data-lucide="clipboard-list"></i>
+                        <span id="recommendation-modal-title">Results &amp; Recommendations</span>
+                    </div>
+                    <button type="button" id="closeRecommendationModal" class="ht-iconbtn ht-iconbtn--muted" aria-label="Close"><i data-lucide="x"></i></button>
+                </div>
+                <div id="recommendationModalBody" class="ht-modal__body"></div>
+            </div>
+        </div>
+    </main>
+
+    <div id="logoutConfirmModal" class="ht-logout-modal" role="dialog" aria-modal="true" aria-labelledby="logoutConfirmTitle" aria-describedby="logoutConfirmMessage" hidden>
+        <div class="ht-logout-modal__backdrop" data-logout-dismiss></div>
+        <div class="ht-logout-modal__card" role="document">
+            <div class="ht-logout-modal__icon"><i data-lucide="log-out"></i></div>
+            <h2 id="logoutConfirmTitle">Log out?</h2>
+            <p id="logoutConfirmMessage">Are you sure you want to log out of HeatTrack?</p>
+            <div class="ht-logout-modal__actions">
+                <button type="button" class="ht-btn ht-btn--secondary ht-logout-modal__cancel" data-logout-dismiss>No</button>
+                <button type="button" class="ht-btn ht-btn--primary ht-logout-modal__confirm" data-logout-confirm>Yes, log out</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="loginLoadingScreen" class="ht-login-loading" role="status" aria-live="polite" aria-label="Signing in" hidden>
+        <div class="ht-login-loading__content">
+            <div class="ht-login-loading__logo"><img src="HEATTRACK_WHITE.ico" alt="HeatTrack"></div>
+            <p class="ht-login-loading__brand">HEATTRACK</p>
+            <p class="ht-login-loading__tagline">THERMAL AI SYSTEM</p>
+            <div class="ht-login-loading__progress" aria-hidden="true"><span></span></div>
+            <p id="loginLoadingStatus" class="ht-login-loading__status" role="status" aria-live="polite">Signing you in...</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="script.js"></script>
+    <script src="livefeed.js"></script>
+</body>
+</html>
