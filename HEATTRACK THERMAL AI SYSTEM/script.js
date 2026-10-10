@@ -2509,7 +2509,13 @@ function openRecommendationModal(rec, currentTemp, { keepScroll = false } = {}) 
 
     // Gemini's text for this result when it exists; guideline text otherwise
     const ai = rec.ai || null;
-    const pick = (aiList, fallback) => (Array.isArray(aiList) && aiList.length ? aiList : fallback);
+    // Always 5 lines: the AI's list, topped up from the guideline text if it gave fewer
+    const pick = (aiList, fallback) => {
+        const lines = Array.isArray(aiList) ? aiList.filter(Boolean) : [];
+        const seen = new Set(lines.map((l) => l.toLowerCase()));
+        fallback.forEach((l) => { if (!seen.has(l.toLowerCase())) { seen.add(l.toLowerCase()); lines.push(l); } });
+        return lines.slice(0, REC_LIST_LENGTH);
+    };
     const guidanceLines = pick(ai?.suggested_actions, getRecommendationGuidance(rec));
     const resultSummary = getRecommendationResultSummary(rec, currentTemp);
     const headline = getRecommendationHeadline(rec);
@@ -2777,31 +2783,49 @@ function rotateForResult(list, rec) {
     return list.slice(shift).concat(list.slice(0, shift));
 }
 
+// Suggested Actions and Heat Stress Prevention both show this many lines
+const REC_LIST_LENGTH = 5;
+
+// Lead line first (skipped if missing or already in the list), then the list, cut to 5
+function withLead(lead, list) {
+    const rest = lead ? list.filter((l) => l.toLowerCase() !== lead.toLowerCase()) : list;
+    return (lead ? [lead, ...rest] : rest).slice(0, REC_LIST_LENGTH);
+}
+
 function getRecommendationGuidance(rec) {
     const guidanceBySeverity = {
         CRITICAL: [
             'Start cooling right away and keep the hottest birds apart.',
             'Watch response for 1–3 minutes and be ready to escalate.',
-            'Keep water available and avoid extra handling.'
+            'Keep water available and avoid extra handling.',
+            'Run misting with strong ventilation so humidity does not trap heat.',
+            'Call a veterinarian if severe signs last more than 10 minutes.'
         ],
         HIGH: [
             'Turn fans and shade on high, then recheck in 10 minutes.',
             'Reduce crowding and delay non-essential activity.',
-            'Focus on the hottest zones first.'
+            'Focus on the hottest zones first.',
+            'Watch for panting, wing spreading, or lethargy every 10 minutes.',
+            'Open all airflow panels to move hot air out of the barn.'
         ],
         MODERATE: [
             'Use preventive cooling and monitor the trend.',
             'Check drinkers, vents, and shade coverage.',
-            'Be ready to act if temperatures rise again.'
+            'Be ready to act if temperatures rise again.',
+            'Recheck temperature and humidity every 15 minutes.',
+            'Add temporary shade over sunny open areas.'
         ],
         LOW: [
             'Keep regular monitoring active.',
             'Verify water and airflow are working.',
-            'Note any new heat spikes for the next check.'
+            'Note any new heat spikes for the next check.',
+            'Keep automated alerts switched on.',
+            'Check fan operation once per shift.'
         ]
     };
 
-    return rotateForResult(guidanceBySeverity[rec.severity] || guidanceBySeverity.MODERATE, rec);
+    // Lead with the result's guideline action, like Prevention leads with its tip
+    return withLead(rec.action, rotateForResult(guidanceBySeverity[rec.severity] || guidanceBySeverity.MODERATE, rec));
 }
 
 // Modal heading: the detection result plus its key facts (time, confidence)
@@ -2828,27 +2852,34 @@ function getRecommendationPreventionTips(rec) {
         CRITICAL: [
             'Open airflow and keep water available.',
             'Avoid unnecessary movement or handling.',
-            'Keep the hottest animals separated from the group.'
+            'Keep the hottest animals separated from the group.',
+            'Provide cool, not cold, water at several drinking points.',
+            'Hold feeding until body temperatures come down.'
         ],
         HIGH: [
             'Boost shade and fan output where it is hottest.',
             'Check that all birds can reach water easily.',
-            'Delay extra handling until conditions calm.'
+            'Delay extra handling until conditions calm.',
+            'Replace warm trough water and recheck it every 20 minutes.',
+            'Move feeding to the cooler early morning or late afternoon.'
         ],
         MODERATE: [
             'Check vents, water, and shade before heat rises.',
             'Move cooling equipment closer if needed.',
-            'Track the trend for any quick changes.'
+            'Track the trend for any quick changes.',
+            'Keep drinkers clean, flowing, and reachable from every section.',
+            'Schedule feeding outside the hottest hours of the day.'
         ],
         LOW: [
             'Keep normal checks active and log peak readings.',
             'Confirm fans and water are working properly.',
-            'Stay ready for a quick response if heat rises.'
+            'Stay ready for a quick response if heat rises.',
+            'Test backup cooling before hot weather arrives.',
+            'Review daily heat trends to spot rising risk early.'
         ]
     };
 
-    const base = rotateForResult(bySeverity[rec.severity] || bySeverity.MODERATE, rec);
-    return rec.tip ? [rec.tip, base[0], base[1]] : base;
+    return withLead(rec.tip, rotateForResult(bySeverity[rec.severity] || bySeverity.MODERATE, rec));
 }
 
 // Summary card (when there is no Gemini text): what was found, the conditions
@@ -3503,7 +3534,8 @@ function xlsStyle(id, o = {}) {
     const borders = o.borders
         ? '<Borders>' + o.borders.map(([pos, w, c]) => '<Border ss:LineStyle="Continuous" ss:Weight="' + w + '" ss:Color="' + c + '" ss:Position="' + pos + '"/>').join('') + '</Borders>'
         : '';
-    return '<Style ss:ID="' + id + '">' + font + fill + align + borders + '</Style>';
+    const numFmt = o.numFmt ? '<NumberFormat ss:Format="' + o.numFmt + '"/>' : '';
+    return '<Style ss:ID="' + id + '">' + font + fill + align + borders + numFmt + '</Style>';
 }
 
 // The rows the Detection Log shows for the chosen filters (status + period).
@@ -3532,8 +3564,14 @@ function exportDetectionsToExcel() {
     const rows = getFilteredLogDetections();
     // Summary boxes count the same way as the KPI cards (10-minute rows; the
     // 30-minute rows repeat them), but only for the rows in this report
-    const counts = getDetectionCounts(rows.filter(d => !(d.hasInterval && d.interval === 30)));
+    const countedRows = rows.filter(d => !(d.hasInterval && d.interval === 30));
+    const counts = getDetectionCounts(countedRows);
+    const totalDucks = (counts.normal || 0) + (counts.mild || 0) + (counts.stress || 0);
     const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    // Local date/time as Excel's DateTime value (no time zone shift)
+    const xlsDate = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
+        + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + '.000';
 
     const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     // An empty "Number" cell makes Excel refuse the file, so empty values are text
@@ -3554,14 +3592,18 @@ function exportDetectionsToExcel() {
     styleXml += xlsStyle('sCardNormalVal', { bold: true, size: 11, color: '#274E13', fill: '#70F09F', h: 'Center' });
     styleXml += xlsStyle('sCardMildVal', { bold: true, size: 11, color: '#783F04', fill: '#F7BC5B', h: 'Center' });
     styleXml += xlsStyle('sCardHeatstressVal', { bold: true, size: 11, color: '#CE2B1D', fill: '#FF9494', h: 'Center' });
-    styleXml += xlsStyle('sCardCriticalVal', { bold: true, size: 11, color: '#FFFFFF', fill: '#DC2626', h: 'Center' });
     styleXml += xlsStyle('sCardNormalLbl', { bold: true, size: 11, color: '#FFFFFF', fill: '#4ADE80', h: 'Center' });
     styleXml += xlsStyle('sCardMildLbl', { bold: true, size: 11, color: '#FFFFFF', fill: '#F59E0B', h: 'Center' });
     styleXml += xlsStyle('sCardHeatstressLbl', { bold: true, size: 11, color: '#FFFFFF', fill: '#F87171', h: 'Center' });
-    styleXml += xlsStyle('sCardCriticalLbl', { bold: true, size: 11, color: '#FFFFFF', fill: '#B91C1C', h: 'Center' });
     styleXml += xlsStyle('sHeader', { bold: true, size: 11, color: '#FFFFFF', fill: '#FB923C', h: 'Center', wrap: true, borders: white });
-    styleXml += xlsStyle('sDataRow1Timestamp', { size: 10, fill: '#FFCBA2', h: 'Center', borders: white });
-    styleXml += xlsStyle('sDataRow2Timestamp', { size: 10, fill: '#FFDDC2', h: 'Center', borders: white });
+    // Timestamps are real Excel dates, so the column sorts and filters by time
+    const tsFmt = 'mmmm d, yyyy, h:mm:ss AM/PM';
+    styleXml += xlsStyle('sDataRow1Timestamp', { size: 10, fill: '#FFCBA2', h: 'Center', borders: white, numFmt: tsFmt });
+    styleXml += xlsStyle('sDataRow2Timestamp', { size: 10, fill: '#FFDDC2', h: 'Center', borders: white, numFmt: tsFmt });
+    // Body temps always show one decimal
+    styleXml += xlsStyle('sTempRow1', { size: 10, fill: '#FFCBA2', h: 'Center', borders: white, numFmt: '0.0' });
+    styleXml += xlsStyle('sTempRow2', { size: 10, fill: '#FFDDC2', h: 'Center', borders: white, numFmt: '0.0' });
+    styleXml += xlsStyle('sNote', { size: 9, color: '#6B7280', h: 'Left', wrap: true });
     styleXml += xlsStyle('sStatusNormal', { size: 10, color: '#FFFFFF', fill: '#4ADE80', h: 'Center', borders: white });
     styleXml += xlsStyle('sStatusMild', { size: 10, color: '#FFFFFF', fill: '#F59E0B', h: 'Center', borders: white });
     styleXml += xlsStyle('sStatusHeatstress', { size: 10, color: '#FFFFFF', fill: '#F87171', h: 'Center', borders: white });
@@ -3577,7 +3619,9 @@ function exportDetectionsToExcel() {
 
     // ---- Columns: A margin | B-C Timestamp | D Interval | E Status | F Lowest | G Average |
     //      H Highest | I Duck Count | J Batch Count | K Severity | L-M Top Recommendation ----
-    const colWidths = [22, 70, 70, 70, 80, 80, 80, 80, 70, 75, 75, 120, 120];
+    // B-C fit the longest timestamp ("September 30, 2026, 12:05:30 PM"); a date that
+    // doesn't fit shows as ##### in Excel
+    const colWidths = [22, 95, 95, 70, 80, 80, 80, 80, 70, 75, 75, 120, 120];
     const span = colWidths.length - 2;          // MergeAcross for full-width rows (B..M)
     let tableXml = '<Table>' + colWidths.map((w) => '<Column ss:Width="' + w + '"/>').join('');
     const fullRow = (height, style, text) =>
@@ -3602,21 +3646,22 @@ function exportDetectionsToExcel() {
     tableXml += spacerRow;
     tableXml += fullRow(18, 'sGenerated', 'Generated: ' + generated);
     tableXml += fullRow(18, 'sGenerated', 'Events: ' + (pick('logFilter') || 'All Events') + '   |   Period: ' + period
-        + '   |   Records: ' + rows.length);
+        // Total = Normal + Mild + Heat Stress ducks, the same sum as the boxes below
+        + '   |   Total Records: ' + totalDucks);
     tableXml += spacerRow;
 
-    // ---- Summary boxes: Normal | Mild | Heat Stress | Critical ----
+    // ---- Summary boxes: Normal | Mild | Heat Stress (with share of all ducks) ----
+    const share = (n) => (totalDucks ? ' (' + Math.round(((n || 0) / totalDucks) * 100) + '%)' : '');
     const cards = [
-        ['sCardNormalVal', 'sCardNormalLbl', counts.normal, 'Normal Ducks'],
-        ['sCardMildVal', 'sCardMildLbl', counts.mild, 'Mild Ducks'],
-        ['sCardHeatstressVal', 'sCardHeatstressLbl', counts.stress, 'Heat Stress Ducks'],
-        ['sCardCriticalVal', 'sCardCriticalLbl', counts.critical, 'Critical Cases'],
+        ['sCardNormalVal', 'sCardNormalLbl', counts.normal, 'Normal Ducks' + share(counts.normal)],
+        ['sCardMildVal', 'sCardMildLbl', counts.mild, 'Mild Ducks' + share(counts.mild)],
+        ['sCardHeatstressVal', 'sCardHeatstressLbl', counts.stress, 'Heat Stress Ducks' + share(counts.stress)],
     ];
-    const cardStart = [2, 5, 8, 11];            // columns B, E, H, K (2 wide, 1 gap between)
+    const cardStart = [2, 6, 10];               // columns B, F, J (3 wide, 1 gap between)
     tableXml += '<Row ss:Height="22"><Cell/>' + cards.map((c, i) =>
-        '<Cell ss:Index="' + cardStart[i] + '" ss:MergeAcross="1" ss:StyleID="' + c[0] + '"><Data ss:Type="Number">' + (c[2] || 0) + '</Data></Cell>').join('') + '</Row>';
+        '<Cell ss:Index="' + cardStart[i] + '" ss:MergeAcross="2" ss:StyleID="' + c[0] + '"><Data ss:Type="Number">' + (c[2] || 0) + '</Data></Cell>').join('') + '</Row>';
     tableXml += '<Row ss:Height="22"><Cell/>' + cards.map((c, i) =>
-        '<Cell ss:Index="' + cardStart[i] + '" ss:MergeAcross="1" ss:StyleID="' + c[1] + '"><Data ss:Type="String">' + c[3] + '</Data></Cell>').join('') + '</Row>';
+        '<Cell ss:Index="' + cardStart[i] + '" ss:MergeAcross="2" ss:StyleID="' + c[1] + '"><Data ss:Type="String">' + c[3] + '</Data></Cell>').join('') + '</Row>';
     tableXml += spacerRow;
 
     // ---- Table header (same columns as the Detection Log) ----
@@ -3626,11 +3671,19 @@ function exportDetectionsToExcel() {
            'Duck Count', 'Batch Count', 'Severity'].map((h) => textCell('sHeader', h)).join('')
         + textCell('sHeader', 'Top Recommendation', 1)
         + '</Row>';
+    // Row number of the header: frozen on screen and repeated on every printed page
+    const headerRow = (tableXml.match(/<Row/g) || []).length;
 
     // ---- Data rows ----
     rows.forEach((d, idx) => {
         const odd = idx % 2 === 0;
-        const tsStyle = odd ? 'sDataRow1Timestamp' : 'sDataRow2Timestamp';
+        const rowN = odd ? 'Row1' : 'Row2';
+        const tempCell = (t) => numCell('sTemp' + rowN, t, 1);
+        const ts = d.timestamp instanceof Date ? d.timestamp : new Date(d.timestamp);
+        const tsCell = Number.isNaN(ts.getTime())
+            ? textCell(odd ? 'sDataRow1Timestamp' : 'sDataRow2Timestamp', '--', 1)
+            : '<Cell ss:MergeAcross="1" ss:StyleID="' + (odd ? 'sDataRow1Timestamp' : 'sDataRow2Timestamp') + '"><Data ss:Type="DateTime">' + xlsDate(ts) + '</Data></Cell>';
+        const sevText = { CRITICAL: 'Critical', HIGH: 'High', MODERATE: 'Moderate', LOW: 'Low' }[d.severity] || 'Low';
         const center = odd ? 'sDataCenterRow1' : 'sDataCenterRow2';
         const recStyle = odd ? 'sRecRow1' : 'sRecRow2';
         const statusText = d.status === 'HEAT STRESS' ? 'Heat Stress' : d.status === 'MILD' ? 'Mild' : 'Normal';
@@ -3645,15 +3698,15 @@ function exportDetectionsToExcel() {
             : textCell(center, d.batchCount ?? '--');
 
         tableXml += '<Row ss:Height="' + rowHeight + '"><Cell/>'
-            + textCell(tsStyle, formatTimestamp(d.timestamp), 1)
+            + tsCell
             + textCell(center, interval)
             + textCell(statusStyle, statusText)
-            + numCell(center, d.lowTemp, 1)
-            + numCell(center, d.avgTemp, 1)
-            + numCell(center, d.highTemp, 1)
+            + tempCell(d.lowTemp)
+            + tempCell(d.avgTemp)
+            + tempCell(d.highTemp)
             + numCell(center, d.count ?? 0, 0)
             + batch
-            + textCell(sevStyle, d.severity || 'LOW')
+            + textCell(sevStyle, sevText)
             + textCell(recStyle, recText, 1)
             + '</Row>';
     });
@@ -3661,16 +3714,28 @@ function exportDetectionsToExcel() {
     if (!rows.length) {
         tableXml += fullRow(30, 'sDataCenterRow1', 'No detections for the selected events and period.');
     }
+    tableXml += spacerRow;
+    tableXml += fullRow(28, 'sNote', 'Duck totals count the 10-minute records only; 30-minute peak records repeat them. '
+        + 'Results and recommendations are assistive only. Always confirm with on-site observation and follow your farm protocol or veterinary guidance.');
     tableXml += '</Table>';
 
+    const sheetName = 'HeatTrack Report';
     const xml = '<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?>'
         + '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office"'
         + ' xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'
-        + styleXml + '<Worksheet ss:Name="HeatTrack Report">' + tableXml
-        // Print / PDF: landscape, all columns on one page width
+        + styleXml + '<Worksheet ss:Name="' + sheetName + '">'
+        // Print the table header at the top of every page
+        + '<Names><NamedRange ss:Name="Print_Titles" ss:RefersTo="=\'' + sheetName + '\'!R' + headerRow + '"/></Names>'
+        + tableXml
+        // Print / PDF: landscape, all columns on one page width, page numbers in the footer
         + '<WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><PageSetup><Layout x:Orientation="Landscape"/>'
-        + '<PageMargins x:Left="0.3" x:Right="0.3" x:Top="0.4" x:Bottom="0.4"/></PageSetup><FitToPage/>'
-        + '<Print><FitWidth>1</FitWidth><FitHeight>0</FitHeight><ValidPrinterInfo/></Print></WorksheetOptions>'
+        + '<Footer x:Margin="0.2" x:Data="&amp;LHeatTrack Analytics Report&amp;RPage &amp;P of &amp;N"/>'
+        + '<PageMargins x:Left="0.3" x:Right="0.3" x:Top="0.4" x:Bottom="0.5"/></PageSetup><FitToPage/>'
+        + '<Print><FitWidth>1</FitWidth><FitHeight>0</FitHeight><ValidPrinterInfo/></Print>'
+        // Keep everything down to the table header in view while scrolling
+        + '<FreezePanes/><FrozenNoSplit/><SplitHorizontal>' + headerRow + '</SplitHorizontal>'
+        + '<TopRowBottomPane>' + headerRow + '</TopRowBottomPane><ActivePane>2</ActivePane>'
+        + '</WorksheetOptions>'
         + '</Worksheet></Workbook>';
 
     // The link must be on the page, and the file kept a moment, for every browser to download it
@@ -3678,7 +3743,8 @@ function exportDetectionsToExcel() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'heattrack_report_' + now.toISOString().slice(0, 10) + '.xls';
+    // Local date and time (toISOString is UTC, which can be the wrong day)
+    a.download = 'heattrack_report_' + xlsDate(now).slice(0, 10) + '_' + pad(now.getHours()) + pad(now.getMinutes()) + '.xls';
     a.style.display = 'none';
     document.body.appendChild(a);
     a.click();
@@ -5325,21 +5391,31 @@ function adminMatchesSearch(profile, inputId) {
     return `${profile.username} ${adminFullName(profile)} ${profile.email} ${adminDeviceCodeFor(profile.id)}`.toLowerCase().includes(search);
 }
 
+// Free-text cell: cut with "…" at the column's maximum width, full value on hover
+function adminClipCell(text) {
+    const safe = escapeHtml(text);
+    return `<span class="ht-admin-ui__clip" title="${safe}">${safe}</span>`;
+}
+
 function adminDeviceCell(profile) {
-    return escapeHtml(adminDeviceCodeFor(profile.id) || 'Not linked');
+    return adminClipCell(adminDeviceCodeFor(profile.id) || 'Not linked');
+}
+
+function adminIdentityCells(profile) {
+    return `<td>${adminClipCell(profile.username)}</td><td>${adminClipCell(adminFullName(profile))}</td><td>${adminClipCell(profile.email)}</td><td>${adminDeviceCell(profile)}</td>`;
 }
 
 function renderAdminPending() {
     const rows = adminSortRows(adminVisibleProfiles().filter((profile) => profile.status !== 'approved' && adminMatchesSearch(profile, 'adminPendingSearch')), 'pending');
     syncAdminSortControls('pending');
-    renderAdminTable('pending', rows, (profile) => `<tr><td>${escapeHtml(profile.username)}</td><td>${escapeHtml(adminFullName(profile))}</td><td>${escapeHtml(profile.email)}</td><td>${adminDeviceCell(profile)}</td><td>${adminFormatDate(profile.createdAt)}</td><td><span class="ht-admin-ui__status ht-admin-ui__status--pending">Pending</span></td><td><div class="ht-admin-ui__actions"><button type="button" class="ht-btn ht-btn--small ht-btn--ghost ht-admin-ui__btn--accept" data-admin-accept="${profile.id}"><i data-lucide="check"></i>Accept</button><button type="button" class="ht-btn ht-btn--small ht-btn--ghost ht-admin-ui__btn--danger" data-admin-reject="${profile.id}"><i data-lucide="x"></i>Reject</button></div></td></tr>`, 'No pending requests', 'requests');
+    renderAdminTable('pending', rows, (profile) => `<tr>${adminIdentityCells(profile)}<td>${adminFormatDate(profile.createdAt)}</td><td><span class="ht-admin-ui__status ht-admin-ui__status--pending">Pending</span></td><td><div class="ht-admin-ui__actions"><button type="button" class="ht-btn ht-btn--small ht-btn--ghost ht-admin-ui__btn--accept" data-admin-accept="${profile.id}"><i data-lucide="check"></i>Accept</button><button type="button" class="ht-btn ht-btn--small ht-btn--ghost ht-admin-ui__btn--danger" data-admin-reject="${profile.id}"><i data-lucide="x"></i>Reject</button></div></td></tr>`, 'No pending requests', 'requests');
 }
 
 function renderAdminUsers() {
     const rows = adminVisibleProfiles().filter((profile) => profile.status === 'approved' && adminMatchesSearch(profile, 'adminUserSearch'));
     adminSortRows(rows, 'users');
     syncAdminSortControls('users');
-    renderAdminTable('users', rows, (profile) => `<tr><td>${escapeHtml(profile.username)}</td><td>${escapeHtml(adminFullName(profile))}</td><td>${escapeHtml(profile.email)}</td><td>${adminDeviceCell(profile)}</td><td>${adminFormatDate(profile.createdAt)}</td><td><span class="ht-admin-ui__status ht-admin-ui__status--approved">Approved</span></td><td><div class="ht-admin-ui__actions"><button type="button" class="ht-btn ht-btn--small ht-btn--ghost" data-admin-edit="${profile.id}"><i data-lucide="pencil"></i>Edit</button><button type="button" class="ht-btn ht-btn--small ht-btn--ghost ht-admin-ui__btn--info" data-admin-reset="${profile.id}"><i data-lucide="key-round"></i>Reset Password</button><button type="button" class="ht-btn ht-btn--small ht-btn--ghost ht-admin-ui__btn--danger" data-admin-delete="${profile.id}"><i data-lucide="trash-2"></i>Delete</button></div></td></tr>`, 'No approved accounts', 'users');
+    renderAdminTable('users', rows, (profile) => `<tr>${adminIdentityCells(profile)}<td>${adminFormatDate(profile.createdAt)}</td><td><span class="ht-adash__chip ht-adash__chip--approved">Approved</span></td><td><div class="ht-admin-ui__actions"><button type="button" class="ht-btn ht-btn--small ht-btn--ghost" data-admin-edit="${profile.id}"><i data-lucide="pencil"></i>Edit</button><button type="button" class="ht-btn ht-btn--small ht-btn--ghost ht-admin-ui__btn--danger" data-admin-delete="${profile.id}"><i data-lucide="trash-2"></i>Delete</button></div></td></tr>`, 'No approved accounts', 'users');
 }
 
 // Re-renders everything that shows account / device counts
