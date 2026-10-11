@@ -2237,23 +2237,24 @@ function setHtmlIfChanged(el, html) {
 function liveStatusCounts(thermal) {
     if (!thermal || !Array.isArray(thermal.ducks_now)) return null;
     const temps = thermal.ducks_now.filter((t) => typeof t === 'number');
-    const stress = temps.filter((t) => t >= LIVE_TEMP_LEVELS.stress).length;
-    const mild = temps.filter((t) => t >= LIVE_TEMP_LEVELS.mild && t < LIVE_TEMP_LEVELS.stress).length;
+    const stress = temps.filter((t) => t > LIVE_TEMP_LEVELS.stress).length;
+    const mild = temps.filter((t) => t > LIVE_TEMP_LEVELS.mild && t <= LIVE_TEMP_LEVELS.stress).length;
     return { normal: temps.length - mild - stress, mild, stress };
 }
 
 // Live body temperatures from the thermal camera (window.liveThermal, set by
 // livefeed.js from the logger's /stats). Uses the same thresholds as the
 // Detection Log colours. Returns null when there is no live thermal data.
-// Thermal Color Spectrum bands (same as the logger's SPECTRUM_BANDS):
-// below 30 °C Normal (LOW) · 30-35 Mild (MODERATE) · 35-40 Heat Stress (HIGH) · 40+ Heat Stress (CRITICAL)
-const LIVE_TEMP_LEVELS = { mild: 30, stress: 35, critical: 40 };   // °C: from mild = Mild, from stress = Heat Stress
+// Status & Severity levels (same as the logger's SPECTRUM_BANDS):
+// 34 °C or below Normal (LOW) · above 34 up to 37 Mild (MODERATE) ·
+// above 37 up to 40 Heat Stress (HIGH) · above 40 Heat Stress (CRITICAL)
+const LIVE_TEMP_LEVELS = { mild: 34, stress: 37, critical: 40 };   // °C: above mild = Mild, above stress = Heat Stress
 
 function liveThermalHtml(thermal) {
     if (!thermal || !Array.isArray(thermal.ducks_now)) return null;
     const temps = thermal.ducks_now.filter((t) => typeof t === 'number');
-    const stress = temps.filter((t) => t >= LIVE_TEMP_LEVELS.stress).length;
-    const mild = temps.filter((t) => t >= LIVE_TEMP_LEVELS.mild && t < LIVE_TEMP_LEVELS.stress).length;
+    const stress = temps.filter((t) => t > LIVE_TEMP_LEVELS.stress).length;
+    const mild = temps.filter((t) => t > LIVE_TEMP_LEVELS.mild && t <= LIVE_TEMP_LEVELS.stress).length;
     const normal = temps.length - mild - stress;
     const unmeasured = thermal.ducks_now.length - temps.length;
     const hottest = temps.length ? `${Math.max(...temps).toFixed(1)}°C` : '--';
@@ -2299,7 +2300,7 @@ function renderDetectionLogs() {
             // One cell per header column: lowest / average / highest body temperature
             const tempCell = (t) => {
                 if (t == null) return '<td class="ht-log-cell--mono">--</td>';
-                const cls = t >= LIVE_TEMP_LEVELS.stress ? 'ht-log-temp--hi' : t >= LIVE_TEMP_LEVELS.mild ? 'ht-log-temp--mid' : 'ht-log-temp--ok';
+                const cls = t > LIVE_TEMP_LEVELS.stress ? 'ht-log-temp--hi' : t > LIVE_TEMP_LEVELS.mild ? 'ht-log-temp--mid' : 'ht-log-temp--ok';
                 return `<td class="ht-log-cell--mono ${cls}">${t.toFixed(1)}°C</td>`;
             };
             const batch = d.batchCount != null ? escapeHtml(String(d.batchCount)) : '--';
