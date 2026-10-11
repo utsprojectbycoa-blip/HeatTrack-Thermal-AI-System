@@ -793,7 +793,7 @@
                                             <span class="ht-about-highlight__icon ht-about-highlight__icon--ai"><i data-lucide="lightbulb"></i></span>
                                             <div>
                                                 <strong>AI-guided actions</strong>
-                                                <p>AI-rated heat stress risk, with alerts and recommended actions.</p>
+                                                <p>Heat stress alerts with AI-recommended actions.</p>
                                             </div>
                                         </li>
                                     </ul>
@@ -926,7 +926,7 @@
                                 <div class="ht-article-card__icon ht-article-card__icon--thermal"><i data-lucide="gauge"></i></div>
                                 <h3 class="ht-article-card__h">Status &amp; Severity Levels</h3>
                             </div>
-                            <p class="ht-prose ht-quickref-intro">Every 10 and 30 minutes, HeatTrack saves a detection record with two labels. An AI model sets the <strong>Severity Level</strong> (Low, Moderate, High, or Critical) from the highest barn temperature in that period and the humidity at that moment, both measured by the DHT22 sensor. The <strong>Status</strong> (Normal, Mild, or Heat Stress) follows from the severity, as shown below. The temperatures listed are barn air temperatures and serve as a guide; because the model also weighs humidity, a very humid barn can be rated higher at the same temperature. Each record also lists the ducks' lowest, average, and highest body temperatures from the thermal camera. Check the status at a glance, then let the severity tell you how fast to act.</p>
+                            <p class="ht-prose ht-quickref-intro">At the first detection and every 30 minutes after it, HeatTrack records a reading with two labels. The <strong>Severity Level</strong> (Low, Moderate, High, or Critical) is set by the highest duck body temperature measured by the thermal camera in that period, and the <strong>Status</strong> (Normal, Mild, or Heat Stress) follows from the severity, as shown below. Each record also lists the ducks' lowest and average body temperatures, plus the barn temperature and humidity from the DHT22 sensor. Check the status at a glance, then let the severity tell you how fast to act.</p>
                             <div class="ht-status-guide">
                                 <!-- Mapping: 4 severity levels grouped under 3 statuses -->
                                 <div class="ht-status-map" role="img" aria-label="Low is Normal, Moderate is Mild, High and Critical are Heat Stress">
@@ -955,7 +955,8 @@
                                             </div>
                                         </div>
                                         <div class="ht-tier-card__body">
-                                            <p>Barn temperature is <strong>34°C or below</strong> and humidity is in a safe range, so the ducks can shed heat normally. No intervention is needed.</p>                                        </div>
+                                            <p>The highest duck body temperature is <strong>34°C or below</strong>. The ducks are shedding heat normally, so no intervention is needed. Keep water, shade, and airflow as usual.</p>
+                                        </div>
                                         <div class="ht-tier-card__action"><i data-lucide="circle-check"></i> Keep routine monitoring</div>
                                     </li>
                                     <li class="ht-tier-card ht-tier-card--mild">
@@ -967,7 +968,8 @@
                                             </div>
                                         </div>
                                         <div class="ht-tier-card__body">
-                                            <p>Barn temperature is <strong>above 34°C, up to 37°C</strong>. Heat and humidity are building up, and early signs may appear. Act early so conditions do not climb into heat stress.</p>                                        </div>
+                                            <p>The highest duck body temperature is <strong>above 34°C, up to 37°C</strong>. Heat is building up and early signs such as panting may appear. Act early so the ducks do not climb into heat stress.</p>
+                                        </div>
                                         <div class="ht-tier-card__action"><i data-lucide="shield"></i> Take preventive steps</div>
                                     </li>
                                     <li class="ht-tier-card ht-tier-card--stress">
@@ -980,7 +982,8 @@
                                             </div>
                                         </div>
                                         <div class="ht-tier-card__body">
-                                            <p>Barn conditions make it hard for the ducks to shed heat. At <strong>High</strong> (above 37°C, up to 40°C), start cooling now; at <strong>Critical</strong> (above 40°C), take emergency action and contact a veterinarian.</p>                                        </div>
+                                            <p>The ducks can no longer shed heat well. At <strong>High</strong> (highest body temperature above 37°C, up to 40°C), start cooling now; at <strong>Critical</strong> (above 40°C), take emergency action and contact a veterinarian.</p>
+                                        </div>
                                         <div class="ht-tier-card__action"><i data-lucide="siren"></i> Cool down immediately</div>
                                     </li>
                                 </ol>
@@ -1017,7 +1020,7 @@
                                     <span class="ht-guide-card__icon"><i data-lucide="thermometer-sun"></i></span>
                                     <h3 class="ht-guide-card__title">What is heat stress?</h3>
                                 </div>
-                                <p class="ht-guide-card__text">Heat stress occurs when a duck cannot shed heat fast enough and its body temperature rises above safe limits. Hot, humid air is the main driver, so HeatTrack rates the risk from barn conditions and tracks body temperatures with a thermal camera.</p>
+                                <p class="ht-guide-card__text">Heat stress occurs when a duck cannot shed heat fast enough and its body temperature rises above safe limits. HeatTrack rates the risk from each duck's body temperature, read by a thermal camera.</p>
                                 <div class="ht-guide-card__box">
                                     <p class="ht-guide-card__label">Signs to watch for</p>
                                     <ul class="ht-guide-card__list">
@@ -1176,7 +1179,7 @@
                                     <i data-lucide="line-chart"></i>
                                     <h3 class="ht-monitor-card__title">Detection Analytics</h3>
                                 </div>
-                                <p class="ht-monitor-card__text">Records saved every 10 and 30 minutes, with severity and distribution charts, help you spot patterns over days and weather changes.</p>
+                                <p class="ht-monitor-card__text">30-minute readings with severity and distribution charts help you spot patterns over days and weather changes.</p>
                                 <ul class="ht-monitor-card__list">
                                     <li>Filterable detection history</li>
                                     <li>Excel report export for records</li>
@@ -1212,7 +1215,7 @@
                             <div class="ht-benefit-item">
                                 <span class="ht-benefit-item__num">01</span>
                                 <h3 class="ht-benefit-item__title">Earlier Intervention</h3>
-                                <p class="ht-benefit-item__text">Conditions are rated every 10 and 30 minutes, and Heat Stress records raise an alert right away for a head start.</p>
+                                <p class="ht-benefit-item__text">Ducks are rated every 30 minutes, and Heat Stress readings raise an alert right away, giving your team a head start.</p>
                             </div>
                             <div class="ht-benefit-item">
                                 <span class="ht-benefit-item__num">02</span>
@@ -1254,7 +1257,7 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>HeatTrack combines three sources: a live RGB camera where an AI model detects and counts your ducks, a thermal camera that estimates each duck's body temperature, and a DHT22 sensor that measures barn temperature and humidity. Every 10 minutes, and again every 30 minutes for the peak of that window, a heat-stress model rates the barn conditions and records a <strong>Status</strong> and <strong>Severity Level</strong>, so you can act before conditions get worse.</p>
+                                        <p>HeatTrack combines three sources: a live RGB camera where an AI model detects and counts your ducks, a thermal camera that estimates each duck's body temperature, and a DHT22 sensor that measures barn temperature and humidity. From the first detection and every 30 minutes after it, HeatTrack rates the ducks' highest body temperature and records a <strong>Status</strong> and <strong>Severity Level</strong>, so you can act before conditions get worse.</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
@@ -1287,7 +1290,7 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>The Insights page shows one recommendation for every 10-minute record in which ducks were detected, newest first. Each one is labeled with its Severity Level, from Low to Critical, and its steps are matched to that level. When available, AI rewrites them for the current conditions, marked with an <strong>AI</strong> badge. Tap any card for its Detection Details, Summary, Suggested Actions (cooling, moving ducks, hydration), and Heat Stress Prevention (airflow, shade, water, feeding times).</p>
+                                        <p>The Insights page shows one recommendation for every 30-minute reading in which ducks were detected, newest first. Each one is labeled with its Severity Level, from Low to Critical, and its steps are matched to that level. When available, AI rewrites them for the current conditions, marked with an <strong>AI</strong> badge. Tap any card for its Detection Details, Summary, Suggested Actions (cooling, moving ducks, hydration), and Heat Stress Prevention (airflow, shade, water, feeding times).</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
@@ -1298,7 +1301,7 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>Both labels rate the heat stress risk of each record. An AI model sets the <strong>Severity Level</strong> (Low, Moderate, High, or Critical) from the barn's highest temperature and its humidity, and the <strong>Status</strong> follows from it: Low means Normal (34°C or below), Moderate means Mild (above 34°C, up to 37°C), and High (above 37°C, up to 40°C) or Critical (above 40°C) means Heat Stress. The temperatures are a guide, since humidity also counts. Use the status for a quick check and the severity to decide how fast to act.</p>
+                                        <p>Both labels rate the heat stress risk of each record. The <strong>Severity Level</strong> (Low, Moderate, High, or Critical) is set by the ducks' highest body temperature from the thermal camera, and the <strong>Status</strong> follows from it: Low means Normal (34°C or below), Moderate means Mild (above 34°C, up to 37°C), and High (above 37°C, up to 40°C) or Critical (above 40°C) means Heat Stress. Use the status for a quick check and the severity to decide how fast to act.</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
@@ -1309,7 +1312,7 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>HeatTrack alerts you when a new record has the <strong>Heat Stress</strong> status, meaning a High or Critical severity. The alert is added to the <strong>Alerts &amp; Notifications</strong> panel under the bell icon, and a pop-up appears on screen for about 5 seconds. Each alert shows the body temperature, severity, and time so you can handle the most urgent cases first. Normal and Mild records do not trigger alerts.</p>
+                                        <p>HeatTrack alerts you when a 30-minute reading has the <strong>Heat Stress</strong> status, meaning a High or Critical severity. The first detection itself does not raise an alert. The alert is added to the <strong>Alerts &amp; Notifications</strong> panel under the bell icon, and a pop-up appears on screen for about 5 seconds. Each alert shows the body temperature, severity, and time so you can handle the most urgent cases first. Normal and Mild records do not trigger alerts.</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
@@ -1331,7 +1334,7 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>The camera feeds stream continuously while Camera Streams is on. DHT22 readings are saved about every 10 seconds, updating the Temperature and Humidity tiles and the Environmental Trend chart. Every 10 minutes, a new Status and Severity record is added to the Detection Log History and Analytics charts, with a 30-minute peak record every half hour, and the recommendations update to match. Periods with no ducks detected add no record.</p>
+                                        <p>The camera feeds stream continuously while Camera Streams is on. DHT22 readings are saved about every 10 seconds, updating the Temperature and Humidity tiles and the Environmental Trend chart. When ducks are first detected, that detection is added to the Detection Log History. After that, a new Status and Severity reading, marked <strong>30 min</strong>, is added every 30 minutes, counted from the first detection, and the KPI cards, Analytics charts, and recommendations update to match. Periods with no ducks detected, or with ducks the thermal camera could not measure, add no record, and if no ducks are seen for more than 30 minutes, the next detection starts a new count.</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
