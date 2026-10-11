@@ -4589,11 +4589,39 @@ function normalizeSeverity(value) {
 }
 
 // analytics row -> the "detection" shape the UI already understands
+// Status & Severity levels (the website's Status & Severity cards), from the
+// highest body temperature: 34 °C or below LOW/Normal · above 34 up to 37
+// MODERATE/Mild · above 37 up to 40 HIGH/Heat Stress · above 40 CRITICAL/Heat Stress
+const SEVERITY_STEPS = ['LOW', 'MODERATE', 'HIGH', 'CRITICAL'];
+const STATUS_OF_SEVERITY = { LOW: 'NORMAL', MODERATE: 'MILD', HIGH: 'HEAT STRESS', CRITICAL: 'HEAT STRESS' };
+
+function severityFromBodyTemp(t) {
+    if (t > LIVE_TEMP_LEVELS.critical) return 'CRITICAL';
+    if (t > LIVE_TEMP_LEVELS.stress) return 'HIGH';
+    if (t > LIVE_TEMP_LEVELS.mild) return 'MODERATE';
+    return 'LOW';
+}
+
+// The level shown for a saved row: the body-temperature level, raised by at most
+// ONE step when the saved rating was higher (the DHT22 humidity/air support),
+// never lowered below it. Also corrects rows saved with older rules.
+function levelForRow(highTemp, savedSeverity) {
+    if (highTemp == null || Number.isNaN(highTemp)) {
+        return { severity: savedSeverity, status: STATUS_OF_SEVERITY[savedSeverity] || 'NORMAL' };
+    }
+    const base = SEVERITY_STEPS.indexOf(severityFromBodyTemp(highTemp));
+    const saved = SEVERITY_STEPS.indexOf(savedSeverity);
+    const step = saved > base ? Math.min(base + 1, SEVERITY_STEPS.length - 1) : base;
+    const severity = SEVERITY_STEPS[step];
+    return { severity, status: STATUS_OF_SEVERITY[severity] };
+}
+
 function mapAnalyticsRow(row) {
-    const status = normalizeStatus(row.status);
     const low = toNum(row[DB_COLS.lowTemp]);
     const high = toNum(row[DB_COLS.highTemp]);
     const avg = toNum(row[DB_COLS.avgTemp]);
+    const level = levelForRow(high, normalizeSeverity(row.severity));
+    const status = level.status;
     // 10 = 10-minute slot row, 30 = 30-minute window row; rows saved before
     // the interval column existed are 30-minute rows
     const hasInterval = row.interval_minutes != null;
@@ -4614,7 +4642,7 @@ function mapAnalyticsRow(row) {
         count: Math.max(0, parseInt(row.duck_count, 10) || 0),
         batchCount: row.batch_count ?? null,
         confidence: null, // no confidence column in the analytics table
-        severity: normalizeSeverity(row.severity),
+        severity: level.severity,
         interval,
         hasInterval,
         ai: row.ai_recommendation || null,   // written by the "recommend" Edge Function (Gemini)
