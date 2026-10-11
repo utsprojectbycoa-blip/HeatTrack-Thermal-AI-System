@@ -1967,9 +1967,9 @@ img { max-width: 100%; height: auto; display: block; }
 
 /* Tier colors: solid (bars/dots), text (readable on white), tint (backgrounds) */
 .ht-status-guide {
-    margin-top: 2rem;
+    margin-top: 1.5rem;
     display: grid;
-    gap: 2rem;
+    gap: 1.5rem;
 }
 .ht-tier-card--normal { --st-solid: #22c55e; --st-text: #15803d; --st-tint: rgba(34, 197, 94, 0.12); }
 .ht-tier-card--mild { --st-solid: #eab308; --st-text: #a16207; --st-tint: rgba(234, 179, 8, 0.15); }
@@ -2071,7 +2071,7 @@ img { max-width: 100%; height: auto; display: block; }
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 1rem 1.25rem;
+    padding: 0.75rem 1.25rem;
     border-bottom: 1px solid rgba(15, 23, 42, 0.06);
 }
 /* Status colors match the Detection Log status badges (.ht-log-status--*) */
@@ -2109,13 +2109,13 @@ img { max-width: 100%; height: auto; display: block; }
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 0.625rem;
-    padding: 1.125rem 1.25rem 1.25rem;
+    gap: 0.5rem;
+    padding: 0.875rem 1.25rem;
 }
 .ht-tier-card__body p {
     margin: 0;
     font-size: 0.875rem;
-    line-height: 1.6;
+    line-height: 1.55;
     text-align: justify;
     hyphens: none;
     color: var(--ht-surface-300);
@@ -2126,7 +2126,7 @@ img { max-width: 100%; height: auto; display: block; }
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.875rem 1.25rem;
+    padding: 0.75rem 1.25rem;
     border-top: 1px solid rgba(15, 23, 42, 0.06);
     font-size: 0.8125rem;
     font-weight: 700;
@@ -2136,7 +2136,7 @@ img { max-width: 100%; height: auto; display: block; }
 
 @media (max-width: 640px) {
     .ht-status-guide-card { margin-top: 1.5rem; }
-    .ht-status-guide { gap: 1.5rem; }
+    .ht-status-guide { margin-top: 1.25rem; gap: 1.25rem; }
     .ht-status-map { padding: 1rem 0.875rem; }
     .ht-status-map__levels,
     .ht-status-map__groups { gap: 0.25rem; }
@@ -2148,9 +2148,9 @@ img { max-width: 100%; height: auto; display: block; }
     }
     .ht-status-map__group { font-size: 0.75rem; flex-direction: column; gap: 0.25rem; }
     .ht-status-map__group::before { left: 0.25rem; right: 0.25rem; }
-    .ht-tier-card__head { padding: 0.875rem 1rem; }
-    .ht-tier-card__body { padding: 1rem; }
-    .ht-tier-card__action { padding: 0.75rem 1rem; }
+    .ht-tier-card__head { padding: 0.75rem 1rem; }
+    .ht-tier-card__body { padding: 0.75rem 1rem; }
+    .ht-tier-card__action { padding: 0.625rem 1rem; }
 }
 
 .ht-disclaimer-band {
