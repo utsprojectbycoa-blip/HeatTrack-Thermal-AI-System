@@ -17,7 +17,7 @@
     // changed). true = flip left <-> right. Use either this OR the logger's
     // HEATTRACK_WEBCAM_FLIP / HEATTRACK_THERMAL_FLIP, not both (they would cancel out).
     const FLIP_RGB_HORIZONTAL = true;
-    const FLIP_THERMAL_HORIZONTAL = true;
+    const FLIP_THERMAL_HORIZONTAL = false;
 
     // Reuse the client created in script.js (one client per page)
     const client = typeof sb !== 'undefined' ? sb : null;
