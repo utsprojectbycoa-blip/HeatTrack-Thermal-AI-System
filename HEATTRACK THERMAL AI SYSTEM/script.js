@@ -2310,7 +2310,7 @@ function renderDetectionLogs() {
 
             return `
                 <tr class="ht-log-row-clickable${flash}" data-detection-id="${d.id}">
-                    <td class="ht-log-cell--mono">${formatTimestamp(d.timestamp)}${intervalBadge(durations.get(d.id))}${peak30Badge(d)}</td>
+                    <td class="ht-log-cell--mono">${formatTimestamp(d.timestamp)}${intervalBadge(durations.get(d.id))}</td>
                     <td>
                         <div class="${statusWrap}">
                             <i data-lucide="${statusIcon}"></i>
@@ -4677,11 +4677,6 @@ function peak30Text(d) {
     if (!d.peak30) return '';
     const temp = d.peak30.highTemp ?? d.peak30.bodyTemp;
     return `30 min peak${temp != null ? ' ' + temp.toFixed(1) + '°C' : ''} · ${d.peak30.count} duck${d.peak30.count !== 1 ? 's' : ''}`;
-}
-
-function peak30Badge(d) {
-    if (!d.peak30) return '';
-    return ` <span title="Highest body temperature and peak duck count of the last 30 minutes" style="display:inline-block;margin-left:.3rem;padding:.05rem .45rem;border-radius:999px;font:700 .68rem 'DM Sans',system-ui,sans-serif;vertical-align:middle;background:#fff7ed;color:#c2410c">${peak30Text(d)}</span>`;
 }
 
 // Totals (KPI cards, charts) use the 10-minute rows, so they update every
