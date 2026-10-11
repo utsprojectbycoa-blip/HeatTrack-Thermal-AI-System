@@ -2237,21 +2237,23 @@ function setHtmlIfChanged(el, html) {
 function liveStatusCounts(thermal) {
     if (!thermal || !Array.isArray(thermal.ducks_now)) return null;
     const temps = thermal.ducks_now.filter((t) => typeof t === 'number');
-    const stress = temps.filter((t) => t > LIVE_TEMP_LEVELS.stress).length;
-    const mild = temps.filter((t) => t > LIVE_TEMP_LEVELS.mild && t <= LIVE_TEMP_LEVELS.stress).length;
+    const stress = temps.filter((t) => t >= LIVE_TEMP_LEVELS.stress).length;
+    const mild = temps.filter((t) => t >= LIVE_TEMP_LEVELS.mild && t < LIVE_TEMP_LEVELS.stress).length;
     return { normal: temps.length - mild - stress, mild, stress };
 }
 
 // Live body temperatures from the thermal camera (window.liveThermal, set by
 // livefeed.js from the logger's /stats). Uses the same thresholds as the
 // Detection Log colours. Returns null when there is no live thermal data.
-const LIVE_TEMP_LEVELS = { mild: 41, stress: 42 };   // °C: above mild = Mild, above stress = Heat Stress
+// Thermal Color Spectrum bands (same as the logger's SPECTRUM_BANDS):
+// below 30 °C Normal (LOW) · 30-35 Mild (MODERATE) · 35-40 Heat Stress (HIGH) · 40+ Heat Stress (CRITICAL)
+const LIVE_TEMP_LEVELS = { mild: 30, stress: 35, critical: 40 };   // °C: from mild = Mild, from stress = Heat Stress
 
 function liveThermalHtml(thermal) {
     if (!thermal || !Array.isArray(thermal.ducks_now)) return null;
     const temps = thermal.ducks_now.filter((t) => typeof t === 'number');
-    const stress = temps.filter((t) => t > LIVE_TEMP_LEVELS.stress).length;
-    const mild = temps.filter((t) => t > LIVE_TEMP_LEVELS.mild && t <= LIVE_TEMP_LEVELS.stress).length;
+    const stress = temps.filter((t) => t >= LIVE_TEMP_LEVELS.stress).length;
+    const mild = temps.filter((t) => t >= LIVE_TEMP_LEVELS.mild && t < LIVE_TEMP_LEVELS.stress).length;
     const normal = temps.length - mild - stress;
     const unmeasured = thermal.ducks_now.length - temps.length;
     const hottest = temps.length ? `${Math.max(...temps).toFixed(1)}°C` : '--';
@@ -2297,7 +2299,7 @@ function renderDetectionLogs() {
             // One cell per header column: lowest / average / highest body temperature
             const tempCell = (t) => {
                 if (t == null) return '<td class="ht-log-cell--mono">--</td>';
-                const cls = t > 42 ? 'ht-log-temp--hi' : t > 41 ? 'ht-log-temp--mid' : 'ht-log-temp--ok';
+                const cls = t >= LIVE_TEMP_LEVELS.stress ? 'ht-log-temp--hi' : t >= LIVE_TEMP_LEVELS.mild ? 'ht-log-temp--mid' : 'ht-log-temp--ok';
                 return `<td class="ht-log-cell--mono ${cls}">${t.toFixed(1)}°C</td>`;
             };
             const batch = d.batchCount != null ? escapeHtml(String(d.batchCount)) : '--';
@@ -2307,7 +2309,7 @@ function renderDetectionLogs() {
 
             return `
                 <tr class="ht-log-row-clickable${flash}" data-detection-id="${d.id}">
-                    <td class="ht-log-cell--mono">${formatTimestamp(d.timestamp)}${intervalBadge(durations.get(d.id))}</td>
+                    <td class="ht-log-cell--mono">${formatTimestamp(d.timestamp)}${intervalBadge(durations.get(d.id))}${peak30Badge(d)}</td>
                     <td>
                         <div class="${statusWrap}">
                             <i data-lucide="${statusIcon}"></i>
@@ -3601,10 +3603,13 @@ function getFilteredLogDetections() {
     const statusFilter = document.getElementById('logFilter')?.value || 'all';
     const { start, end } = getLogDateBounds();
 
-    let filtered = logEntryDetections();
-    if (statusFilter === 'heatstress') filtered = filtered.filter(d => d.status === 'HEAT STRESS');
-    if (statusFilter === 'mild') filtered = filtered.filter(d => d.status === 'MILD');
-    if (statusFilter === 'normal') filtered = filtered.filter(d => d.status === 'NORMAL');
+    // One entry per moment: the 30-minute peak rides along on its entry
+    let filtered = attachThirtyMinutePeaks(logEntryDetections());
+    // An entry matches the filter if either its own or its 30-minute peak status does
+    const hasStatus = (d, s) => d.status === s || d.peak30?.status === s;
+    if (statusFilter === 'heatstress') filtered = filtered.filter(d => hasStatus(d, 'HEAT STRESS'));
+    if (statusFilter === 'mild') filtered = filtered.filter(d => hasStatus(d, 'MILD'));
+    if (statusFilter === 'normal') filtered = filtered.filter(d => hasStatus(d, 'NORMAL'));
 
     if (start || end) {
         filtered = filtered.filter(d => {
@@ -3679,7 +3684,7 @@ function exportDetectionsToExcel() {
     //      H Highest | I Duck Count | J Batch Count | K Severity | L-M Top Recommendation ----
     // B-C fit the longest timestamp ("September 30, 2026, 12:05:30 PM"); a date that
     // doesn't fit shows as ##### in Excel
-    const colWidths = [22, 95, 95, 70, 80, 80, 80, 80, 70, 75, 75, 120, 120];
+    const colWidths = [22, 95, 95, 170, 80, 80, 80, 80, 70, 75, 75, 120, 120];
     const span = colWidths.length - 2;          // MergeAcross for full-width rows (B..M)
     let tableXml = '<Table>' + colWidths.map((w) => '<Column ss:Width="' + w + '"/>').join('');
     const fullRow = (height, style, text) =>
@@ -3748,7 +3753,8 @@ function exportDetectionsToExcel() {
         const statusStyle = d.status === 'HEAT STRESS' ? 'sStatusHeatstress' : d.status === 'MILD' ? 'sStatusMild' : 'sStatusNormal';
         const sevStyle = d.severity === 'CRITICAL' ? 'sSevCritical' : d.severity === 'HIGH' ? 'sSevHigh'
             : d.severity === 'MODERATE' ? 'sSevModerate' : 'sSevLow';
-        const interval = durations.get(d.id) || '--';
+        const interval = [durations.get(d.id), d.peak30 ? peak30Text(d).replace('°C', ' °C') : '']
+            .filter(Boolean).join(' + ') || '--';
         const recText = buildRecommendationFromDetection(d)?.action || '';
         const rowHeight = Math.max(24, (Math.ceil(recText.length / 45) + 1) * 14);
         const batch = d.batchCount != null && /^\d+$/.test(String(d.batchCount))
@@ -4611,7 +4617,45 @@ function mapAnalyticsRow(row) {
         interval,
         hasInterval,
         ai: row.ai_recommendation || null,   // written by the "recommend" Edge Function (Gemini)
+        deviceId: row.device_id ?? null,
     };
+}
+
+// At :00 and :30 the logger saves two rows for the same moment: the 10-minute
+// row and the 30-minute peak row. The Detection Log (and its report) shows
+// them as ONE entry: the listed entry carries the 30-minute peak (peak30) of
+// the 30-minute row saved at the same moment, shown as a badge.
+const PAIR_WINDOW_MS = 2 * 60 * 1000;
+
+function attachThirtyMinutePeaks(list) {
+    const peaks = state.detections.filter((d) => d.hasInterval && d.interval === 30
+        && d.timestamp instanceof Date && !Number.isNaN(d.timestamp.getTime()));
+    return list.map((d) => {
+        if (d.hasInterval && d.interval === 30) return d;      // already the 30-minute row
+        const t = d.timestamp.getTime();
+        let match = null;
+        for (const p of peaks) {
+            if (p.deviceId && d.deviceId && p.deviceId !== d.deviceId) continue;
+            const gap = Math.abs(p.timestamp.getTime() - t);
+            if (gap <= PAIR_WINDOW_MS && (!match || gap < Math.abs(match.timestamp.getTime() - t))) match = p;
+        }
+        if (!match) return d;
+        return { ...d, peak30: {
+            id: match.id, highTemp: match.highTemp, bodyTemp: match.bodyTemp, count: match.count,
+            status: match.status, severity: match.severity, batchCount: match.batchCount,
+        } };
+    });
+}
+
+function peak30Text(d) {
+    if (!d.peak30) return '';
+    const temp = d.peak30.highTemp ?? d.peak30.bodyTemp;
+    return `30 min peak${temp != null ? ' ' + temp.toFixed(1) + '°C' : ''} · ${d.peak30.count} duck${d.peak30.count !== 1 ? 's' : ''}`;
+}
+
+function peak30Badge(d) {
+    if (!d.peak30) return '';
+    return ` <span title="Highest body temperature and peak duck count of the last 30 minutes" style="display:inline-block;margin-left:.3rem;padding:.05rem .45rem;border-radius:999px;font:700 .68rem 'DM Sans',system-ui,sans-serif;vertical-align:middle;background:#fff7ed;color:#c2410c">${peak30Text(d)}</span>`;
 }
 
 // Totals (KPI cards, charts) use the 10-minute rows, so they update every
@@ -5705,7 +5749,8 @@ function initAdminProfile() {
     });
 
     document.getElementById('adminProfileEditBtn').addEventListener('click', () => {
-        if (adminSelf) setAdminProfileEditing(true);
+        if (adminSelf) setAdmin
+ProfileEditing(true);
     });
     document.getElementById('adminProfileCancelBtn').addEventListener('click', () => {
         renderAdminSelf();
