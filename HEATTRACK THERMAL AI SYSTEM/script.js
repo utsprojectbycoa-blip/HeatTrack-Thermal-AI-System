@@ -4602,17 +4602,14 @@ function severityFromBodyTemp(t) {
     return 'LOW';
 }
 
-// The level shown for a saved row: the body-temperature level, raised by at most
-// ONE step when the saved rating was higher (the DHT22 humidity/air support),
-// never lowered below it. Also corrects rows saved with older rules.
+// The level shown for a saved row: exactly the Status & Severity level of its
+// highest body temperature (also corrects rows saved with older rules).
+// Rows without a body temperature keep their saved rating.
 function levelForRow(highTemp, savedSeverity) {
     if (highTemp == null || Number.isNaN(highTemp)) {
         return { severity: savedSeverity, status: STATUS_OF_SEVERITY[savedSeverity] || 'NORMAL' };
     }
-    const base = SEVERITY_STEPS.indexOf(severityFromBodyTemp(highTemp));
-    const saved = SEVERITY_STEPS.indexOf(savedSeverity);
-    const step = saved > base ? Math.min(base + 1, SEVERITY_STEPS.length - 1) : base;
-    const severity = SEVERITY_STEPS[step];
+    const severity = severityFromBodyTemp(highTemp);
     return { severity, status: STATUS_OF_SEVERITY[severity] };
 }
 
