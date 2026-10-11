@@ -583,10 +583,10 @@ class Detector:
     """Runs the YOLO model on the newest frame in the background."""
 
     # Box colors (BGR) follow each duck's status, same colors and thresholds as the
-    # website (LIVE_TEMP_LEVELS in script.js): above 41 C = Mild, above 42 C = Heat Stress
+    # website (LIVE_TEMP_LEVELS in script.js): above 34 C = Mild, above 37 C = Heat Stress
     STATUS_COLORS = {"normal": (128, 222, 74), "mild": (36, 191, 251), "stress": (113, 113, 248)}
     NO_READING_COLOR = (160, 160, 160)   # grey: no body temperature for this duck
-    MILD_C, STRESS_C = 41.0, 42.0
+    MILD_C, STRESS_C = 34.0, 37.0
 
     def __init__(self, cam):
         from ultralytics import YOLO   # imported here so streaming works even if missing
