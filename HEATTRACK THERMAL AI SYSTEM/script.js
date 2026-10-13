@@ -2417,14 +2417,14 @@ function renderRecommendations() {
     const activeRecs = [];
 
     // One recommendation per 30-minute reading with ducks (newest first), on the
-    // 30-minute steps from the first detection. Slots without ducks have no row.
+    // 30-minute steps (see logEntryLabels). Slots without ducks have no row.
     const duckDetections = detailDetections().filter(d => d.count > 0);
     const currentTemp = state.sensorHistory.temp.length > 0 ? state.sensorHistory.temp[state.sensorHistory.temp.length - 1] : null;
 
     if (!duckDetections.length) {
         container.innerHTML = `
             <div class="ht-footnote" style="text-align:center; padding:1.5rem 0; font-size:15px; line-height:1.6;">
-                No ducks detected yet, so there are no recommendations. A recommendation appears every 30 minutes after ducks are first detected.
+                No ducks detected yet, so there are no recommendations. The first recommendation appears 20 minutes after ducks are first detected, then every 30 minutes.
             </div>
         `;
         lucide.createIcons();
@@ -3782,7 +3782,7 @@ function exportDetectionsToExcel() {
         tableXml += fullRow(30, 'sDataCenterRow1', 'No detections for the selected events and period.');
     }
     tableXml += spacerRow;
-    tableXml += fullRow(28, 'sNote', 'Listed: the first detection (--) and the reading every 30 minutes after it (30 min). Totals count the 30 min readings only. '
+    tableXml += fullRow(28, 'sNote', 'Listed: the first detection (--), then a reading 20 minutes later and every 30 minutes after that (30 min). Totals count the 30 min readings only. '
         + 'Results and recommendations are assistive only. Always confirm with on-site observation and follow your farm protocol or veterinary guidance.');
     tableXml += '</Table>';
 
@@ -3932,7 +3932,7 @@ function setupEventListeners() {
             if (document.getElementById('alertPanel')?.classList.contains('u-hidden')) alertBtn?.click();
         });
     });
-    
+
     // Settings button
     settingsBtn?.addEventListener('click', () => {
         const panel = document.getElementById('settingsPanel');
@@ -4709,13 +4709,14 @@ function summaryDetections() {
 }
 
 // Insights page Results (live list) and Recommendations show only the 30-minute
-// readings (every 30 minutes from the first detection); first detections are left out
+// readings (20 minutes after the first detection, then every 30 minutes); first
+// detections are left out
 function detailDetections() {
     return thirtyMinuteReadings();
 }
 
 // Alerts (bell + pop-up): the 30-minute readings (see logEntryLabels) whose
-// status is Heat Stress, e.g. first detection 12:10 -> 12:40, 1:10. First
+// status is Heat Stress, e.g. first detection 12:10 -> 12:30, 1:00. First
 // detections and the results between readings raise nothing.
 // Returns the ids of the results that raise an alert.
 function heatStressAlertIds(rows = summaryDetections()) {
@@ -4723,16 +4724,20 @@ function heatStressAlertIds(rows = summaryDetections()) {
     return new Set(rows.filter((d) => d.isHeatStress && isThirtyMinuteReading(d, entries)).map((d) => d.id));
 }
 
-// Detection Log entries, whatever the status. The 30-minute monitoring counts
-// from the timestamp of the first detection: first detection 12:10 -> readings
-// at 12:40, 1:10, 1:40 ... and keeps that schedule. A status change or a short
-// gap doesn't restart it (a missed slot just has no reading); only when no
-// ducks are detected for more than 30 minutes does the next result start a new
-// count as a new first detection.
+// Detection Log entries, whatever the status. The first detection is the first
+// 10-minute result, which covers the 10 minutes before it. Monitoring counts
+// from the start of that slot, so the first 30-minute reading comes 20 minutes
+// after the first detection, then every 30 minutes:
+//   first detection 12:10 -> readings at 12:30, 1:00, 1:30 ...
+// A status change doesn't restart it. Only when no ducks are detected for
+// 10 minutes (a 10-minute slot with no result) does the next result start a
+// new count as a new first detection.
+// Older data with only 30-minute rows keeps 30-minute steps and gaps.
 //   - first detection: listed, no label
-//   - result on each 30-minute step from it: listed, label '30 min'
+//   - result on each 30-minute step: listed, label '30 min'
 // Everything else is hidden. Returns id -> label ('' or '30 min').
 const LOG_EVERY_MS = 30 * 60 * 1000;
+const SLOT_MS = 10 * 60 * 1000;
 const MARK_SLACK_MS = 60 * 1000;
 
 function logEntryLabels(rows = summaryDetections()) {
@@ -4740,13 +4745,18 @@ function logEntryLabels(rows = summaryDetections()) {
         .filter((d) => d.timestamp instanceof Date && !Number.isNaN(d.timestamp.getTime()))
         .slice()
         .sort((a, b) => a.timestamp - b.timestamp);
+    const isSlotRow = (d) => d.hasInterval && d.interval === 10;
     const shown = new Map();
     let prev = null;
     let firstAt = null;
     sorted.forEach((d) => {
-        if (!prev || d.timestamp - prev.timestamp > LOG_EVERY_MS + MARK_SLACK_MS) {
+        // Back-to-back 10-minute results are 10 minutes apart; a longer gap means
+        // a slot had no ducks
+        const maxGap = prev && isSlotRow(d) && isSlotRow(prev) ? SLOT_MS : LOG_EVERY_MS;
+        if (!prev || d.timestamp - prev.timestamp > maxGap + MARK_SLACK_MS) {
             shown.set(d.id, '');
-            firstAt = d.timestamp.getTime();
+            // Count from the start of the first detection's 10-minute slot
+            firstAt = d.timestamp.getTime() - (isSlotRow(d) ? SLOT_MS : 0);
         } else {
             const since = d.timestamp.getTime() - firstAt;
             const offset = since % LOG_EVERY_MS;
