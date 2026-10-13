@@ -4904,6 +4904,123 @@ html[data-boot-route="insights"] #view-analytics {
     border-bottom: none;
 }
 
+.ht-about-section--howto {
+    background: var(--ht-surface-950);
+}
+
+/* How to Use: warm light panel with an orange step timeline */
+.ht-howto {
+    position: relative;
+    overflow: hidden;
+    padding: clamp(1.75rem, 4vw, 3rem) clamp(1.25rem, 3.5vw, 2.75rem);
+    border-radius: var(--ht-radius-2xl);
+    border: 1px solid var(--ht-border-warm);
+    background: linear-gradient(180deg, #fff7ed 0%, #fff 55%);
+    box-shadow: var(--ht-shadow-md);
+}
+/* Orange strip across the top */
+.ht-howto::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--ht-thermal-400), var(--ht-thermal-600));
+}
+.ht-howto .ht-section-head {
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+}
+.ht-howto .ht-section-sub {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.ht-howto__steps {
+    display: grid;
+    gap: 1rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: howto-step;
+}
+@media (min-width: 640px) {
+    .ht-howto__steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+    .ht-howto__steps { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.25rem; }
+}
+
+.ht-howto-step {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 1.35rem 1.35rem 1.25rem;
+    border-radius: var(--ht-radius-xl);
+    border: 1px solid var(--ht-border-subtle);
+    background: #fff;
+    box-shadow: var(--ht-shadow-sm);
+    counter-increment: howto-step;
+}
+/* Large faded step number in the corner (decorative) */
+.ht-howto-step::after {
+    content: counter(howto-step, decimal-leading-zero);
+    position: absolute;
+    top: 0.35rem;
+    right: 0.9rem;
+    font-family: var(--ht-font-display);
+    font-size: 3.25rem;
+    font-weight: 800;
+    line-height: 1;
+    color: rgba(249, 115, 22, 0.09);
+    pointer-events: none;
+}
+.ht-howto-step > * { position: relative; z-index: 1; }
+
+.ht-howto-step__marker {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+.ht-howto-step__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: var(--ht-radius-full);
+    color: var(--ht-thermal-600);
+    background: rgba(249, 115, 22, 0.1);
+    box-shadow: 0 0 0 1px var(--ht-border-warm);
+}
+.ht-howto-step__icon svg { width: 1.25rem; height: 1.25rem; }
+.ht-howto-step__num {
+    font-family: var(--ht-mono);
+    font-size: var(--ht-text-xs);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ht-thermal-600);
+}
+.ht-howto-step__title {
+    margin: 0 0 0.45rem;
+    font-family: var(--ht-font-display);
+    font-size: var(--ht-text-lg);
+    font-weight: 700;
+    color: var(--ht-surface-50);
+}
+.ht-howto-step__text {
+    margin: 0;
+    text-align: justify;
+    font-size: var(--ht-text-sm);
+    line-height: var(--ht-leading-normal);
+    color: var(--ht-surface-300);
+}
+.ht-howto-step__text strong { color: var(--ht-surface-100); }
+
 .ht-about-section--guide {
     background: linear-gradient(180deg, var(--ht-surface-950) 0%, #fff 100%);
 }
@@ -5186,14 +5303,24 @@ html[data-boot-route="insights"] #view-analytics {
     color: var(--ht-surface-50);
 }
 
-/* flex-grow keeps the bottom links aligned across cards with different text lengths */
 .ht-cap-card__text {
-    flex-grow: 1;
     margin: 0.875rem 0 0;
     font-size: var(--ht-text-base);
     line-height: var(--ht-leading-relaxed);
     color: var(--ht-surface-400);
 }
+
+/* flex-grow keeps the bottom links aligned across cards with different text lengths */
+.ht-cap-card__list {
+    flex-grow: 1;
+    margin: 1rem 0 0;
+    padding-left: 1.15rem;
+    font-size: var(--ht-text-sm);
+    line-height: var(--ht-leading-normal);
+    color: var(--ht-surface-300);
+}
+.ht-cap-card__list li { margin-bottom: 0.35rem; }
+.ht-cap-card__list li::marker { color: var(--ht-cap-accent); }
 
 .ht-cap-card__link {
     display: inline-flex;
@@ -5208,6 +5335,18 @@ html[data-boot-route="insights"] #view-analytics {
     font-weight: 600;
     color: var(--ht-cap-accent);
     text-decoration: none;
+}
+/* Same look when the link is a <button> (e.g. "View alerts") */
+button.ht-cap-card__link {
+    border: 0;
+    border-top: 1px solid rgba(15, 23, 42, 0.06);
+    padding-left: 0;
+    padding-right: 0;
+    padding-bottom: 0;
+    background: none;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
 }
 .ht-cap-card__link svg {
     width: 1rem;
@@ -5268,6 +5407,7 @@ html[data-boot-route="insights"] #view-analytics {
 #view-about .ht-guide-card__text,
 #view-about .ht-guide-card__list span,
 #view-about .ht-cap-card__text,
+#view-about .ht-cap-card__list li,
 #view-about .ht-rec-preview-card__text,
 #view-about .ht-monitor-card__text,
 #view-about .ht-monitor-card__list li,
@@ -6199,6 +6339,7 @@ html[data-boot-route="insights"] #view-analytics {
 .ht-faq__tag--ai { color: #6d28d9; background: rgba(139, 92, 246, 0.12); }
 .ht-faq__tag--alerts { color: #b45309; background: rgba(245, 158, 11, 0.14); }
 .ht-faq__tag--farmers { color: #15803d; background: rgba(34, 197, 94, 0.12); }
+.ht-faq__tag--guide { color: #0f766e; background: rgba(20, 184, 166, 0.12); }
 
 .ht-faq__icon {
     grid-column: 1;
@@ -6217,6 +6358,7 @@ html[data-boot-route="insights"] #view-analytics {
 .ht-faq__icon--ai { color: #7c3aed; background: rgba(139, 92, 246, 0.1); }
 .ht-faq__icon--alerts { color: #d97706; background: rgba(245, 158, 11, 0.12); }
 .ht-faq__icon--farmers { color: #16a34a; background: rgba(34, 197, 94, 0.1); }
+.ht-faq__icon--guide { color: #0d9488; background: rgba(20, 184, 166, 0.1); }
 
 .ht-faq__question {
     grid-column: 2;
@@ -6268,6 +6410,23 @@ html[data-boot-route="insights"] #view-analytics {
 .ht-faq__panel strong {
     color: var(--ht-surface-200);
     font-weight: 600;
+}
+.ht-faq__panel a {
+    color: var(--ht-thermal-600);
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-color: rgba(234, 88, 12, 0.35);
+    text-underline-offset: 3px;
+    transition: color 0.2s, text-decoration-color 0.2s;
+}
+.ht-faq__panel a:hover {
+    color: var(--ht-thermal-700);
+    text-decoration-color: currentColor;
+}
+.ht-faq__panel a:focus-visible {
+    outline: none;
+    border-radius: 3px;
+    box-shadow: var(--ht-focus-ring);
 }
 
 @media (max-width: 520px) {
