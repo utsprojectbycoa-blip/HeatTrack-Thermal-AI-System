@@ -5954,6 +5954,129 @@ function initAdminProfile() {
     });
 }
 
+// ============================================
+// ADMIN WEATHER CARD (Open-Meteo)
+// ============================================
+// Uses the browser's location if allowed, else Pateros. Refreshed at most
+// every 15 minutes (the last result is kept between page loads).
+const WEATHER_FALLBACK = { lat: 14.5454, lon: 121.0687, place: 'Pateros, Metro Manila' };
+const WEATHER_EVERY_MS = 15 * 60 * 1000;
+const WEATHER_CACHE_KEY = 'ht-admin-weather';
+let adminWeatherTimer = null;
+
+// Heat index tiers, same as the card's guide
+function weatherRisk(heatIndex) {
+    if (heatIndex < 27) return 'low';
+    if (heatIndex < 33) return 'moderate';
+    if (heatIndex < 42) return 'high';
+    return 'critical';
+}
+
+// Open-Meteo weather code -> [description, lucide icon]
+function weatherLook(code, isDay) {
+    if (code === 0) return ['Clear sky', isDay ? 'sun' : 'moon'];
+    if (code <= 2) return ['Partly cloudy', isDay ? 'cloud-sun' : 'cloud-moon'];
+    if (code === 3) return ['Overcast', 'cloud'];
+    if (code === 45 || code === 48) return ['Fog', 'cloud-fog'];
+    if (code >= 51 && code <= 57) return ['Drizzle', 'cloud-drizzle'];
+    if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return ['Rain', 'cloud-rain'];
+    if ((code >= 71 && code <= 77) || code === 85 || code === 86) return ['Snow', 'snowflake'];
+    if (code >= 95) return ['Thunderstorm', 'cloud-lightning'];
+    return ['--', 'cloud-sun'];
+}
+
+function adminWeatherLocation() {
+    return new Promise((resolve) => {
+        if (!navigator.geolocation) return resolve(null);
+        navigator.geolocation.getCurrentPosition(
+            (pos) => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+            () => resolve(null),   // denied, unavailable or timed out
+            { timeout: 10000, maximumAge: WEATHER_EVERY_MS }
+        );
+    });
+}
+
+async function adminWeatherPlace(lat, lon) {
+    try {
+        const r = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
+        if (!r.ok) return null;
+        const j = await r.json();
+        const parts = [j.locality || j.city, j.principalSubdivision].filter(Boolean);
+        return parts.length ? [...new Set(parts)].join(', ') : null;
+    } catch {
+        return null;
+    }
+}
+
+async function fetchAdminWeather() {
+    const coords = await adminWeatherLocation();
+    const { lat, lon } = coords || WEATHER_FALLBACK;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
+        + '&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,is_day&timezone=auto';
+    const [res, place] = await Promise.all([fetch(url), coords ? adminWeatherPlace(lat, lon) : null]);
+    if (!res.ok) throw new Error('Open-Meteo ' + res.status);
+    const { current } = await res.json();
+    return {
+        at: Date.now(),
+        place: place || (coords ? `${lat.toFixed(2)}, ${lon.toFixed(2)}` : WEATHER_FALLBACK.place + ' (default)'),
+        temp: current.temperature_2m,
+        humidity: current.relative_humidity_2m,
+        heatIndex: current.apparent_temperature,
+        code: current.weather_code,
+        isDay: current.is_day === 1,
+    };
+}
+
+function renderAdminWeather(w) {
+    const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    const [desc, icon] = weatherLook(w.code, w.isDay);
+    set('adminWeatherPlace', w.place);
+    set('adminWeatherTemp', `${Math.round(w.temp)}°C`);
+    set('adminWeatherDesc', desc);
+    set('adminWeatherFeels', `${Math.round(w.heatIndex)}°C`);
+    set('adminWeatherHumid', `${Math.round(w.humidity)}%`);
+    set('adminWeatherUpdated', 'Updated ' + new Date(w.at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }));
+    const iconEl = document.getElementById('adminWeatherIcon');
+    if (iconEl) {
+        iconEl.innerHTML = `<i data-lucide="${icon}"></i>`;
+        lucide.createIcons();
+    }
+    const risk = weatherRisk(w.heatIndex);
+    document.querySelectorAll('.ht-adash__guide-list [data-risk]').forEach((li) => {
+        li.classList.toggle('is-current', li.dataset.risk === risk);
+    });
+}
+
+async function loadAdminWeather() {
+    let cached = null;
+    try { cached = JSON.parse(localStorage.getItem(WEATHER_CACHE_KEY)); } catch { /* no storage */ }
+    if (cached && Date.now() - cached.at < WEATHER_EVERY_MS) {
+        renderAdminWeather(cached);
+        return;
+    }
+    try {
+        const w = await fetchAdminWeather();
+        renderAdminWeather(w);
+        try { localStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify(w)); } catch { /* no storage */ }
+    } catch (e) {
+        console.warn('Weather fetch failed:', e);
+        if (cached) {
+            renderAdminWeather(cached);   // show the last result rather than nothing
+        } else {
+            document.getElementById('adminWeatherPlace').textContent = 'Location unavailable';
+            document.getElementById('adminWeatherDesc').textContent = 'Weather unavailable. Retrying in 15 minutes.';
+            document.getElementById('adminWeatherUpdated').textContent = 'Offline';
+        }
+    }
+}
+
+function initAdminWeather() {
+    if (!document.getElementById('adminWeatherTemp')) return;
+    loadAdminWeather();
+    clearInterval(adminWeatherTimer);
+    adminWeatherTimer = setInterval(loadAdminWeather, WEATHER_EVERY_MS);
+}
+
 async function initAdminUi() {
     const adminUi = document.getElementById('admin-ui');
     if (!adminUi) return;
@@ -5973,6 +6096,7 @@ async function initAdminUi() {
     adminUiBound = true;
     initAdminProfile();
     initAdminDevices();
+    initAdminWeather();
 
     document.querySelectorAll('[data-admin-route]').forEach((link) => link.addEventListener('click', () => adminSetView(link.dataset.adminRoute)));
     document.getElementById('adminUserSearch')?.addEventListener('input', () => { adminPage.users = 1; renderAdminUsers(); });
