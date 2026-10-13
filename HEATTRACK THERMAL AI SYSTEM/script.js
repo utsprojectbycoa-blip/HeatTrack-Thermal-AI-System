@@ -3649,13 +3649,14 @@ function getFilteredLogDetections({ allRows = false } = {}) {
 
 function exportDetectionsToExcel() {
     // Every 10-minute reading, not only the Detection Log entries
-    const rows = getFilteredLogDetections({ allRows: true });
+    // Rows that fit no 10-minute mark (e.g. test rows seconds apart) are left out
+    const minutesIn = countDurations();   // Duration column: 10 / 20 / 30 min
+    const rows = getFilteredLogDetections({ allRows: true }).filter((d) => minutesIn.has(d.id));
     // Summary boxes count the same way as the KPI cards: the listed entries
     // (readings after every 30 minutes of monitoring, not the first detection)
     // in the chosen filters
     const durations = logEntryLabels();   // same badges as the Detection Log
     const counts = getDetectionCounts(rows.filter((d) => isThirtyMinuteReading(d, durations)));
-    const minutesIn = countDurations();   // Duration column: 10 / 20 / 30 min
     const totalDucks = (counts.normal || 0) + (counts.mild || 0) + (counts.stress || 0);
     const now = new Date();
     const pad = (n) => String(n).padStart(2, '0');
@@ -4792,16 +4793,30 @@ function countRuns(rows = summaryDetections()) {
 // Excel Duration: minutes into the current 30-minute step, 10 -> 20 -> 30, then
 // 10 -> 20 -> 30 again while monitoring continues; a new count starts at 10.
 // Rows that aren't 10-minute readings (30-minute and older rows) are '30 min'.
+// Each 10-minute mark keeps one row only, the closest (the '30 min' row on a
+// 30-minute mark). Rows saved seconds apart (e.g. test timing) fit no mark, so
+// they get no label and are left out of the Excel file.
 function countDurations(rows = summaryDetections()) {
     const labels = logEntryLabels(rows);
     const out = new Map();
+    const slotPick = new Map();   // "firstAt:tens" -> { d, tens, dist }
     countRuns(rows).forEach(({ d, firstAt }) => {
-        if (labels.get(d.id) === '30 min' || !isSlotRow(d)) {
+        if (!isSlotRow(d)) {
             out.set(d.id, '30 min');
             return;
         }
-        const tens = Math.max(1, Math.round((d.timestamp.getTime() - firstAt) / SLOT_MS));
-        out.set(d.id, (((tens - 1) % 3) + 1) * 10 + ' min');
+        const since = d.timestamp.getTime() - firstAt;
+        const tens = Math.max(1, Math.round(since / SLOT_MS));
+        const isStep = labels.get(d.id) === '30 min';
+        const dist = isStep ? -1 : Math.abs(since - tens * SLOT_MS);   // the step row always wins
+        const key = firstAt + ':' + tens;
+        const best = slotPick.get(key);
+        if (!best || dist < best.dist) slotPick.set(key, { d, tens, dist });
+    });
+    slotPick.forEach(({ d, tens, dist }) => {
+        // A 30-minute mark belongs to the '30 min' row only
+        if (dist === -1) out.set(d.id, '30 min');
+        else if (tens % 3 !== 0) out.set(d.id, (tens % 3) * 10 + ' min');
     });
     return out;
 }
