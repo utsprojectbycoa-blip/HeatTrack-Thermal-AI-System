@@ -1292,19 +1292,17 @@ function normalizeRoute(route) {
 }
 
 const ABOUT_SECTION_HASHES = new Set([
+    '#about-howto',
     '#about-guide',
     '#about-features',
     '#about-rec',
-    '#about-monitor',
-    '#about-benefits',
 ]);
 
 const ABOUT_NAV_SECTIONS = [
+    { id: 'about-howto', hash: '#about-howto' },
     { id: 'about-guide', hash: '#about-guide' },
     { id: 'about-features', hash: '#about-features' },
     { id: 'about-rec', hash: '#about-rec' },
-    { id: 'about-monitor', hash: '#about-monitor' },
-    { id: 'about-benefits', hash: '#about-benefits' },
 ];
 
 let aboutNavScrollPending = false;
@@ -1445,6 +1443,10 @@ function showView(route) {
         const thermalCameraContainer = document.getElementById('thermalCameraContainer');
         if (normalCameraContainer?.resetZoom) normalCameraContainer.resetZoom();
         if (thermalCameraContainer?.resetZoom) thermalCameraContainer.resetZoom();
+    }
+    // Leaving the FAQ: close every open question so it starts collapsed next time
+    if (previousView === 'faq' && currentView !== 'faq') {
+        document.querySelectorAll('#view-faq details[open]').forEach((item) => { item.open = false; });
     }
 
     document.documentElement.classList.remove('initial-dashboard');
@@ -3922,6 +3924,15 @@ function setupEventListeners() {
         }
     });
 
+    // "View alerts" buttons elsewhere on the page (e.g. About) open the bell's panel.
+    // stopPropagation keeps the outside-click handler below from closing it again.
+    document.querySelectorAll('[data-open-alerts]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (document.getElementById('alertPanel')?.classList.contains('u-hidden')) alertBtn?.click();
+        });
+    });
+    
     // Settings button
     settingsBtn?.addEventListener('click', () => {
         const panel = document.getElementById('settingsPanel');
