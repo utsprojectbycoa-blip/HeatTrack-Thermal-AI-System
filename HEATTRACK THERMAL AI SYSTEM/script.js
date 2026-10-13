@@ -3602,12 +3602,13 @@ function xlsStyle(id, o = {}) {
 // Generate Report uses the same rows, so the file always matches the screen.
 // Only first detections and the readings every 30 minutes after them are listed (see logEntryLabels),
 // (the KPI cards count the '30 min' ones only).
-function getFilteredLogDetections() {
+// allRows: also the 10-minute readings between the 30-minute steps (Excel only)
+function getFilteredLogDetections({ allRows = false } = {}) {
     const statusFilter = document.getElementById('logFilter')?.value || 'all';
     const { start, end } = getLogDateBounds();
 
     // One entry per moment: the 30-minute peak rides along on its entry
-    let filtered = attachThirtyMinutePeaks(logEntryDetections());
+    let filtered = attachThirtyMinutePeaks(allRows ? summaryDetections() : logEntryDetections());
     // An entry matches the filter if either its own or its 30-minute peak status does
     const hasStatus = (d, s) => d.status === s || d.peak30?.status === s;
     if (statusFilter === 'heatstress') filtered = filtered.filter(d => hasStatus(d, 'HEAT STRESS'));
@@ -3626,7 +3627,8 @@ function getFilteredLogDetections() {
 }
 
 function exportDetectionsToExcel() {
-    const rows = getFilteredLogDetections();
+    // Every 10-minute reading, not only the Detection Log entries
+    const rows = getFilteredLogDetections({ allRows: true });
     // Summary boxes count the same way as the KPI cards: the listed entries
     // (readings after every 30 minutes of monitoring, not the first detection)
     // in the chosen filters
@@ -3741,8 +3743,13 @@ function exportDetectionsToExcel() {
     const headerRow = (tableXml.match(/<Row/g) || []).length;
 
     // ---- Data rows ----
-    rows.forEach((d, idx) => {
-        const odd = idx % 2 === 0;
+    rows.forEach((d) => {
+        // '30 min' on each 30-minute step (as in the Detection Log), else '10 min'
+        // for a 10-minute reading; older rows without an interval were 30-minute rows
+        const interval = durations.get(d.id) !== '30 min' && d.hasInterval && d.interval === 10
+            ? '10 min' : '30 min';
+        // Darker fill (Row1) for 30-minute rows, lighter (Row2) for 10-minute rows
+        const odd = interval === '30 min';
         const rowN = odd ? 'Row1' : 'Row2';
         const tempCell = (t) => numCell('sTemp' + rowN, t, 1);
         const ts = d.timestamp instanceof Date ? d.timestamp : new Date(d.timestamp);
@@ -3756,8 +3763,6 @@ function exportDetectionsToExcel() {
         const statusStyle = d.status === 'HEAT STRESS' ? 'sStatusHeatstress' : d.status === 'MILD' ? 'sStatusMild' : 'sStatusNormal';
         const sevStyle = d.severity === 'CRITICAL' ? 'sSevCritical' : d.severity === 'HIGH' ? 'sSevHigh'
             : d.severity === 'MODERATE' ? 'sSevModerate' : 'sSevLow';
-        const interval = [durations.get(d.id), d.peak30 ? peak30Text(d).replace('°C', ' °C') : '']
-            .filter(Boolean).join(' + ') || '--';
         const recText = buildRecommendationFromDetection(d)?.action || '';
         const rowHeight = Math.max(24, (Math.ceil(recText.length / 45) + 1) * 14);
         const batch = d.batchCount != null && /^\d+$/.test(String(d.batchCount))
@@ -4747,6 +4752,9 @@ function logEntryLabels(rows = summaryDetections()) {
         .sort((a, b) => a.timestamp - b.timestamp);
     const isSlotRow = (d) => d.hasInterval && d.interval === 10;
     const shown = new Map();
+    // One entry per 30-minute step: the row closest to the mark. Rows saved
+    // seconds apart (e.g. test timing) would otherwise all fall in the slack.
+    const stepPick = new Map();   // "firstAt:step" -> { id, dist }
     let prev = null;
     let firstAt = null;
     sorted.forEach((d) => {
@@ -4761,10 +4769,17 @@ function logEntryLabels(rows = summaryDetections()) {
             const since = d.timestamp.getTime() - firstAt;
             const offset = since % LOG_EVERY_MS;
             const onStep = offset < MARK_SLACK_MS || offset > LOG_EVERY_MS - MARK_SLACK_MS;
-            if (since >= LOG_EVERY_MS - MARK_SLACK_MS && onStep) shown.set(d.id, '30 min');
+            if (since >= LOG_EVERY_MS - MARK_SLACK_MS && onStep) {
+                const step = Math.round(since / LOG_EVERY_MS);
+                const dist = Math.abs(since - step * LOG_EVERY_MS);
+                const key = firstAt + ':' + step;
+                const best = stepPick.get(key);
+                if (!best || dist < best.dist) stepPick.set(key, { id: d.id, dist });
+            }
         }
         prev = d;
     });
+    stepPick.forEach(({ id }) => shown.set(id, '30 min'));
     return shown;
 }
 
