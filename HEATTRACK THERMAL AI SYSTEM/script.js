@@ -1144,6 +1144,7 @@ function animatePanelClose(panel) {
     panel.addEventListener('transitionend', finishClose);
 }
 
+
 // ============================================
 // STATE MANAGEMENT
 // ============================================
@@ -2709,6 +2710,12 @@ function closeRecommendationModal() {
     if (!modal) return;
     modal.classList.remove('is-open');
     openRecState = null;
+    // Back to the top once it has faded out (opening resets it too)
+    setTimeout(() => {
+        if (modal.classList.contains('is-open')) return;
+        [modal.querySelector('.ht-modal__body'), modal.querySelector('.ht-modal__dialog'), modal]
+            .forEach((el) => { if (el) el.scrollTop = 0; });
+    }, 300);
 }
 
 // ============================================
@@ -3648,6 +3655,7 @@ function exportDetectionsToExcel() {
     // in the chosen filters
     const durations = logEntryLabels();   // same badges as the Detection Log
     const counts = getDetectionCounts(rows.filter((d) => isThirtyMinuteReading(d, durations)));
+    const minutesIn = countDurations();   // Duration column: 10 / 20 / 30 min
     const totalDucks = (counts.normal || 0) + (counts.mild || 0) + (counts.stress || 0);
     const now = new Date();
     const pad = (n) => String(n).padStart(2, '0');
@@ -3758,10 +3766,9 @@ function exportDetectionsToExcel() {
 
     // ---- Data rows ----
     rows.forEach((d) => {
-        // '30 min' on each 30-minute step (as in the Detection Log), else '10 min'
-        // for a 10-minute reading; older rows without an interval were 30-minute rows
-        const interval = durations.get(d.id) !== '30 min' && d.hasInterval && d.interval === 10
-            ? '10 min' : '30 min';
+        // Minutes into the count: 10, 20, 30 (the Detection Log's '30 min' step),
+        // then 10, 20, 30 again; older rows without an interval were 30-minute rows
+        const interval = minutesIn.get(d.id) || '30 min';
         // Darker fill (Row1) for 30-minute rows, lighter (Row2) for 10-minute rows
         const odd = interval === '30 min';
         const rowN = odd ? 'Row1' : 'Row2';
@@ -3801,7 +3808,7 @@ function exportDetectionsToExcel() {
         tableXml += fullRow(30, 'sDataCenterRow1', 'No detections for the selected events and period.');
     }
     tableXml += spacerRow;
-    tableXml += fullRow(28, 'sNote', 'Listed: the first detection (--), then a reading 20 minutes later and every 30 minutes after that (30 min). Totals count the 30 min readings only. '
+    tableXml += fullRow(28, 'sNote', 'Duration: minutes into each 30-minute step of monitoring (10, 20, 30, then 10, 20, 30 again). The first detection is 10 min; after 10 minutes with no reading, counting starts again at 10 min. Totals count the 30 min readings only. '
         + 'Results and recommendations are assistive only. Always confirm with on-site observation and follow your farm protocol or veterinary guidance.');
     tableXml += '</Table>';
 
@@ -4748,10 +4755,10 @@ function heatStressAlertIds(rows = summaryDetections()) {
 // from the start of that slot, so the first 30-minute reading comes 20 minutes
 // after the first detection, then every 30 minutes:
 //   first detection 12:10 -> readings at 12:30, 1:00, 1:30 ...
-// A status change doesn't restart it. Only when no ducks are detected for
-// 10 minutes (a 10-minute slot with no result) does the next result start a
-// new count as a new first detection.
-// Older data with only 30-minute rows keeps 30-minute steps and gaps.
+// A status change doesn't restart it. Only when there is no reading for
+// 10 minutes (no saved result: no ducks, or ducks without a body temperature)
+// does the next result start a new count as a new first detection.
+// Older data from before the interval column keeps 30-minute steps and gaps.
 //   - first detection: listed, no label
 //   - result on each 30-minute step: listed, label '30 min'
 // Everything else is hidden. Returns id -> label ('' or '30 min').
@@ -4759,26 +4766,54 @@ const LOG_EVERY_MS = 30 * 60 * 1000;
 const SLOT_MS = 10 * 60 * 1000;
 const MARK_SLACK_MS = 60 * 1000;
 
-function logEntryLabels(rows = summaryDetections()) {
+const isSlotRow = (d) => d.hasInterval && d.interval === 10;
+
+// Each row's count: { firstAt, isFirst }, oldest first. firstAt is when its count
+// started (the start of the first detection's 10-minute slot).
+function countRuns(rows = summaryDetections()) {
     const sorted = rows
         .filter((d) => d.timestamp instanceof Date && !Number.isNaN(d.timestamp.getTime()))
         .slice()
         .sort((a, b) => a.timestamp - b.timestamp);
-    const isSlotRow = (d) => d.hasInterval && d.interval === 10;
+    let prev = null;
+    let firstAt = null;
+    return sorted.map((d) => {
+        // Back-to-back readings are 10 minutes apart; a longer gap means a slot
+        // had no reading (no ducks, or no body temperature), so counting restarts.
+        // Only old rows without an interval keep the 30-minute gap.
+        const maxGap = prev && (d.hasInterval || prev.hasInterval) ? SLOT_MS : LOG_EVERY_MS;
+        const isFirst = !prev || d.timestamp - prev.timestamp > maxGap + MARK_SLACK_MS;
+        if (isFirst) firstAt = d.timestamp.getTime() - (isSlotRow(d) ? SLOT_MS : 0);
+        prev = d;
+        return { d, firstAt, isFirst };
+    });
+}
+
+// Excel Duration: minutes into the current 30-minute step, 10 -> 20 -> 30, then
+// 10 -> 20 -> 30 again while monitoring continues; a new count starts at 10.
+// Rows that aren't 10-minute readings (30-minute and older rows) are '30 min'.
+function countDurations(rows = summaryDetections()) {
+    const labels = logEntryLabels(rows);
+    const out = new Map();
+    countRuns(rows).forEach(({ d, firstAt }) => {
+        if (labels.get(d.id) === '30 min' || !isSlotRow(d)) {
+            out.set(d.id, '30 min');
+            return;
+        }
+        const tens = Math.max(1, Math.round((d.timestamp.getTime() - firstAt) / SLOT_MS));
+        out.set(d.id, (((tens - 1) % 3) + 1) * 10 + ' min');
+    });
+    return out;
+}
+
+function logEntryLabels(rows = summaryDetections()) {
     const shown = new Map();
     // One entry per 30-minute step: the row closest to the mark. Rows saved
     // seconds apart (e.g. test timing) would otherwise all fall in the slack.
     const stepPick = new Map();   // "firstAt:step" -> { id, dist }
-    let prev = null;
-    let firstAt = null;
-    sorted.forEach((d) => {
-        // Back-to-back 10-minute results are 10 minutes apart; a longer gap means
-        // a slot had no ducks
-        const maxGap = prev && isSlotRow(d) && isSlotRow(prev) ? SLOT_MS : LOG_EVERY_MS;
-        if (!prev || d.timestamp - prev.timestamp > maxGap + MARK_SLACK_MS) {
+    countRuns(rows).forEach(({ d, firstAt, isFirst }) => {
+        if (isFirst) {
             shown.set(d.id, '');
-            // Count from the start of the first detection's 10-minute slot
-            firstAt = d.timestamp.getTime() - (isSlotRow(d) ? SLOT_MS : 0);
         } else {
             const since = d.timestamp.getTime() - firstAt;
             const offset = since % LOG_EVERY_MS;
@@ -4791,7 +4826,6 @@ function logEntryLabels(rows = summaryDetections()) {
                 if (!best || dist < best.dist) stepPick.set(key, { id: d.id, dist });
             }
         }
-        prev = d;
     });
     stepPick.forEach(({ id }) => shown.set(id, '30 min'));
     return shown;
