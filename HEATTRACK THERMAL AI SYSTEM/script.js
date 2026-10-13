@@ -3712,7 +3712,7 @@ function exportDetectionsToExcel() {
     //      H Highest | I Duck Count | J Batch Count | K Severity | L-M Top Recommendation ----
     // B-C fit the longest timestamp ("September 30, 2026, 12:05:30 PM"); a date that
     // doesn't fit shows as ##### in Excel
-    const colWidths = [22, 95, 95, 170, 80, 80, 80, 80, 70, 75, 75, 120, 120];
+    const colWidths = [22, 95, 95, 70, 80, 80, 80, 80, 70, 75, 75, 120, 120];
     const span = colWidths.length - 2;          // MergeAcross for full-width rows (B..M)
     let tableXml = '<Table>' + colWidths.map((w) => '<Column ss:Width="' + w + '"/>').join('');
     const fullRow = (height, style, text) =>
