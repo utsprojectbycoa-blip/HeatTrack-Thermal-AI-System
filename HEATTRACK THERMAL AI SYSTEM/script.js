@@ -1106,6 +1106,13 @@ function initMobileNavMenu() {
     });
 }
 
+// Header panels (Alerts, Settings) start at the top each time they open or close
+function resetPanelScroll(panel) {
+    [panel, ...panel.querySelectorAll('*')].forEach((el) => {
+        if (el.scrollTop) el.scrollTop = 0;
+    });
+}
+
 function animatePanelOpen(panel) {
     if (!panel) return;
     if (panel.__pendingCloseListener) {
@@ -1113,6 +1120,7 @@ function animatePanelOpen(panel) {
         panel.__pendingCloseListener = null;
     }
     panel.classList.remove('u-hidden');
+    resetPanelScroll(panel);
     void panel.offsetWidth;
     panel.classList.add('is-open');
 }
@@ -1126,6 +1134,7 @@ function animatePanelClose(panel) {
     }
     const finishClose = (event) => {
         if (event.propertyName === 'opacity') {
+            resetPanelScroll(panel);   // after the fade, so the list doesn't jump while visible
             panel.classList.add('u-hidden');
             panel.removeEventListener('transitionend', finishClose);
             panel.__pendingCloseListener = null;
@@ -1134,7 +1143,6 @@ function animatePanelClose(panel) {
     panel.__pendingCloseListener = finishClose;
     panel.addEventListener('transitionend', finishClose);
 }
-
 
 // ============================================
 // STATE MANAGEMENT
@@ -1447,6 +1455,11 @@ function showView(route) {
     // Leaving the FAQ: close every open question so it starts collapsed next time
     if (previousView === 'faq' && currentView !== 'faq') {
         document.querySelectorAll('#view-faq details[open]').forEach((item) => { item.open = false; });
+    }
+    // Opening or leaving Insights: Results & Recommendations starts at the top
+    if ((previousView === 'insights') !== (currentView === 'insights')) {
+        const recList = document.getElementById('recommendationsList');
+        if (recList) recList.scrollTop = 0;
     }
 
     document.documentElement.classList.remove('initial-dashboard');
@@ -3000,15 +3013,16 @@ function getRecommendationResultSummary(rec, currentTemp) {
 
     // Severity Level shows only this result's level:
     // Normal -> Low, Mild -> Moderate, Heat Stress -> High or Critical (whichever it is)
-    const counts = getDetectionCounts();
+    // The count is this result's own ducks: a reading has one level for all its ducks
     const level = status === 'HEAT STRESS'
         ? (rec.severity === 'CRITICAL' ? 'critical' : 'high')
         : status === 'MILD' ? 'moderate' : 'low';
-    items.push({
-        group: 'severity', tone: level,
-        label: level.charAt(0).toUpperCase() + level.slice(1),
-        count: counts[level], unit: `duck${counts[level] !== 1 ? 's' : ''}`,
-    });
+    const levelDucks = rec.duckCount == null ? NaN : Number(rec.duckCount);
+    const levelLabel = level.charAt(0).toUpperCase() + level.slice(1);
+    items.push(Number.isFinite(levelDucks)
+        ? { group: 'severity', tone: level, label: levelLabel,
+            count: levelDucks, unit: `duck${levelDucks !== 1 ? 's' : ''}` }
+        : { group: 'severity', tone: level, label: levelLabel, value: '—' });
 
     // Extra batch details from the analytics table (only for detection-based recommendations)
     if (rec.lowTemp != null && rec.highTemp != null) {
