@@ -926,7 +926,7 @@
                                 <div class="ht-article-card__icon ht-article-card__icon--thermal"><i data-lucide="gauge"></i></div>
                                 <h3 class="ht-article-card__h">Status &amp; Severity Levels</h3>
                             </div>
-                            <p class="ht-prose ht-quickref-intro">At the first detection and every 30 minutes after it, HeatTrack records a reading with two labels. The <strong>Severity Level</strong> (Low, Moderate, High, or Critical) is set by the highest duck body temperature measured by the thermal camera in that period, and the <strong>Status</strong> (Normal, Mild, or Heat Stress) follows from the severity, as shown below. Each record also lists the ducks' lowest and average body temperatures, plus the barn temperature and humidity from the DHT22 sensor. Check the status at a glance, then let the severity tell you how fast to act.</p>
+                            <p class="ht-prose ht-quickref-intro">At the first detection and every 30 minutes of monitoring after it, HeatTrack records a reading with two labels. The <strong>Severity Level</strong> (Low, Moderate, High, or Critical) is set by the highest duck body temperature measured by the thermal camera in that period, and the <strong>Status</strong> (Normal, Mild, or Heat Stress) follows from the severity, as shown below. Each record also lists the ducks' lowest and average body temperatures, plus the barn temperature and humidity from the DHT22 sensor. Check the status at a glance, then let the severity tell you how fast to act.</p>
                             <div class="ht-status-guide">
                                 <!-- Mapping: 4 severity levels grouped under 3 statuses -->
                                 <div class="ht-status-map" role="img" aria-label="Low is Normal, Moderate is Mild, High and Critical are Heat Stress">
@@ -1268,7 +1268,7 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>HeatTrack combines three sources: a live RGB camera where an AI model detects and counts your ducks, a thermal camera that estimates each duck's body temperature, and a DHT22 sensor that measures barn temperature and humidity. From the first detection and every 30 minutes after it, HeatTrack rates the ducks' highest body temperature and records a <strong>Status</strong> and <strong>Severity Level</strong>, so you can act before conditions get worse.</p>
+                                        <p>HeatTrack combines three sources: a live RGB camera where an AI model detects and counts your ducks, a thermal camera that estimates each duck's body temperature, and a DHT22 sensor that measures barn temperature and humidity. At the first detection and every 30 minutes of monitoring after it, HeatTrack rates the ducks' highest body temperature and records a <strong>Status</strong> and <strong>Severity Level</strong>, so you can act before conditions get worse.</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
@@ -1345,7 +1345,7 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>The camera feeds stream continuously while Camera Streams is on. DHT22 readings are saved about every 10 seconds, updating the Temperature and Humidity tiles and the Environmental Trend chart. When ducks are first detected, that detection is added to the Detection Log History. After that, a new Status and Severity reading, marked <strong>30 min</strong>, is added every 30 minutes, counted from the first detection, and the KPI cards, Analytics charts, and recommendations update to match. Periods with no ducks detected, or with ducks the thermal camera could not measure, add no record, and if no ducks are seen for more than 30 minutes, the next detection starts a new count.</p>
+                                        <p>The camera feeds stream continuously while Camera Streams is on. DHT22 readings are saved about every 10 seconds, updating the Temperature and Humidity tiles and the Environmental Trend chart. When ducks are first detected, that detection is added to the Detection Log History. After that, a new Status and Severity reading, marked <strong>30 min</strong>, is added 20 minutes later (completing the first 30 minutes of monitoring) and then every 30 minutes, and the KPI cards, Analytics charts, and recommendations update to match. Periods with no ducks detected, or with ducks the thermal camera could not measure, add no record, and if no ducks are seen for 10 minutes, the next detection starts a new count.</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
