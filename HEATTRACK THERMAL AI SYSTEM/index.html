@@ -841,7 +841,7 @@
                                     <i data-lucide="info"></i>
                                 </div>
                                 <h3 class="ht-jump-card__title">About HeatTrack</h3>
-                                <p class="ht-jump-card__text">Heat stress guide, features, AI recommendations, how monitoring works, and system benefits.</p>
+                                <p class="ht-jump-card__text">How to use HeatTrack, a heat stress guide, its features, and how AI recommendations work.</p>
                                 <span class="ht-jump-card__cta">Learn More <i data-lucide="chevron-right"></i></span>
                             </a>
                         </div>
@@ -1006,6 +1006,69 @@
             <!-- ABOUT VIEW -->
             <section id="view-about" class="ht-view ht-about-page u-hidden" aria-label="About HeatTrack">
 
+                <!-- HOW TO USE -->
+                <section id="about-howto" class="ht-about-section ht-about-section--howto" aria-labelledby="howto-heading">
+                    <div class="ht-wrap">
+                        <div class="ht-howto">
+                        <header class="ht-section-head ht-section-head--center">
+                            <p class="ht-section-eyebrow">Getting Started</p>
+                            <h2 id="howto-heading" class="ht-section-title">How to Use HeatTrack</h2>
+                            <p class="ht-section-sub">A quick guide to monitoring your ducks, from signing up to reviewing reports.</p>
+                        </header>
+                        <ol class="ht-howto__steps">
+                            <li class="ht-howto-step">
+                                <div class="ht-howto-step__marker">
+                                    <span class="ht-howto-step__icon" aria-hidden="true"><i data-lucide="user-plus"></i></span>
+                                    <span class="ht-howto-step__num">Sign Up</span>
+                                </div>
+                                <h3 class="ht-howto-step__title">Create Your Account</h3>
+                                <p class="ht-howto-step__text">Sign up with your details, your Device ID (HT-PDCK- plus the 3-digit number), and the Device API Key. You can log in once the administrator approves your account.</p>
+                            </li>
+                            <li class="ht-howto-step">
+                                <div class="ht-howto-step__marker">
+                                    <span class="ht-howto-step__icon" aria-hidden="true"><i data-lucide="video"></i></span>
+                                    <span class="ht-howto-step__num">Monitor</span>
+                                </div>
+                                <h3 class="ht-howto-step__title">Watch the Live Page</h3>
+                                <p class="ht-howto-step__text">Open <strong>Live</strong> to see the RGB and thermal camera feeds, the duck count, and the barn temperature and humidity from the DHT22 sensor.</p>
+                            </li>
+                            <li class="ht-howto-step">
+                                <div class="ht-howto-step__marker">
+                                    <span class="ht-howto-step__icon" aria-hidden="true"><i data-lucide="gauge"></i></span>
+                                    <span class="ht-howto-step__num">Status</span>
+                                </div>
+                                <h3 class="ht-howto-step__title">Read the Status</h3>
+                                <p class="ht-howto-step__text">Each reading is rated <strong>Normal</strong>, <strong>Mild</strong>, or <strong>Heat Stress</strong>, with a severity from Low to Critical. Readings are recorded every 30 minutes from the first detection.</p>
+                            </li>
+                            <li class="ht-howto-step">
+                                <div class="ht-howto-step__marker">
+                                    <span class="ht-howto-step__icon" aria-hidden="true"><i data-lucide="lightbulb"></i></span>
+                                    <span class="ht-howto-step__num">Insights</span>
+                                </div>
+                                <h3 class="ht-howto-step__title">Follow the Insights</h3>
+                                <p class="ht-howto-step__text">Open <strong>Insights</strong> for duck counts and AI recommendations. Click any result to see its details and the suggested actions.</p>
+                            </li>
+                            <li class="ht-howto-step">
+                                <div class="ht-howto-step__marker">
+                                    <span class="ht-howto-step__icon" aria-hidden="true"><i data-lucide="line-chart"></i></span>
+                                    <span class="ht-howto-step__num">Analytics</span>
+                                </div>
+                                <h3 class="ht-howto-step__title">Review Analytics</h3>
+                                <p class="ht-howto-step__text">Open <strong>Analytics</strong> to browse the Detection Log History, filter by status or date, view the charts, and click <strong>Generate Report</strong> to download an Excel file.</p>
+                            </li>
+                            <li class="ht-howto-step">
+                                <div class="ht-howto-step__marker">
+                                    <span class="ht-howto-step__icon" aria-hidden="true"><i data-lucide="bell-ring"></i></span>
+                                    <span class="ht-howto-step__num">Alerts</span>
+                                </div>
+                                <h3 class="ht-howto-step__title">Manage Alerts &amp; Settings</h3>
+                                <p class="ht-howto-step__text">The bell icon lists your Heat Stress alerts. The gear icon opens Settings, where you can turn the cameras, AI detection, and alert notifications on or off.</p>
+                            </li>
+                        </ol>
+                        </div>
+                    </div>
+                </section>
+
                 <!-- FIELD GUIDE -->
                 <section id="about-guide" class="ht-about-section ht-about-section--guide" aria-labelledby="guide-heading">
                     <div class="ht-wrap">
@@ -1081,6 +1144,11 @@
                                     <h3 class="ht-cap-card__title">Dual-Camera Detection</h3>
                                 </div>
                                 <p class="ht-cap-card__text">An AI model finds and counts the ducks on the RGB feed, while the thermal feed boxes each duck with its estimated body temperature in real time.</p>
+                                <ul class="ht-cap-card__list">
+                                    <li>Side-by-side RGB and thermal feeds</li>
+                                    <li>Normal, Mild, and Heat Stress counts</li>
+                                    <li>Fullscreen view and FPS counter on each camera</li>
+                                </ul>
                                 <a href="#live" class="ht-cap-card__link">Open Live <i data-lucide="arrow-right"></i></a>
                             </article>
                             <article class="ht-cap-card ht-cap-card--sensor">
@@ -1089,23 +1157,38 @@
                                     <h3 class="ht-cap-card__title">Environmental Sensing</h3>
                                 </div>
                                 <p class="ht-cap-card__text">DHT22 temperature and humidity readings are saved every 10 seconds and charted live, so you can see how barn conditions change over time.</p>
+                                <ul class="ht-cap-card__list">
+                                    <li>Temperature and humidity tiles with trend arrows</li>
+                                    <li>Level meters for both readings</li>
+                                    <li>Chart of the last 60 readings</li>
+                                </ul>
                                 <a href="#live" class="ht-cap-card__link">View sensor readings <i data-lucide="arrow-right"></i></a>
+                            </article>
+                            <article class="ht-cap-card ht-cap-card--insight">
+                                <div class="ht-cap-card__head">
+                                    <span class="ht-cap-card__icon"><i data-lucide="line-chart"></i></span>
+                                    <h3 class="ht-cap-card__title">Detection Analytics</h3>
+                                </div>
+                                <p class="ht-cap-card__text">Every 30-minute reading is saved with its status and severity, so you can spot patterns across days and weather changes.</p>
+                                <ul class="ht-cap-card__list">
+                                    <li>Detection log filtered by status and date</li>
+                                    <li>Severity Levels and Detection Distribution charts</li>
+                                    <li>Excel report export</li>
+                                </ul>
+                                <a href="#analytics" class="ht-cap-card__link">Open Analytics <i data-lucide="arrow-right"></i></a>
                             </article>
                             <article class="ht-cap-card ht-cap-card--alert">
                                 <div class="ht-cap-card__head">
                                     <span class="ht-cap-card__icon"><i data-lucide="bell-ring"></i></span>
                                     <h3 class="ht-cap-card__title">Severity-Based Alerts</h3>
                                 </div>
-                                <p class="ht-cap-card__text">Heat Stress alerts show the severity, body temperature, and time so you can act first where it matters.</p>
-                                <a href="#insights" class="ht-cap-card__link">View recommendations <i data-lucide="arrow-right"></i></a>
-                            </article>
-                            <article class="ht-cap-card ht-cap-card--insight">
-                                <div class="ht-cap-card__head">
-                                    <span class="ht-cap-card__icon"><i data-lucide="lightbulb"></i></span>
-                                    <h3 class="ht-cap-card__title">Actionable Insights</h3>
-                                </div>
-                                <p class="ht-cap-card__text">Each record comes with cooling, hydration, and recheck steps matched to its severity, rewritten by AI for current conditions when available.</p>
-                                <a href="#insights" class="ht-cap-card__link">Open Insights <i data-lucide="arrow-right"></i></a>
+                                <p class="ht-cap-card__text">When a 30-minute reading shows Heat Stress, HeatTrack alerts you right away with the severity, body temperature, and time, so you can act first where it matters.</p>
+                                <ul class="ht-cap-card__list">
+                                    <li>Pop-up when a reading shows Heat Stress</li>
+                                    <li>Alert list under the bell icon</li>
+                                    <li>Turn alerts on or off in Settings</li>
+                                </ul>
+                                <button type="button" class="ht-cap-card__link" data-open-alerts>View alerts <i data-lucide="arrow-right"></i></button>
                             </article>
                         </div>
                     </div>
@@ -1153,89 +1236,6 @@
                     </div>
                 </section>
 
-                <!-- MONITORING CAPABILITIES -->
-                <section id="about-monitor" class="ht-about-section ht-about-section--monitor" aria-labelledby="monitor-heading">
-                    <div class="ht-wrap">
-                        <header class="ht-section-head ht-section-head--center">
-                            <p class="ht-section-eyebrow">Monitoring Capabilities</p>
-                            <h2 id="monitor-heading" class="ht-section-title">Continuous Heat Monitoring</h2>
-                            <p class="ht-section-sub">HeatTrack watches environmental and thermal signals around the clock so operators can intervene while conditions are still manageable.</p>
-                        </header>
-                        <div class="ht-monitor-grid">
-                            <article class="ht-monitor-card">
-                                <div class="ht-monitor-card__head">
-                                    <i data-lucide="video"></i>
-                                    <h3 class="ht-monitor-card__title">Live Streams</h3>
-                                </div>
-                                <p class="ht-monitor-card__text">Side-by-side RGB and thermal feeds with detection boxes, FPS counters, and per-camera duck statistics updated in real time.</p>
-                                <ul class="ht-monitor-card__list">
-                                    <li>Fullscreen zoom on both cameras</li>
-                                    <li>Normal, Mild, and Heat Stress counts</li>
-                                    <li>Thermal color scale reference</li>
-                                </ul>
-                            </article>
-                            <article class="ht-monitor-card">
-                                <div class="ht-monitor-card__head">
-                                    <i data-lucide="line-chart"></i>
-                                    <h3 class="ht-monitor-card__title">Detection Analytics</h3>
-                                </div>
-                                <p class="ht-monitor-card__text">30-minute readings with severity and distribution charts help you spot patterns over days and weather changes.</p>
-                                <ul class="ht-monitor-card__list">
-                                    <li>Filterable detection history</li>
-                                    <li>Excel report export for records</li>
-                                    <li>Severity level and status distribution charts</li>
-                                </ul>
-                            </article>
-                            <article class="ht-monitor-card">
-                                <div class="ht-monitor-card__head">
-                                    <i data-lucide="activity"></i>
-                                    <h3 class="ht-monitor-card__title">Sensor Dashboard</h3>
-                                </div>
-                                <p class="ht-monitor-card__text">Temperature and humidity tiles with trend indicators, level meters, and a chart of the last 60 environmental readings.</p>
-                                <ul class="ht-monitor-card__list">
-                                    <li>Live DHT22 readings</li>
-                                    <li>Visual progress meters</li>
-                                    <li>Temperature and humidity trend chart</li>
-                                </ul>
-                            </article>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- SYSTEM BENEFITS -->
-                <section id="about-benefits" class="ht-about-section ht-about-section--benefits" aria-labelledby="benefits-heading">
-                    <div class="ht-wrap">
-                        <div class="ht-about-panel ht-about-panel--benefits">
-                        <header class="ht-section-head ht-section-head--center">
-                            <p class="ht-section-eyebrow">Why It Matters</p>
-                            <h2 id="benefits-heading" class="ht-section-title">System Benefits for Your Operation</h2>
-                            <p class="ht-section-sub">HeatTrack supports faster decisions, better welfare outcomes, and more consistent farm management practices.</p>
-                        </header>
-                        <div class="ht-benefits-grid">
-                            <div class="ht-benefit-item">
-                                <span class="ht-benefit-item__num">01</span>
-                                <h3 class="ht-benefit-item__title">Earlier Intervention</h3>
-                                <p class="ht-benefit-item__text">Ducks are rated every 30 minutes, and Heat Stress readings raise an alert right away, giving your team a head start.</p>
-                            </div>
-                            <div class="ht-benefit-item">
-                                <span class="ht-benefit-item__num">02</span>
-                                <h3 class="ht-benefit-item__title">Reduced Mortality Risk</h3>
-                                <p class="ht-benefit-item__text">Timely alerts and graded recommendations help teams act within the minutes that matter most during heat events.</p>
-                            </div>
-                            <div class="ht-benefit-item">
-                                <span class="ht-benefit-item__num">03</span>
-                                <h3 class="ht-benefit-item__title">Data-Informed Decisions</h3>
-                                <p class="ht-benefit-item__text">Combine live feeds, sensor trends, and detection logs instead of relying on observation alone during peak heat.</p>
-                            </div>
-                            <div class="ht-benefit-item">
-                                <span class="ht-benefit-item__num">04</span>
-                                <h3 class="ht-benefit-item__title">Operational Confidence</h3>
-                                <p class="ht-benefit-item__text">A single dashboard for monitoring, analytics, and insights keeps your team aligned on what to check and when to escalate.</p>
-                            </div>
-                        </div>
-                        </div>
-                    </div>
-                </section>
             </section>
 
             <!-- FAQ VIEW (opened from Settings) -->
@@ -1246,9 +1246,20 @@
                             <header class="ht-section-head ht-section-head--center">
                                 <p class="ht-section-eyebrow">Support</p>
                                 <h2 id="faq-heading" class="ht-section-title">Frequently Asked Questions</h2>
-                                <p class="ht-section-sub">Common questions about monitoring, thermal detection, AI guidance, alerts, and duck protection.</p>
+                                <p class="ht-section-sub">Common questions about monitoring, thermal detection, AI guidance,<br>alerts, and duck protection.</p>
                             </header>
                             <div class="ht-faq">
+                                <details class="ht-faq__item">
+                                    <summary class="ht-faq__trigger">
+                                        <span class="ht-faq__tag ht-faq__tag--guide">Getting Started</span>
+                                        <span class="ht-faq__icon ht-faq__icon--guide" aria-hidden="true"><i data-lucide="book-open"></i></span>
+                                        <span class="ht-faq__question">How do I use HeatTrack?</span>
+                                        <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
+                                    </summary>
+                                    <div class="ht-faq__panel">
+                                        <p>Check the <strong>Live</strong> page for the camera feeds and barn conditions, <strong>Insights</strong> for duck counts and AI recommendations, and <strong>Analytics</strong> for the detection history, charts, and Excel reports. Heat Stress alerts appear under the bell icon, and Settings is under the gear icon. For the full step-by-step guide, see <a href="#about-howto">How to Use HeatTrack</a> on the About page.</p>
+                                    </div>
+                                </details>
                                 <details class="ht-faq__item">
                                     <summary class="ht-faq__trigger">
                                         <span class="ht-faq__tag ht-faq__tag--monitor">Monitoring</span>
