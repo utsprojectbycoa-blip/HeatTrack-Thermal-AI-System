@@ -4080,6 +4080,32 @@ input[type="date"] {
     background: var(--ht-kv-dot, #94a3b8);
 }
 
+/* Severity Level: change from the previous reading (up = worse, down = better) */
+.ht-modal-kv-group--severity .ht-modal-kv__val { flex-direction: column; align-items: flex-start; gap: 0.125rem; }
+.ht-sev-change {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: var(--ht-text-sm);
+    font-weight: 700;
+}
+.ht-sev-change svg { flex-shrink: 0; width: 1em; height: 1em; }
+.ht-sev-change--up { color: #ef4444; }
+.ht-sev-change--down { color: #22c55e; }
+.ht-sev-change--same,
+.ht-sev-change--first { color: var(--ht-surface-500); }
+.ht-sev-change__time {
+    color: var(--ht-surface-500);
+    font-size: var(--ht-text-xs);
+    font-weight: 500;
+}
+.ht-sev-change__dot { display: none; }
+/* Wider screens: previous reading beside the change, split by a dot */
+@media (min-width: 761px) {
+    .ht-modal-kv-group--severity .ht-modal-kv__val { flex-direction: row; align-items: center; gap: 0.125rem 0.5rem; }
+    .ht-sev-change__dot { display: inline; margin-right: 0.5rem; font-weight: 700; }
+}
+
 /* Severity Level value: same badge as .ht-modal-sev in the modal hero */
 .ht-modal-kv__item[class*="--sev-"] .ht-modal-kv__val {
     display: inline-block;
