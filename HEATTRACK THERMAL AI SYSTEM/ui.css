@@ -3901,7 +3901,8 @@ input[type="date"] {
 }
 /* Row 2 side by side only when there's room; narrower screens stack the two boxes */
 @media (min-width: 761px) {
-    .ht-modal-snapshot { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+    /* Severity Level gets 2/5 so its one-line change text fits */
+    .ht-modal-snapshot { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
 }
 .ht-modal-kv-group--temperature { grid-column: 1 / -1; }
 
@@ -4002,7 +4003,7 @@ input[type="date"] {
     color: var(--ht-surface-500);
     font-size: var(--ht-text-xs);
     font-weight: 600;
-    white-space: nowrap; /* keep "Body Temperature Range" etc. on one line */
+    white-space: nowrap; /* keep "Surface Temperature Range" etc. on one line */
     min-width: 0;
 }
 /* If a label still doesn't fit (small phones), it ends in "…" instead of spilling out */
@@ -4100,10 +4101,16 @@ input[type="date"] {
     font-weight: 500;
 }
 .ht-sev-change__dot { display: none; }
-/* Wider screens: previous reading beside the change, split by a dot */
+/* Text sizes below follow the Severity Level box's width (cqi), not the screen's */
+.ht-modal-kv-group--severity { container-type: inline-size; }
+/* Wider screens: previous reading beside the change, split by a dot, on one line.
+   The text shrinks a little when the box is narrower so it doesn't wrap
+   (it only wraps when even the smallest size doesn't fit) */
 @media (min-width: 761px) {
-    .ht-modal-kv-group--severity .ht-modal-kv__val { flex-direction: row; align-items: center; gap: 0.125rem 0.5rem; }
-    .ht-sev-change__dot { display: inline; margin-right: 0.5rem; font-weight: 700; }
+    .ht-modal-kv-group--severity .ht-modal-kv__val { flex-direction: row; align-items: center; gap: 0.125rem 0.375rem; }
+    .ht-sev-change { font-size: clamp(0.6875rem, 4.1cqi, var(--ht-text-sm)); white-space: nowrap; }
+    .ht-sev-change__time { font-size: clamp(0.625rem, 3.5cqi, var(--ht-text-xs)); white-space: nowrap; }
+    .ht-sev-change__dot { display: inline; margin-right: 0.375rem; font-weight: 700; }
 }
 
 /* Severity Level value: same badge as .ht-modal-sev in the modal hero */
