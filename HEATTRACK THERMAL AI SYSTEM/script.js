@@ -2449,6 +2449,7 @@ function renderRecommendations() {
         activeRecs.push({
             ...recommendationFor(d, recommendations[d.severity] ? d.severity : 'LOW'),
             id: `duck-${d.id}`,
+            detectionId: d.id,
             timestamp: formatTimestamp(d.timestamp),
             timestampMs: d.timestamp instanceof Date ? d.timestamp.getTime() : Date.now(),
             severity: d.severity,
@@ -2987,6 +2988,29 @@ function getRecStatus(rec) {
         || (rec.severity === 'CRITICAL' || rec.severity === 'HIGH' ? 'HEAT STRESS' : 'NORMAL');
 }
 
+// Severity Level: this result's level compared with the 30-minute reading before it.
+// Up = worse (toward Critical), down = better (toward Low).
+function severityChangeHtml(rec) {
+    const readings = detailDetections().filter((d) => d.timestamp instanceof Date);
+    const own = readings.find((d) => d.id === rec.detectionId);
+    if (!own) return '—';
+    const previous = readings
+        .filter((d) => d.timestamp < own.timestamp)
+        .sort((a, b) => b.timestamp - a.timestamp)[0];
+    if (!previous) {
+        return '<span class="ht-sev-change ht-sev-change--first"><i data-lucide="flag"></i>First reading</span>';
+    }
+    const rank = (sev) => severityLevels.length - 1 - severityLevels.indexOf(sev);   // LOW 0 ... CRITICAL 3
+    const diff = rank(own.severity) - rank(previous.severity);
+    const prevLabel = previous.severity.charAt(0) + previous.severity.slice(1).toLowerCase();
+    const prevTime = previous.timestamp.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const [cls, icon, text] = diff > 0 ? ['up', 'trending-up', `Up from ${prevLabel}`]
+        : diff < 0 ? ['down', 'trending-down', `Down from ${prevLabel}`]
+        : ['same', 'minus', 'Same as previous'];
+    return `<span class="ht-sev-change ht-sev-change--${cls}"><i data-lucide="${icon}"></i>${text}</span>`
+        + `<span class="ht-sev-change__time"><span class="ht-sev-change__dot" aria-hidden="true">·</span>Previous reading ${prevTime}</span>`;
+}
+
 function getRecommendationResultSummary(rec, currentTemp) {
     // The result's own air temperature (same as its card); the latest reading if not looked up
     const ambientValue = typeof rec.ambientTemp === 'number' ? rec.ambientTemp : currentTemp;
@@ -3020,16 +3044,13 @@ function getRecommendationResultSummary(rec, currentTemp) {
 
     // Severity Level shows only this result's level:
     // Normal -> Low, Mild -> Moderate, Heat Stress -> High or Critical (whichever it is)
-    // The count is this result's own ducks: a reading has one level for all its ducks
+    // The level comes from the air, so all ducks of a reading share it; instead of
+    // repeating the duck count it shows how the level changed from the previous reading
     const level = status === 'HEAT STRESS'
         ? (rec.severity === 'CRITICAL' ? 'critical' : 'high')
         : status === 'MILD' ? 'moderate' : 'low';
-    const levelDucks = rec.duckCount == null ? NaN : Number(rec.duckCount);
     const levelLabel = level.charAt(0).toUpperCase() + level.slice(1);
-    items.push(Number.isFinite(levelDucks)
-        ? { group: 'severity', tone: level, label: levelLabel,
-            count: levelDucks, unit: `duck${levelDucks !== 1 ? 's' : ''}` }
-        : { group: 'severity', tone: level, label: levelLabel, value: '—' });
+    items.push({ group: 'severity', tone: level, label: levelLabel, value: severityChangeHtml(rec) });
 
     // Extra batch details from the analytics table (only for detection-based recommendations)
     if (rec.lowTemp != null && rec.highTemp != null) {
@@ -3708,7 +3729,7 @@ function exportDetectionsToExcel() {
     styleXml += xlsStyle('sRecRow2', { size: 10, fill: '#FFDDC2', h: 'Left', wrap: true, borders: white });
     styleXml += '</Styles>';
 
-    // ---- Columns: A margin | B-C Timestamp | D Interval | E Status | F Lowest | G Average |
+    // ---- Columns: A margin | B-C Timestamp | D Duration | E Status | F Lowest | G Average |
     //      H Highest | I Duck Count | J Batch Count | K Severity | L-M Top Recommendation ----
     // B-C fit the longest timestamp ("September 30, 2026, 12:05:30 PM"); a date that
     // doesn't fit shows as ##### in Excel
