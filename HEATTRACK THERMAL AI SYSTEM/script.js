@@ -2311,7 +2311,7 @@ function renderDetectionLogs() {
 
             return `
                 <tr class="ht-log-row-clickable${flash}" data-detection-id="${d.id}">
-                    <td class="ht-log-cell--mono">${formatTimestamp(d.timestamp)}${intervalBadge(durations.get(d.id))}${peak30Badge(d)}</td>
+                    <td class="ht-log-cell--mono">${formatTimestamp(d.timestamp)}${intervalBadge(durations.get(d.id))}</td>
                     <td>
                         <div class="${statusWrap}">
                             <i data-lucide="${statusIcon}"></i>
@@ -3624,10 +3624,8 @@ function getFilteredLogDetections() {
     const statusFilter = document.getElementById('logFilter')?.value || 'all';
     const { start, end } = getLogDateBounds();
 
-    // One entry per moment: the 30-minute peak rides along on its entry
-    let filtered = attachThirtyMinutePeaks(logEntryDetections());
-    // An entry matches the filter if either its own or its 30-minute peak status does
-    const hasStatus = (d, s) => d.status === s || d.peak30?.status === s;
+    let filtered = logEntryDetections();
+    const hasStatus = (d, s) => d.status === s;
     if (statusFilter === 'heatstress') filtered = filtered.filter(d => hasStatus(d, 'HEAT STRESS'));
     if (statusFilter === 'mild') filtered = filtered.filter(d => hasStatus(d, 'MILD'));
     if (statusFilter === 'normal') filtered = filtered.filter(d => hasStatus(d, 'NORMAL'));
@@ -3774,8 +3772,7 @@ function exportDetectionsToExcel() {
         const statusStyle = d.status === 'HEAT STRESS' ? 'sStatusHeatstress' : d.status === 'MILD' ? 'sStatusMild' : 'sStatusNormal';
         const sevStyle = d.severity === 'CRITICAL' ? 'sSevCritical' : d.severity === 'HIGH' ? 'sSevHigh'
             : d.severity === 'MODERATE' ? 'sSevModerate' : 'sSevLow';
-        const interval = [durations.get(d.id), d.peak30 ? peak30Text(d).replace('°C', ' °C') : '']
-            .filter(Boolean).join(' + ') || '--';
+        const interval = durations.get(d.id) || '--';
         const recText = buildRecommendationFromDetection(d)?.action || '';
         const rowHeight = Math.max(24, (Math.ceil(recText.length / 45) + 1) * 14);
         const batch = d.batchCount != null && /^\d+$/.test(String(d.batchCount))
@@ -4665,43 +4662,6 @@ function mapAnalyticsRow(row) {
         ai: row.ai_recommendation || null,   // written by the "recommend" Edge Function (Gemini)
         deviceId: row.device_id ?? null,
     };
-}
-
-// At :00 and :30 the logger saves two rows for the same moment: the 10-minute
-// row and the 30-minute peak row. The Detection Log (and its report) shows
-// them as ONE entry: the listed entry carries the 30-minute peak (peak30) of
-// the 30-minute row saved at the same moment, shown as a badge.
-const PAIR_WINDOW_MS = 2 * 60 * 1000;
-
-function attachThirtyMinutePeaks(list) {
-    const peaks = state.detections.filter((d) => d.hasInterval && d.interval === 30
-        && d.timestamp instanceof Date && !Number.isNaN(d.timestamp.getTime()));
-    return list.map((d) => {
-        if (d.hasInterval && d.interval === 30) return d;      // already the 30-minute row
-        const t = d.timestamp.getTime();
-        let match = null;
-        for (const p of peaks) {
-            if (p.deviceId && d.deviceId && p.deviceId !== d.deviceId) continue;
-            const gap = Math.abs(p.timestamp.getTime() - t);
-            if (gap <= PAIR_WINDOW_MS && (!match || gap < Math.abs(match.timestamp.getTime() - t))) match = p;
-        }
-        if (!match) return d;
-        return { ...d, peak30: {
-            id: match.id, highTemp: match.highTemp, bodyTemp: match.bodyTemp, count: match.count,
-            status: match.status, severity: match.severity, batchCount: match.batchCount,
-        } };
-    });
-}
-
-function peak30Text(d) {
-    if (!d.peak30) return '';
-    const temp = d.peak30.highTemp ?? d.peak30.bodyTemp;
-    return `30 min peak${temp != null ? ' ' + temp.toFixed(1) + '°C' : ''} · ${d.peak30.count} duck${d.peak30.count !== 1 ? 's' : ''}`;
-}
-
-function peak30Badge(d) {
-    if (!d.peak30) return '';
-    return ` <span title="Highest body temperature and peak duck count of the last 30 minutes" style="display:inline-block;margin-left:.3rem;padding:.05rem .45rem;border-radius:999px;font:700 .68rem 'DM Sans',system-ui,sans-serif;vertical-align:middle;background:#fff7ed;color:#c2410c">${peak30Text(d)}</span>`;
 }
 
 // Totals (KPI cards, charts) use the 10-minute rows, so they update every
