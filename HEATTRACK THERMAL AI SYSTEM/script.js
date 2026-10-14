@@ -3006,7 +3006,7 @@ function severityChangeHtml(rec) {
     const prevTime = previous.timestamp.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
     const [cls, icon, text] = diff > 0 ? ['up', 'trending-up', `Up from ${prevLabel}`]
         : diff < 0 ? ['down', 'trending-down', `Down from ${prevLabel}`]
-        : ['same', 'minus', 'Same as previous'];
+        : ['same', 'minus', 'No changes'];
     return `<span class="ht-sev-change ht-sev-change--${cls}"><i data-lucide="${icon}"></i>${text}</span>`
         + `<span class="ht-sev-change__time"><span class="ht-sev-change__dot" aria-hidden="true">·</span>Previous reading ${prevTime}</span>`;
 }
