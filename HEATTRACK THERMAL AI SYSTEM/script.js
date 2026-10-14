@@ -1194,8 +1194,8 @@ const recommendations = {
         { action: 'Activate emergency cooling now (sprinklers + fans at 100%)', icon: 'droplets', type: 'urgent', category: 'Suggested Action', tip: 'Start cooling within 1–3 minutes while confirming affected birds on-site.' },
         { action: 'Move high-temperature ducks to shaded recovery pen within 3 minutes', icon: 'move', type: 'urgent', category: 'Suggested Action', tip: 'Prioritize ducks with the highest thermal readings and visible distress.' },
         { action: 'Start intensive rehydration: cool clean water at multiple access points', icon: 'glass-water', type: 'urgent', category: 'Prevention', tip: 'Ensure water is cool—not cold enough to shock—and reachable from every zone.' },
-        { action: 'Apply misting cycles every 2-3 minutes until body temperature drops below 41.0°C', icon: 'cloud-rain', type: 'urgent', category: 'Environmental', tip: 'Pair misting with ventilation so humidity does not trap additional heat.' },
-        { action: 'Escalate to veterinarian if severe signs persist for more than 10 minutes', icon: 'phone', type: 'urgent', category: 'Temperature', tip: 'Document body temperatures and intervention times for veterinary review.' },
+        { action: 'Apply misting cycles every 2-3 minutes until surface temperature drops below 41.0°C', icon: 'cloud-rain', type: 'urgent', category: 'Environmental', tip: 'Pair misting with ventilation so humidity does not trap additional heat.' },
+        { action: 'Escalate to veterinarian if severe signs persist for more than 10 minutes', icon: 'phone', type: 'urgent', category: 'Temperature', tip: 'Document surface temperatures and intervention times for veterinary review.' },
     ],
     HIGH: [
         { action: 'Run cooling fans at high speed and open all airflow panels', icon: 'fan', type: 'warning', category: 'Environmental', tip: 'Target stagnant zones where humidity and temperature combine to reduce evaporative cooling.' },
@@ -2258,7 +2258,7 @@ function liveStatusCounts(thermal) {
     return { normal: temps.length - mild - stress, mild, stress };
 }
 
-// Live body temperatures from the thermal camera (window.liveThermal, set by
+// Live surface temperatures from the thermal camera (window.liveThermal, set by
 // livefeed.js from the logger's /stats). Uses the same thresholds as the
 // Detection Log colours. Returns null when there is no live thermal data.
 // Status & Severity levels (same as the logger's SPECTRUM_BANDS):
@@ -2313,7 +2313,7 @@ function renderDetectionLogs() {
             const statusWrap = d.status === 'HEAT STRESS' ? 'ht-log-status ht-log-status--stress' : d.status === 'MILD' ? 'ht-log-status ht-log-status--warn' : 'ht-log-status ht-log-status--ok';
             const statusIcon = d.status === 'HEAT STRESS' ? 'alert-triangle' : d.status === 'MILD' ? 'sun' : 'check-circle';
             const flash = d.status === 'HEAT STRESS' ? ' ht-log-row--flash' : '';
-            // One cell per header column: lowest / average / highest body temperature
+            // One cell per header column: lowest / average / highest surface temperature
             const tempCell = (t) => {
                 if (t == null) return '<td class="ht-log-cell--mono">--</td>';
                 const cls = t > LIVE_TEMP_LEVELS.stress ? 'ht-log-temp--hi' : t > LIVE_TEMP_LEVELS.mild ? 'ht-log-temp--mid' : 'ht-log-temp--ok';
@@ -2493,7 +2493,7 @@ function renderRecommendations() {
                             <span class="ht-rec-sev">${r.severity}</span>
                         </div>
                         <div class="ht-rec-card__meta">
-                            <span class="ht-rec-card__category">Body Temp ${formatCardTemp(r.bodyTemp)}</span>
+                            <span class="ht-rec-card__category">Surface Temp ${formatCardTemp(r.bodyTemp)}</span>
                             <span class="ht-rec-card__category">Ambient Temp ${ambientText}</span>
                         </div>
                         <p class="ht-rec-card__tip">${tip}</p>
@@ -2904,7 +2904,7 @@ function getRecommendationPreventionTips(rec) {
             'Avoid unnecessary movement or handling.',
             'Keep the hottest animals separated from the group.',
             'Provide cool, not cold, water at several drinking points.',
-            'Hold feeding until body temperatures come down.'
+            'Hold feeding until surface temperatures come down.'
         ],
         HIGH: [
             'Boost shade and fan output where it is hottest.',
@@ -2959,7 +2959,7 @@ function getRecommendationSummary(rec, currentTemp) {
     if (bodyStr && tempStr) {
         const struggling = rec.severity === 'CRITICAL' || rec.severity === 'HIGH';
         lines.push(
-            `Body temperature reached ${bodyStr} while the barn is at ${tempStr}` +
+            `Surface temperature reached ${bodyStr} while the barn is at ${tempStr}` +
             (struggling ? ', so ducks are struggling to shed heat.' : ', which is still manageable.')
         );
     } else if (tempStr) {
@@ -3027,7 +3027,7 @@ function getRecommendationResultSummary(rec, currentTemp) {
     // the label; count + unit: big-number layout; tone: colored dot for severity levels
     const items = [
         { group: 'temperature', icon: 'activity', label: 'Status', value: statusBadge },
-        { group: 'temperature', icon: 'thermometer', label: 'Body Temperature', value: detectedTemp },
+        { group: 'temperature', icon: 'thermometer', label: 'Surface Temperature', value: detectedTemp },
         { group: 'temperature', icon: 'home', label: 'Ambient Temperature', value: ambientTemp },
     ];
 
@@ -3054,7 +3054,7 @@ function getRecommendationResultSummary(rec, currentTemp) {
 
     // Extra batch details from the analytics table (only for detection-based recommendations)
     if (rec.lowTemp != null && rec.highTemp != null) {
-        items.splice(2, 0, { group: 'temperature', icon: 'arrow-left-right', label: 'Body Temperature Range', value: `${rec.lowTemp}–${rec.highTemp}°C` });
+        items.splice(2, 0, { group: 'temperature', icon: 'arrow-left-right', label: 'Surface Temperature Range', value: `${rec.lowTemp}–${rec.highTemp}°C` });
     }
     return items;
 }
@@ -3239,7 +3239,7 @@ function showToast(detection) {
     state.lastToastDetection = detection;
     let action = '';
     try { action = buildRecommendationFromDetection(detection).action || ''; } catch { /* no recommendation text */ }
-    const stats = [['Body temp', fmtTemp(detection.bodyTemp)]];
+    const stats = [['Surface temp', fmtTemp(detection.bodyTemp)]];
     if (detection.ambientTemp != null) stats.push(['Barn', fmtTemp(detection.ambientTemp)]);
     if (detection.count != null) stats.push(['Ducks', String(detection.count)]);
     renderToast({
@@ -3712,7 +3712,7 @@ function exportDetectionsToExcel() {
     const tsFmt = 'mmmm d, yyyy, h:mm:ss AM/PM';
     styleXml += xlsStyle('sDataRow1Timestamp', { size: 10, fill: '#FFCBA2', h: 'Center', borders: white, numFmt: tsFmt });
     styleXml += xlsStyle('sDataRow2Timestamp', { size: 10, fill: '#FFDDC2', h: 'Center', borders: white, numFmt: tsFmt });
-    // Body temps always show one decimal
+    // Surface temps always show one decimal
     styleXml += xlsStyle('sTempRow1', { size: 10, fill: '#FFCBA2', h: 'Center', borders: white, numFmt: '0.0' });
     styleXml += xlsStyle('sTempRow2', { size: 10, fill: '#FFDDC2', h: 'Center', borders: white, numFmt: '0.0' });
     styleXml += xlsStyle('sNote', { size: 9, color: '#6B7280', h: 'Left', wrap: true });
@@ -3779,7 +3779,7 @@ function exportDetectionsToExcel() {
     // ---- Table header (same columns as the Detection Log) ----
     tableXml += '<Row ss:Height="30"><Cell/>'
         + textCell('sHeader', 'Timestamp', 1)
-        + ['Duration', 'Status', 'Lowest Body Temp (°C)', 'Average Body Temp (°C)', 'Highest Body Temp (°C)',
+        + ['Duration', 'Status', 'Lowest Surface Temp (°C)', 'Average Surface Temp (°C)', 'Highest Surface Temp (°C)',
            'Duck Count', 'Batch Count', 'Severity'].map((h) => textCell('sHeader', h)).join('')
         + textCell('sHeader', 'Top Recommendation', 1)
         + '</Row>';
@@ -4649,7 +4649,7 @@ function normalizeSeverity(value) {
 
 // analytics row -> the "detection" shape the UI already understands
 // Status & Severity levels (the website's Status & Severity cards), from the
-// highest body temperature: 34 °C or below LOW/Normal · above 34 up to 37
+// highest surface temperature: 34 °C or below LOW/Normal · above 34 up to 37
 // MODERATE/Mild · above 37 up to 40 HIGH/Heat Stress · above 40 CRITICAL/Heat Stress
 const SEVERITY_STEPS = ['LOW', 'MODERATE', 'HIGH', 'CRITICAL'];
 const STATUS_OF_SEVERITY = { LOW: 'NORMAL', MODERATE: 'MILD', HIGH: 'HEAT STRESS', CRITICAL: 'HEAT STRESS' };
@@ -4662,8 +4662,8 @@ function severityFromBodyTemp(t) {
 }
 
 // The level shown for a saved row: exactly the Status & Severity level of its
-// highest body temperature (also corrects rows saved with older rules).
-// Rows without a body temperature keep their saved rating.
+// highest surface temperature (also corrects rows saved with older rules).
+// Rows without a surface temperature keep their saved rating.
 function levelForRow(highTemp, savedSeverity) {
     if (highTemp == null || Number.isNaN(highTemp)) {
         return { severity: savedSeverity, status: STATUS_OF_SEVERITY[savedSeverity] || 'NORMAL' };
@@ -4682,7 +4682,7 @@ function mapAnalyticsRow(row) {
     // the interval column existed are 30-minute rows
     const hasInterval = row.interval_minutes != null;
     const interval = hasInterval ? Number(row.interval_minutes) : 30;
-    // 30-minute rows report the window's HIGHEST body temperature
+    // 30-minute rows report the window's HIGHEST surface temperature
     const bodyTemp = (interval === 30 && hasInterval ? (high ?? avg) : (avg ?? high)) ?? low ?? 0;
 
     return {
@@ -4778,7 +4778,7 @@ function heatStressAlertIds(rows = summaryDetections()) {
 // after the first detection, then every 30 minutes:
 //   first detection 12:10 -> readings at 12:30, 1:00, 1:30 ...
 // A status change doesn't restart it. Only when there is no reading for
-// 10 minutes (no saved result: no ducks, or ducks without a body temperature)
+// 10 minutes (no saved result: no ducks, or ducks without a surface temperature)
 // does the next result start a new count as a new first detection.
 // Older data from before the interval column keeps 30-minute steps and gaps.
 //   - first detection: listed, no label
@@ -4801,7 +4801,7 @@ function countRuns(rows = summaryDetections()) {
     let firstAt = null;
     return sorted.map((d) => {
         // Back-to-back readings are 10 minutes apart; a longer gap means a slot
-        // had no reading (no ducks, or no body temperature), so counting restarts.
+        // had no reading (no ducks, or no surface temperature), so counting restarts.
         // Only old rows without an interval keep the 30-minute gap.
         const maxGap = prev && (d.hasInterval || prev.hasInterval) ? SLOT_MS : LOG_EVERY_MS;
         const isFirst = !prev || d.timestamp - prev.timestamp > maxGap + MARK_SLACK_MS;
