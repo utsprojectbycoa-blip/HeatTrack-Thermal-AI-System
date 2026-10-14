@@ -2434,6 +2434,7 @@ function renderRecommendations() {
         activeRecs.push({
             ...recommendationFor(d, recommendations[d.severity] ? d.severity : 'LOW'),
             id: `duck-${d.id}`,
+            detectionId: d.id,
             timestamp: formatTimestamp(d.timestamp),
             timestampMs: d.timestamp instanceof Date ? d.timestamp.getTime() : Date.now(),
             severity: d.severity,
@@ -2980,6 +2981,29 @@ function getRecStatus(rec) {
         || (rec.severity === 'CRITICAL' || rec.severity === 'HIGH' ? 'HEAT STRESS' : 'NORMAL');
 }
 
+// Severity Level: this result's level compared with the 30-minute reading before it.
+// Up = worse (toward Critical), down = better (toward Low).
+function severityChangeHtml(rec) {
+    const readings = detailDetections().filter((d) => d.timestamp instanceof Date);
+    const own = readings.find((d) => d.id === rec.detectionId);
+    if (!own) return '—';
+    const previous = readings
+        .filter((d) => d.timestamp < own.timestamp)
+        .sort((a, b) => b.timestamp - a.timestamp)[0];
+    if (!previous) {
+        return '<span class="ht-sev-change ht-sev-change--first"><i data-lucide="flag"></i>First reading</span>';
+    }
+    const rank = (sev) => severityLevels.length - 1 - severityLevels.indexOf(sev);   // LOW 0 ... CRITICAL 3
+    const diff = rank(own.severity) - rank(previous.severity);
+    const prevLabel = previous.severity.charAt(0) + previous.severity.slice(1).toLowerCase();
+    const prevTime = previous.timestamp.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const [cls, icon, text] = diff > 0 ? ['up', 'trending-up', `Up from ${prevLabel}`]
+        : diff < 0 ? ['down', 'trending-down', `Down from ${prevLabel}`]
+        : ['same', 'minus', 'No changes'];
+    return `<span class="ht-sev-change ht-sev-change--${cls}"><i data-lucide="${icon}"></i>${text}</span>`
+        + `<span class="ht-sev-change__time"><span class="ht-sev-change__dot" aria-hidden="true">·</span>Previous reading ${prevTime}</span>`;
+}
+
 function getRecommendationResultSummary(rec, currentTemp) {
     // The result's own air temperature (highest DHT22 reading in its interval). A saved
     // detection never falls back to the CURRENT reading (that would show e.g. this
@@ -3018,15 +3042,13 @@ function getRecommendationResultSummary(rec, currentTemp) {
 
     // Severity Level shows only this result's level:
     // Normal -> Low, Mild -> Moderate, Heat Stress -> High or Critical (whichever it is)
-    const counts = getDetectionCounts();
+    // The level comes from the air, so all ducks of a reading share it; instead of
+    // repeating the duck count it shows how the level changed from the previous reading
     const level = status === 'HEAT STRESS'
         ? (rec.severity === 'CRITICAL' ? 'critical' : 'high')
         : status === 'MILD' ? 'moderate' : 'low';
-    items.push({
-        group: 'severity', tone: level,
-        label: level.charAt(0).toUpperCase() + level.slice(1),
-        count: counts[level], unit: `duck${counts[level] !== 1 ? 's' : ''}`,
-    });
+    const levelLabel = level.charAt(0).toUpperCase() + level.slice(1);
+    items.push({ group: 'severity', tone: level, label: levelLabel, value: severityChangeHtml(rec) });
 
     // Extra batch details from the analytics table (only for detection-based recommendations)
     if (rec.lowTemp != null && rec.highTemp != null) {
