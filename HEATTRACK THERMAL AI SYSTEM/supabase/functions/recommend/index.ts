@@ -89,7 +89,7 @@ const RESPONSE_SCHEMA = {
         suggested_actions: { type: 'ARRAY', items: { type: 'STRING' }, description: '3-5 concrete actions to take now for this result, most urgent first. Each max 20 words.' },
         prevention: { type: 'ARRAY', items: { type: 'STRING' }, description: '3-5 heat stress prevention measures to stop it getting worse or happening again. Each max 20 words.' },
         environmental_insights: { type: 'ARRAY', items: { type: 'STRING' }, description: '2-3 observations about the air temperature, humidity and their trend for this result. Each max 25 words.' },
-        temperature_guidance: { type: 'ARRAY', items: { type: 'STRING' }, description: '2-3 points about the ducks\' body temperatures in this result and when to recheck. Each max 25 words.' },
+        temperature_guidance: { type: 'ARRAY', items: { type: 'STRING' }, description: '2-3 points about the ducks\' surface temperatures in this result and when to recheck. Each max 25 words.' },
     },
     required: ['action', 'category', 'tip', 'explanation', 'suggested_actions', 'prevention', 'environmental_insights', 'temperature_guidance'],
     propertyOrdering: ['action', 'category', 'tip', 'explanation', 'suggested_actions', 'prevention', 'environmental_insights', 'temperature_guidance'],
@@ -105,19 +105,19 @@ const JSON_SHAPE = `Answer with ONLY a JSON object with exactly these keys:
   "suggested_actions": ["3-5 concrete actions to take now, most urgent first, each max 20 words"],
   "prevention": ["3-5 heat stress prevention measures, each max 20 words"],
   "environmental_insights": ["2-3 observations about air temperature, humidity and trend, each max 25 words"],
-  "temperature_guidance": ["2-3 points about the ducks' body temperatures and when to recheck, each max 25 words"]
+  "temperature_guidance": ["2-3 points about the ducks' surface temperatures and when to recheck, each max 25 words"]
 }`;
 
 const SYSTEM_PROMPT = `You are HeatTrack's heat-stress advisor for duck farmers.
-You receive one monitoring result (a 10- or 30-minute interval) from a duck house: the heat-stress severity, the ducks' estimated body temperatures from a thermal camera, the number of ducks detected, and the air temperature and humidity from a DHT22 sensor.
+You receive one monitoring result (a 10- or 30-minute interval) from a duck house: the heat-stress severity, the ducks' estimated surface temperatures from a thermal camera, the number of ducks detected, and the air temperature and humidity from a DHT22 sensor.
 
 Rules:
 - The severity level is decided by a trained model. Never change it, downplay it or contradict it; match the urgency of your advice to it.
-- Base every point on the numbers given. Mention actual values (body temperature, air temperature, humidity, duck count, trend) where they matter.
+- Base every point on the numbers given. Mention actual values (surface temperature, air temperature, humidity, duck count, trend) where they matter.
 - Stay within the GUIDELINE ACTIONS for the severity: you may make them more specific to these readings, reorder them, or combine them, but do not invent unrelated or risky interventions.
 - Never give medication names or doses. For CRITICAL results, include escalating to a veterinarian if signs persist.
 - When humidity is high, note that evaporative cooling (misting/sprinklers) works less well and must be paired with strong ventilation.
-- Body temperatures are thermal-camera estimates; advise confirming visually (panting, wing spreading, lethargy) before drastic action.
+- Surface temperatures are thermal-camera estimates; advise confirming visually (panting, wing spreading, lethargy) before drastic action.
 - Use the recheck time given for the severity.
 - Every result must get a UNIQUE recommendation, even when its severity or status is the same as earlier results. Never reuse a headline, tip, explanation or list item from the RECENT RECOMMENDATIONS, word for word or with only small changes. Lead with a different guideline action than the recent headlines when possible, and make each point specific to THIS result's numbers, duck count and trend.
 - Plain, practical language a farm worker can follow. No markdown, no emojis.`;
@@ -387,12 +387,12 @@ Deno.serve(async (req) => {
         `Severity (from trained model): ${severity}`,
         `Status: ${row.status ?? 'unknown'}`,
         `Ducks detected: ${num(row.duck_count) ?? 'unknown'}`,
-        `Estimated body temperature: lowest ${fmt(low, '°C')}, average ${fmt(avg, '°C')}, highest ${fmt(high, '°C')}`,
+        `Estimated surface temperature: lowest ${fmt(low, '°C')}, average ${fmt(avg, '°C')}, highest ${fmt(high, '°C')}`,
         `Peak air temperature in the interval: ${fmt(num(peak?.temperature), '°C')} with humidity ${fmt(num(peak?.humidity), '%')}`,
         `Latest air reading: ${fmt(num(latest?.temperature), '°C')}, humidity ${fmt(num(latest?.humidity), '%')}`,
         prev
             ? `Previous result: severity ${prev.severity}, highest body ${fmt(prevHigh, '°C')}, ${num(prev.duck_count) ?? '?'} ducks`
-              + (prevHigh !== null && high !== null ? ` (body temperature change ${high - prevHigh >= 0 ? '+' : ''}${(high - prevHigh).toFixed(1)}°C)` : '')
+              + (prevHigh !== null && high !== null ? ` (surface temperature change ${high - prevHigh >= 0 ? '+' : ''}${(high - prevHigh).toFixed(1)}°C)` : '')
             : 'Previous result: none',
         `Recheck time for this severity: ${RECHECK[severity]}`,
         '',
