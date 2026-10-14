@@ -1948,7 +1948,7 @@ def main():
 
     detector = camera.detector if camera else (FakeDetector() if args.simulate else None)
     if detector is None:
-        log("No duck detector running: body temperature can't be measured, so no analytics rows")
+        log("No duck detector running: surface temperature can't be measured, so no analytics rows")
     collector = ThermalCollector(sensor, detector)
 
     try:
