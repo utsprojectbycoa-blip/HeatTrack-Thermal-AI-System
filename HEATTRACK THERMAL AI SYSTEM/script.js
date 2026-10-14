@@ -1106,13 +1106,6 @@ function initMobileNavMenu() {
     });
 }
 
-// Header panels (Alerts, Settings) start at the top each time they open or close
-function resetPanelScroll(panel) {
-    [panel, ...panel.querySelectorAll('*')].forEach((el) => {
-        if (el.scrollTop) el.scrollTop = 0;
-    });
-}
-
 function animatePanelOpen(panel) {
     if (!panel) return;
     if (panel.__pendingCloseListener) {
@@ -1120,7 +1113,6 @@ function animatePanelOpen(panel) {
         panel.__pendingCloseListener = null;
     }
     panel.classList.remove('u-hidden');
-    resetPanelScroll(panel);
     void panel.offsetWidth;
     panel.classList.add('is-open');
 }
@@ -1134,7 +1126,6 @@ function animatePanelClose(panel) {
     }
     const finishClose = (event) => {
         if (event.propertyName === 'opacity') {
-            resetPanelScroll(panel);   // after the fade, so the list doesn't jump while visible
             panel.classList.add('u-hidden');
             panel.removeEventListener('transitionend', finishClose);
             panel.__pendingCloseListener = null;
@@ -1194,8 +1185,8 @@ const recommendations = {
         { action: 'Activate emergency cooling now (sprinklers + fans at 100%)', icon: 'droplets', type: 'urgent', category: 'Suggested Action', tip: 'Start cooling within 1–3 minutes while confirming affected birds on-site.' },
         { action: 'Move high-temperature ducks to shaded recovery pen within 3 minutes', icon: 'move', type: 'urgent', category: 'Suggested Action', tip: 'Prioritize ducks with the highest thermal readings and visible distress.' },
         { action: 'Start intensive rehydration: cool clean water at multiple access points', icon: 'glass-water', type: 'urgent', category: 'Prevention', tip: 'Ensure water is cool—not cold enough to shock—and reachable from every zone.' },
-        { action: 'Apply misting cycles every 2-3 minutes until surface temperature drops below 41.0°C', icon: 'cloud-rain', type: 'urgent', category: 'Environmental', tip: 'Pair misting with ventilation so humidity does not trap additional heat.' },
-        { action: 'Escalate to veterinarian if severe signs persist for more than 10 minutes', icon: 'phone', type: 'urgent', category: 'Temperature', tip: 'Document surface temperatures and intervention times for veterinary review.' },
+        { action: 'Apply misting cycles every 2-3 minutes until body temperature drops below 41.0°C', icon: 'cloud-rain', type: 'urgent', category: 'Environmental', tip: 'Pair misting with ventilation so humidity does not trap additional heat.' },
+        { action: 'Escalate to veterinarian if severe signs persist for more than 10 minutes', icon: 'phone', type: 'urgent', category: 'Temperature', tip: 'Document body temperatures and intervention times for veterinary review.' },
     ],
     HIGH: [
         { action: 'Run cooling fans at high speed and open all airflow panels', icon: 'fan', type: 'warning', category: 'Environmental', tip: 'Target stagnant zones where humidity and temperature combine to reduce evaporative cooling.' },
@@ -1301,17 +1292,19 @@ function normalizeRoute(route) {
 }
 
 const ABOUT_SECTION_HASHES = new Set([
-    '#about-howto',
     '#about-guide',
     '#about-features',
     '#about-rec',
+    '#about-monitor',
+    '#about-benefits',
 ]);
 
 const ABOUT_NAV_SECTIONS = [
-    { id: 'about-howto', hash: '#about-howto' },
     { id: 'about-guide', hash: '#about-guide' },
     { id: 'about-features', hash: '#about-features' },
     { id: 'about-rec', hash: '#about-rec' },
+    { id: 'about-monitor', hash: '#about-monitor' },
+    { id: 'about-benefits', hash: '#about-benefits' },
 ];
 
 let aboutNavScrollPending = false;
@@ -1452,15 +1445,6 @@ function showView(route) {
         const thermalCameraContainer = document.getElementById('thermalCameraContainer');
         if (normalCameraContainer?.resetZoom) normalCameraContainer.resetZoom();
         if (thermalCameraContainer?.resetZoom) thermalCameraContainer.resetZoom();
-    }
-    // Leaving the FAQ: close every open question so it starts collapsed next time
-    if (previousView === 'faq' && currentView !== 'faq') {
-        document.querySelectorAll('#view-faq details[open]').forEach((item) => { item.open = false; });
-    }
-    // Opening or leaving Insights: Results & Recommendations starts at the top
-    if ((previousView === 'insights') !== (currentView === 'insights')) {
-        const recList = document.getElementById('recommendationsList');
-        if (recList) recList.scrollTop = 0;
     }
 
     document.documentElement.classList.remove('initial-dashboard');
@@ -1936,6 +1920,7 @@ function buildRecommendationFromDetection(detection) {
         status: detection.status,
         bodyTemp: detection.bodyTemp,
         ambientTemp: detection.ambientTemp,
+        detectionRef: detection,          // to look up its own air temperature if needed
         lowTemp: detection.lowTemp ?? null,
         highTemp: detection.highTemp ?? null,
         duckCount: detection.count ?? null,
@@ -2258,7 +2243,7 @@ function liveStatusCounts(thermal) {
     return { normal: temps.length - mild - stress, mild, stress };
 }
 
-// Live surface temperatures from the thermal camera (window.liveThermal, set by
+// Live body temperatures from the thermal camera (window.liveThermal, set by
 // livefeed.js from the logger's /stats). Uses the same thresholds as the
 // Detection Log colours. Returns null when there is no live thermal data.
 // Status & Severity levels (same as the logger's SPECTRUM_BANDS):
@@ -2313,7 +2298,7 @@ function renderDetectionLogs() {
             const statusWrap = d.status === 'HEAT STRESS' ? 'ht-log-status ht-log-status--stress' : d.status === 'MILD' ? 'ht-log-status ht-log-status--warn' : 'ht-log-status ht-log-status--ok';
             const statusIcon = d.status === 'HEAT STRESS' ? 'alert-triangle' : d.status === 'MILD' ? 'sun' : 'check-circle';
             const flash = d.status === 'HEAT STRESS' ? ' ht-log-row--flash' : '';
-            // One cell per header column: lowest / average / highest surface temperature
+            // One cell per header column: lowest / average / highest body temperature
             const tempCell = (t) => {
                 if (t == null) return '<td class="ht-log-cell--mono">--</td>';
                 const cls = t > LIVE_TEMP_LEVELS.stress ? 'ht-log-temp--hi' : t > LIVE_TEMP_LEVELS.mild ? 'ht-log-temp--mid' : 'ht-log-temp--ok';
@@ -2326,7 +2311,7 @@ function renderDetectionLogs() {
 
             return `
                 <tr class="ht-log-row-clickable${flash}" data-detection-id="${d.id}">
-                    <td class="ht-log-cell--mono">${formatTimestamp(d.timestamp)}${intervalBadge(durations.get(d.id))}</td>
+                    <td class="ht-log-cell--mono">${formatTimestamp(d.timestamp)}${intervalBadge(durations.get(d.id))}${peak30Badge(d)}</td>
                     <td>
                         <div class="${statusWrap}">
                             <i data-lucide="${statusIcon}"></i>
@@ -2431,14 +2416,14 @@ function renderRecommendations() {
     const activeRecs = [];
 
     // One recommendation per 30-minute reading with ducks (newest first), on the
-    // 30-minute steps (see logEntryLabels). Slots without ducks have no row.
+    // 30-minute steps from the first detection. Slots without ducks have no row.
     const duckDetections = detailDetections().filter(d => d.count > 0);
     const currentTemp = state.sensorHistory.temp.length > 0 ? state.sensorHistory.temp[state.sensorHistory.temp.length - 1] : null;
 
     if (!duckDetections.length) {
         container.innerHTML = `
             <div class="ht-footnote" style="text-align:center; padding:1.5rem 0; font-size:15px; line-height:1.6;">
-                No ducks detected yet, so there are no recommendations. The first recommendation appears 20 minutes after ducks are first detected, then every 30 minutes.
+                No ducks detected yet, so there are no recommendations. A recommendation appears every 30 minutes after ducks are first detected.
             </div>
         `;
         lucide.createIcons();
@@ -2449,7 +2434,6 @@ function renderRecommendations() {
         activeRecs.push({
             ...recommendationFor(d, recommendations[d.severity] ? d.severity : 'LOW'),
             id: `duck-${d.id}`,
-            detectionId: d.id,
             timestamp: formatTimestamp(d.timestamp),
             timestampMs: d.timestamp instanceof Date ? d.timestamp.getTime() : Date.now(),
             severity: d.severity,
@@ -2493,7 +2477,7 @@ function renderRecommendations() {
                             <span class="ht-rec-sev">${r.severity}</span>
                         </div>
                         <div class="ht-rec-card__meta">
-                            <span class="ht-rec-card__category">Surface Temp ${formatCardTemp(r.bodyTemp)}</span>
+                            <span class="ht-rec-card__category">Body Temp ${formatCardTemp(r.bodyTemp)}</span>
                             <span class="ht-rec-card__category">Ambient Temp ${ambientText}</span>
                         </div>
                         <p class="ht-rec-card__tip">${tip}</p>
@@ -2549,6 +2533,19 @@ function openRecommendationModal(rec, currentTemp, { keepScroll = false } = {}) 
     const modal = document.getElementById('recommendationModal');
     const body = document.getElementById('recommendationModalBody');
     if (!modal || !body) return;
+
+    // Not looked up yet: fetch this result's own air temperature, then refresh the modal
+    const ref = rec.detectionRef;
+    if (ref && ref.ambientTemp === undefined && ref.dbId != null && !ref._ambientPending) {
+        ref._ambientPending = true;
+        loadAmbientTemps([ref]).finally(() => {
+            ref._ambientPending = false;
+            if (ref.ambientTemp === undefined) ref.ambientTemp = null;   // lookup failed or no reading
+            const m = document.getElementById('recommendationModal');
+            const stillOpen = m && m.classList.contains('is-open') && m.dataset.recId === String(rec.id);
+            if (stillOpen) openRecommendationModal({ ...rec, ambientTemp: ref.ambientTemp }, currentTemp, { keepScroll: true });
+        });
+    }
 
     // Gemini's text for this result when it exists; guideline text otherwise
     const ai = rec.ai || null;
@@ -2689,6 +2686,7 @@ function openRecommendationModal(rec, currentTemp, { keepScroll = false } = {}) 
     // Open modal first so layout/overflow values are stable, then start at the top
     // every time it opens (on all screen sizes). A refresh of the open modal (AI
     // text arriving) keeps the reader's place instead.
+    modal.dataset.recId = String(rec.id);
     modal.classList.add('is-open');
     if (!keepScroll) {
         resetScrollPosition();
@@ -2711,12 +2709,6 @@ function closeRecommendationModal() {
     if (!modal) return;
     modal.classList.remove('is-open');
     openRecState = null;
-    // Back to the top once it has faded out (opening resets it too)
-    setTimeout(() => {
-        if (modal.classList.contains('is-open')) return;
-        [modal.querySelector('.ht-modal__body'), modal.querySelector('.ht-modal__dialog'), modal]
-            .forEach((el) => { if (el) el.scrollTop = 0; });
-    }, 300);
 }
 
 // ============================================
@@ -2904,7 +2896,7 @@ function getRecommendationPreventionTips(rec) {
             'Avoid unnecessary movement or handling.',
             'Keep the hottest animals separated from the group.',
             'Provide cool, not cold, water at several drinking points.',
-            'Hold feeding until surface temperatures come down.'
+            'Hold feeding until body temperatures come down.'
         ],
         HIGH: [
             'Boost shade and fan output where it is hottest.',
@@ -2959,7 +2951,7 @@ function getRecommendationSummary(rec, currentTemp) {
     if (bodyStr && tempStr) {
         const struggling = rec.severity === 'CRITICAL' || rec.severity === 'HIGH';
         lines.push(
-            `Surface temperature reached ${bodyStr} while the barn is at ${tempStr}` +
+            `Body temperature reached ${bodyStr} while the barn is at ${tempStr}` +
             (struggling ? ', so ducks are struggling to shed heat.' : ', which is still manageable.')
         );
     } else if (tempStr) {
@@ -2988,33 +2980,15 @@ function getRecStatus(rec) {
         || (rec.severity === 'CRITICAL' || rec.severity === 'HIGH' ? 'HEAT STRESS' : 'NORMAL');
 }
 
-// Severity Level: this result's level compared with the 30-minute reading before it.
-// Up = worse (toward Critical), down = better (toward Low).
-function severityChangeHtml(rec) {
-    const readings = detailDetections().filter((d) => d.timestamp instanceof Date);
-    const own = readings.find((d) => d.id === rec.detectionId);
-    if (!own) return '—';
-    const previous = readings
-        .filter((d) => d.timestamp < own.timestamp)
-        .sort((a, b) => b.timestamp - a.timestamp)[0];
-    if (!previous) {
-        return '<span class="ht-sev-change ht-sev-change--first"><i data-lucide="flag"></i>First reading</span>';
-    }
-    const rank = (sev) => severityLevels.length - 1 - severityLevels.indexOf(sev);   // LOW 0 ... CRITICAL 3
-    const diff = rank(own.severity) - rank(previous.severity);
-    const prevLabel = previous.severity.charAt(0) + previous.severity.slice(1).toLowerCase();
-    const prevTime = previous.timestamp.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-    const [cls, icon, text] = diff > 0 ? ['up', 'trending-up', `Up from ${prevLabel}`]
-        : diff < 0 ? ['down', 'trending-down', `Down from ${prevLabel}`]
-        : ['same', 'minus', 'No changes'];
-    return `<span class="ht-sev-change ht-sev-change--${cls}"><i data-lucide="${icon}"></i>${text}</span>`
-        + `<span class="ht-sev-change__time"><span class="ht-sev-change__dot" aria-hidden="true">·</span>Previous reading ${prevTime}</span>`;
-}
-
 function getRecommendationResultSummary(rec, currentTemp) {
-    // The result's own air temperature (same as its card); the latest reading if not looked up
-    const ambientValue = typeof rec.ambientTemp === 'number' ? rec.ambientTemp : currentTemp;
-    const ambientTemp = typeof ambientValue === 'number' ? `${ambientValue.toFixed(1)}°C` : 'Unknown';
+    // The result's own air temperature (highest DHT22 reading in its interval). A saved
+    // detection never falls back to the CURRENT reading (that would show e.g. this
+    // evening's temperature for a midday result); only check-ins without a record do.
+    const own = rec.detectionRef ? rec.detectionRef.ambientTemp : rec.ambientTemp;
+    const ambientValue = typeof own === 'number' ? own
+        : (rec.detectionRef ? null : (typeof rec.ambientTemp === 'number' ? rec.ambientTemp : currentTemp));
+    const ambientTemp = typeof ambientValue === 'number' ? `${ambientValue.toFixed(1)}°C`
+        : (rec.detectionRef && own === undefined ? 'Loading…' : 'No reading');
     const detectedTemp = rec.bodyTemp != null ? `${rec.bodyTemp}°C` : ambientTemp;
 
     const status = getRecStatus(rec);
@@ -3027,7 +3001,7 @@ function getRecommendationResultSummary(rec, currentTemp) {
     // the label; count + unit: big-number layout; tone: colored dot for severity levels
     const items = [
         { group: 'temperature', icon: 'activity', label: 'Status', value: statusBadge },
-        { group: 'temperature', icon: 'thermometer', label: 'Surface Temperature', value: detectedTemp },
+        { group: 'temperature', icon: 'thermometer', label: 'Body Temperature', value: detectedTemp },
         { group: 'temperature', icon: 'home', label: 'Ambient Temperature', value: ambientTemp },
     ];
 
@@ -3044,17 +3018,19 @@ function getRecommendationResultSummary(rec, currentTemp) {
 
     // Severity Level shows only this result's level:
     // Normal -> Low, Mild -> Moderate, Heat Stress -> High or Critical (whichever it is)
-    // The level comes from the air, so all ducks of a reading share it; instead of
-    // repeating the duck count it shows how the level changed from the previous reading
+    const counts = getDetectionCounts();
     const level = status === 'HEAT STRESS'
         ? (rec.severity === 'CRITICAL' ? 'critical' : 'high')
         : status === 'MILD' ? 'moderate' : 'low';
-    const levelLabel = level.charAt(0).toUpperCase() + level.slice(1);
-    items.push({ group: 'severity', tone: level, label: levelLabel, value: severityChangeHtml(rec) });
+    items.push({
+        group: 'severity', tone: level,
+        label: level.charAt(0).toUpperCase() + level.slice(1),
+        count: counts[level], unit: `duck${counts[level] !== 1 ? 's' : ''}`,
+    });
 
     // Extra batch details from the analytics table (only for detection-based recommendations)
     if (rec.lowTemp != null && rec.highTemp != null) {
-        items.splice(2, 0, { group: 'temperature', icon: 'arrow-left-right', label: 'Surface Temperature Range', value: `${rec.lowTemp}–${rec.highTemp}°C` });
+        items.splice(2, 0, { group: 'temperature', icon: 'arrow-left-right', label: 'Body Temperature Range', value: `${rec.lowTemp}–${rec.highTemp}°C` });
     }
     return items;
 }
@@ -3239,7 +3215,7 @@ function showToast(detection) {
     state.lastToastDetection = detection;
     let action = '';
     try { action = buildRecommendationFromDetection(detection).action || ''; } catch { /* no recommendation text */ }
-    const stats = [['Surface temp', fmtTemp(detection.bodyTemp)]];
+    const stats = [['Body temp', fmtTemp(detection.bodyTemp)]];
     if (detection.ambientTemp != null) stats.push(['Barn', fmtTemp(detection.ambientTemp)]);
     if (detection.count != null) stats.push(['Ducks', String(detection.count)]);
     renderToast({
@@ -3644,13 +3620,12 @@ function xlsStyle(id, o = {}) {
 // Generate Report uses the same rows, so the file always matches the screen.
 // Only first detections and the readings every 30 minutes after them are listed (see logEntryLabels),
 // (the KPI cards count the '30 min' ones only).
-// allRows: also the 10-minute readings between the 30-minute steps (Excel only)
-function getFilteredLogDetections({ allRows = false } = {}) {
+function getFilteredLogDetections() {
     const statusFilter = document.getElementById('logFilter')?.value || 'all';
     const { start, end } = getLogDateBounds();
 
     // One entry per moment: the 30-minute peak rides along on its entry
-    let filtered = attachThirtyMinutePeaks(allRows ? summaryDetections() : logEntryDetections());
+    let filtered = attachThirtyMinutePeaks(logEntryDetections());
     // An entry matches the filter if either its own or its 30-minute peak status does
     const hasStatus = (d, s) => d.status === s || d.peak30?.status === s;
     if (statusFilter === 'heatstress') filtered = filtered.filter(d => hasStatus(d, 'HEAT STRESS'));
@@ -3669,10 +3644,7 @@ function getFilteredLogDetections({ allRows = false } = {}) {
 }
 
 function exportDetectionsToExcel() {
-    // Every 10-minute reading, not only the Detection Log entries
-    // Rows that fit no 10-minute mark (e.g. test rows seconds apart) are left out
-    const minutesIn = countDurations();   // Duration column: 10 / 20 / 30 min
-    const rows = getFilteredLogDetections({ allRows: true }).filter((d) => minutesIn.has(d.id));
+    const rows = getFilteredLogDetections();
     // Summary boxes count the same way as the KPI cards: the listed entries
     // (readings after every 30 minutes of monitoring, not the first detection)
     // in the chosen filters
@@ -3712,7 +3684,7 @@ function exportDetectionsToExcel() {
     const tsFmt = 'mmmm d, yyyy, h:mm:ss AM/PM';
     styleXml += xlsStyle('sDataRow1Timestamp', { size: 10, fill: '#FFCBA2', h: 'Center', borders: white, numFmt: tsFmt });
     styleXml += xlsStyle('sDataRow2Timestamp', { size: 10, fill: '#FFDDC2', h: 'Center', borders: white, numFmt: tsFmt });
-    // Surface temps always show one decimal
+    // Body temps always show one decimal
     styleXml += xlsStyle('sTempRow1', { size: 10, fill: '#FFCBA2', h: 'Center', borders: white, numFmt: '0.0' });
     styleXml += xlsStyle('sTempRow2', { size: 10, fill: '#FFDDC2', h: 'Center', borders: white, numFmt: '0.0' });
     styleXml += xlsStyle('sNote', { size: 9, color: '#6B7280', h: 'Left', wrap: true });
@@ -3729,11 +3701,11 @@ function exportDetectionsToExcel() {
     styleXml += xlsStyle('sRecRow2', { size: 10, fill: '#FFDDC2', h: 'Left', wrap: true, borders: white });
     styleXml += '</Styles>';
 
-    // ---- Columns: A margin | B-C Timestamp | D Duration | E Status | F Lowest | G Average |
+    // ---- Columns: A margin | B-C Timestamp | D Interval | E Status | F Lowest | G Average |
     //      H Highest | I Duck Count | J Batch Count | K Severity | L-M Top Recommendation ----
     // B-C fit the longest timestamp ("September 30, 2026, 12:05:30 PM"); a date that
     // doesn't fit shows as ##### in Excel
-    const colWidths = [22, 95, 95, 70, 80, 80, 80, 80, 70, 75, 75, 120, 120];
+    const colWidths = [22, 95, 95, 170, 80, 80, 80, 80, 70, 75, 75, 120, 120];
     const span = colWidths.length - 2;          // MergeAcross for full-width rows (B..M)
     let tableXml = '<Table>' + colWidths.map((w) => '<Column ss:Width="' + w + '"/>').join('');
     const fullRow = (height, style, text) =>
@@ -3779,7 +3751,7 @@ function exportDetectionsToExcel() {
     // ---- Table header (same columns as the Detection Log) ----
     tableXml += '<Row ss:Height="30"><Cell/>'
         + textCell('sHeader', 'Timestamp', 1)
-        + ['Duration', 'Status', 'Lowest Surface Temp (°C)', 'Average Surface Temp (°C)', 'Highest Surface Temp (°C)',
+        + ['Duration', 'Status', 'Lowest Body Temp (°C)', 'Average Body Temp (°C)', 'Highest Body Temp (°C)',
            'Duck Count', 'Batch Count', 'Severity'].map((h) => textCell('sHeader', h)).join('')
         + textCell('sHeader', 'Top Recommendation', 1)
         + '</Row>';
@@ -3787,12 +3759,8 @@ function exportDetectionsToExcel() {
     const headerRow = (tableXml.match(/<Row/g) || []).length;
 
     // ---- Data rows ----
-    rows.forEach((d) => {
-        // Minutes into the count: 10, 20, 30 (the Detection Log's '30 min' step),
-        // then 10, 20, 30 again; older rows without an interval were 30-minute rows
-        const interval = minutesIn.get(d.id) || '30 min';
-        // Darker fill (Row1) for 30-minute rows, lighter (Row2) for 10-minute rows
-        const odd = interval === '30 min';
+    rows.forEach((d, idx) => {
+        const odd = idx % 2 === 0;
         const rowN = odd ? 'Row1' : 'Row2';
         const tempCell = (t) => numCell('sTemp' + rowN, t, 1);
         const ts = d.timestamp instanceof Date ? d.timestamp : new Date(d.timestamp);
@@ -3806,6 +3774,8 @@ function exportDetectionsToExcel() {
         const statusStyle = d.status === 'HEAT STRESS' ? 'sStatusHeatstress' : d.status === 'MILD' ? 'sStatusMild' : 'sStatusNormal';
         const sevStyle = d.severity === 'CRITICAL' ? 'sSevCritical' : d.severity === 'HIGH' ? 'sSevHigh'
             : d.severity === 'MODERATE' ? 'sSevModerate' : 'sSevLow';
+        const interval = [durations.get(d.id), d.peak30 ? peak30Text(d).replace('°C', ' °C') : '']
+            .filter(Boolean).join(' + ') || '--';
         const recText = buildRecommendationFromDetection(d)?.action || '';
         const rowHeight = Math.max(24, (Math.ceil(recText.length / 45) + 1) * 14);
         const batch = d.batchCount != null && /^\d+$/.test(String(d.batchCount))
@@ -3830,7 +3800,7 @@ function exportDetectionsToExcel() {
         tableXml += fullRow(30, 'sDataCenterRow1', 'No detections for the selected events and period.');
     }
     tableXml += spacerRow;
-    tableXml += fullRow(28, 'sNote', 'Duration: minutes into each 30-minute step of monitoring (10, 20, 30, then 10, 20, 30 again). The first detection is 10 min; after 10 minutes with no reading, counting starts again at 10 min. Totals count the 30 min readings only. '
+    tableXml += fullRow(28, 'sNote', 'Listed: the first detection (--) and the reading every 30 minutes after it (30 min). Totals count the 30 min readings only. '
         + 'Results and recommendations are assistive only. Always confirm with on-site observation and follow your farm protocol or veterinary guidance.');
     tableXml += '</Table>';
 
@@ -3970,15 +3940,6 @@ function setupEventListeners() {
             alertBtn.classList.remove('is-active');
             suppressHoverTemporarily();
         }
-    });
-
-    // "View alerts" buttons elsewhere on the page (e.g. About) open the bell's panel.
-    // stopPropagation keeps the outside-click handler below from closing it again.
-    document.querySelectorAll('[data-open-alerts]').forEach((btn) => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (document.getElementById('alertPanel')?.classList.contains('u-hidden')) alertBtn?.click();
-        });
     });
 
     // Settings button
@@ -4649,7 +4610,7 @@ function normalizeSeverity(value) {
 
 // analytics row -> the "detection" shape the UI already understands
 // Status & Severity levels (the website's Status & Severity cards), from the
-// highest surface temperature: 34 °C or below LOW/Normal · above 34 up to 37
+// highest body temperature: 34 °C or below LOW/Normal · above 34 up to 37
 // MODERATE/Mild · above 37 up to 40 HIGH/Heat Stress · above 40 CRITICAL/Heat Stress
 const SEVERITY_STEPS = ['LOW', 'MODERATE', 'HIGH', 'CRITICAL'];
 const STATUS_OF_SEVERITY = { LOW: 'NORMAL', MODERATE: 'MILD', HIGH: 'HEAT STRESS', CRITICAL: 'HEAT STRESS' };
@@ -4662,8 +4623,8 @@ function severityFromBodyTemp(t) {
 }
 
 // The level shown for a saved row: exactly the Status & Severity level of its
-// highest surface temperature (also corrects rows saved with older rules).
-// Rows without a surface temperature keep their saved rating.
+// highest body temperature (also corrects rows saved with older rules).
+// Rows without a body temperature keep their saved rating.
 function levelForRow(highTemp, savedSeverity) {
     if (highTemp == null || Number.isNaN(highTemp)) {
         return { severity: savedSeverity, status: STATUS_OF_SEVERITY[savedSeverity] || 'NORMAL' };
@@ -4682,7 +4643,7 @@ function mapAnalyticsRow(row) {
     // the interval column existed are 30-minute rows
     const hasInterval = row.interval_minutes != null;
     const interval = hasInterval ? Number(row.interval_minutes) : 30;
-    // 30-minute rows report the window's HIGHEST surface temperature
+    // 30-minute rows report the window's HIGHEST body temperature
     const bodyTemp = (interval === 30 && hasInterval ? (high ?? avg) : (avg ?? high)) ?? low ?? 0;
 
     return {
@@ -4738,6 +4699,11 @@ function peak30Text(d) {
     return `30 min peak${temp != null ? ' ' + temp.toFixed(1) + '°C' : ''} · ${d.peak30.count} duck${d.peak30.count !== 1 ? 's' : ''}`;
 }
 
+function peak30Badge(d) {
+    if (!d.peak30) return '';
+    return ` <span title="Highest body temperature and peak duck count of the last 30 minutes" style="display:inline-block;margin-left:.3rem;padding:.05rem .45rem;border-radius:999px;font:700 .68rem 'DM Sans',system-ui,sans-serif;vertical-align:middle;background:#fff7ed;color:#c2410c">${peak30Text(d)}</span>`;
+}
+
 // Totals (KPI cards, charts) use the 10-minute rows, so they update every
 // 10 minutes. A 30-minute row only repeats the 10-minute rows inside its
 // window, so it is left out when those exist (ducks aren't counted twice).
@@ -4757,14 +4723,13 @@ function summaryDetections() {
 }
 
 // Insights page Results (live list) and Recommendations show only the 30-minute
-// readings (20 minutes after the first detection, then every 30 minutes); first
-// detections are left out
+// readings (every 30 minutes from the first detection); first detections are left out
 function detailDetections() {
     return thirtyMinuteReadings();
 }
 
 // Alerts (bell + pop-up): the 30-minute readings (see logEntryLabels) whose
-// status is Heat Stress, e.g. first detection 12:10 -> 12:30, 1:00. First
+// status is Heat Stress, e.g. first detection 12:10 -> 12:40, 1:10. First
 // detections and the results between readings raise nothing.
 // Returns the ids of the results that raise an alert.
 function heatStressAlertIds(rows = summaryDetections()) {
@@ -4772,98 +4737,38 @@ function heatStressAlertIds(rows = summaryDetections()) {
     return new Set(rows.filter((d) => d.isHeatStress && isThirtyMinuteReading(d, entries)).map((d) => d.id));
 }
 
-// Detection Log entries, whatever the status. The first detection is the first
-// 10-minute result, which covers the 10 minutes before it. Monitoring counts
-// from the start of that slot, so the first 30-minute reading comes 20 minutes
-// after the first detection, then every 30 minutes:
-//   first detection 12:10 -> readings at 12:30, 1:00, 1:30 ...
-// A status change doesn't restart it. Only when there is no reading for
-// 10 minutes (no saved result: no ducks, or ducks without a surface temperature)
-// does the next result start a new count as a new first detection.
-// Older data from before the interval column keeps 30-minute steps and gaps.
+// Detection Log entries, whatever the status. The 30-minute monitoring counts
+// from the timestamp of the first detection: first detection 12:10 -> readings
+// at 12:40, 1:10, 1:40 ... and keeps that schedule. A status change or a short
+// gap doesn't restart it (a missed slot just has no reading); only when no
+// ducks are detected for more than 30 minutes does the next result start a new
+// count as a new first detection.
 //   - first detection: listed, no label
-//   - result on each 30-minute step: listed, label '30 min'
+//   - result on each 30-minute step from it: listed, label '30 min'
 // Everything else is hidden. Returns id -> label ('' or '30 min').
 const LOG_EVERY_MS = 30 * 60 * 1000;
-const SLOT_MS = 10 * 60 * 1000;
 const MARK_SLACK_MS = 60 * 1000;
 
-const isSlotRow = (d) => d.hasInterval && d.interval === 10;
-
-// Each row's count: { firstAt, isFirst }, oldest first. firstAt is when its count
-// started (the start of the first detection's 10-minute slot).
-function countRuns(rows = summaryDetections()) {
+function logEntryLabels(rows = summaryDetections()) {
     const sorted = rows
         .filter((d) => d.timestamp instanceof Date && !Number.isNaN(d.timestamp.getTime()))
         .slice()
         .sort((a, b) => a.timestamp - b.timestamp);
+    const shown = new Map();
     let prev = null;
     let firstAt = null;
-    return sorted.map((d) => {
-        // Back-to-back readings are 10 minutes apart; a longer gap means a slot
-        // had no reading (no ducks, or no surface temperature), so counting restarts.
-        // Only old rows without an interval keep the 30-minute gap.
-        const maxGap = prev && (d.hasInterval || prev.hasInterval) ? SLOT_MS : LOG_EVERY_MS;
-        const isFirst = !prev || d.timestamp - prev.timestamp > maxGap + MARK_SLACK_MS;
-        if (isFirst) firstAt = d.timestamp.getTime() - (isSlotRow(d) ? SLOT_MS : 0);
-        prev = d;
-        return { d, firstAt, isFirst };
-    });
-}
-
-// Excel Duration: minutes into the current 30-minute step, 10 -> 20 -> 30, then
-// 10 -> 20 -> 30 again while monitoring continues; a new count starts at 10.
-// Rows that aren't 10-minute readings (30-minute and older rows) are '30 min'.
-// Each 10-minute mark keeps one row only, the closest (the '30 min' row on a
-// 30-minute mark). Rows saved seconds apart (e.g. test timing) fit no mark, so
-// they get no label and are left out of the Excel file.
-function countDurations(rows = summaryDetections()) {
-    const labels = logEntryLabels(rows);
-    const out = new Map();
-    const slotPick = new Map();   // "firstAt:tens" -> { d, tens, dist }
-    countRuns(rows).forEach(({ d, firstAt }) => {
-        if (!isSlotRow(d)) {
-            out.set(d.id, '30 min');
-            return;
-        }
-        const since = d.timestamp.getTime() - firstAt;
-        const tens = Math.max(1, Math.round(since / SLOT_MS));
-        const isStep = labels.get(d.id) === '30 min';
-        const dist = isStep ? -1 : Math.abs(since - tens * SLOT_MS);   // the step row always wins
-        const key = firstAt + ':' + tens;
-        const best = slotPick.get(key);
-        if (!best || dist < best.dist) slotPick.set(key, { d, tens, dist });
-    });
-    slotPick.forEach(({ d, tens, dist }) => {
-        // A 30-minute mark belongs to the '30 min' row only
-        if (dist === -1) out.set(d.id, '30 min');
-        else if (tens % 3 !== 0) out.set(d.id, (tens % 3) * 10 + ' min');
-    });
-    return out;
-}
-
-function logEntryLabels(rows = summaryDetections()) {
-    const shown = new Map();
-    // One entry per 30-minute step: the row closest to the mark. Rows saved
-    // seconds apart (e.g. test timing) would otherwise all fall in the slack.
-    const stepPick = new Map();   // "firstAt:step" -> { id, dist }
-    countRuns(rows).forEach(({ d, firstAt, isFirst }) => {
-        if (isFirst) {
+    sorted.forEach((d) => {
+        if (!prev || d.timestamp - prev.timestamp > LOG_EVERY_MS + MARK_SLACK_MS) {
             shown.set(d.id, '');
+            firstAt = d.timestamp.getTime();
         } else {
             const since = d.timestamp.getTime() - firstAt;
             const offset = since % LOG_EVERY_MS;
             const onStep = offset < MARK_SLACK_MS || offset > LOG_EVERY_MS - MARK_SLACK_MS;
-            if (since >= LOG_EVERY_MS - MARK_SLACK_MS && onStep) {
-                const step = Math.round(since / LOG_EVERY_MS);
-                const dist = Math.abs(since - step * LOG_EVERY_MS);
-                const key = firstAt + ':' + step;
-                const best = stepPick.get(key);
-                if (!best || dist < best.dist) stepPick.set(key, { id: d.id, dist });
-            }
+            if (since >= LOG_EVERY_MS - MARK_SLACK_MS && onStep) shown.set(d.id, '30 min');
         }
+        prev = d;
     });
-    stepPick.forEach(({ id }) => shown.set(id, '30 min'));
     return shown;
 }
 
@@ -5890,7 +5795,8 @@ function initAdminProfile() {
     });
 
     document.getElementById('adminProfileEditBtn').addEventListener('click', () => {
-        if (adminSelf) setAdminProfileEditing(true);
+        if (adminSelf) setAdmin
+ProfileEditing(true);
     });
     document.getElementById('adminProfileCancelBtn').addEventListener('click', () => {
         renderAdminSelf();
@@ -5975,129 +5881,6 @@ function initAdminProfile() {
     });
 }
 
-// ============================================
-// ADMIN WEATHER CARD (Open-Meteo)
-// ============================================
-// Uses the browser's location if allowed, else Pateros. Refreshed at most
-// every 15 minutes (the last result is kept between page loads).
-const WEATHER_FALLBACK = { lat: 14.5454, lon: 121.0687, place: 'Pateros, Metro Manila' };
-const WEATHER_EVERY_MS = 15 * 60 * 1000;
-const WEATHER_CACHE_KEY = 'ht-admin-weather';
-let adminWeatherTimer = null;
-
-// Heat index tiers, same as the card's guide
-function weatherRisk(heatIndex) {
-    if (heatIndex < 27) return 'low';
-    if (heatIndex < 33) return 'moderate';
-    if (heatIndex < 42) return 'high';
-    return 'critical';
-}
-
-// Open-Meteo weather code -> [description, lucide icon]
-function weatherLook(code, isDay) {
-    if (code === 0) return ['Clear sky', isDay ? 'sun' : 'moon'];
-    if (code <= 2) return ['Partly cloudy', isDay ? 'cloud-sun' : 'cloud-moon'];
-    if (code === 3) return ['Overcast', 'cloud'];
-    if (code === 45 || code === 48) return ['Fog', 'cloud-fog'];
-    if (code >= 51 && code <= 57) return ['Drizzle', 'cloud-drizzle'];
-    if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return ['Rain', 'cloud-rain'];
-    if ((code >= 71 && code <= 77) || code === 85 || code === 86) return ['Snow', 'snowflake'];
-    if (code >= 95) return ['Thunderstorm', 'cloud-lightning'];
-    return ['--', 'cloud-sun'];
-}
-
-function adminWeatherLocation() {
-    return new Promise((resolve) => {
-        if (!navigator.geolocation) return resolve(null);
-        navigator.geolocation.getCurrentPosition(
-            (pos) => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
-            () => resolve(null),   // denied, unavailable or timed out
-            { timeout: 10000, maximumAge: WEATHER_EVERY_MS }
-        );
-    });
-}
-
-async function adminWeatherPlace(lat, lon) {
-    try {
-        const r = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
-        if (!r.ok) return null;
-        const j = await r.json();
-        const parts = [j.locality || j.city, j.principalSubdivision].filter(Boolean);
-        return parts.length ? [...new Set(parts)].join(', ') : null;
-    } catch {
-        return null;
-    }
-}
-
-async function fetchAdminWeather() {
-    const coords = await adminWeatherLocation();
-    const { lat, lon } = coords || WEATHER_FALLBACK;
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
-        + '&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,is_day&timezone=auto';
-    const [res, place] = await Promise.all([fetch(url), coords ? adminWeatherPlace(lat, lon) : null]);
-    if (!res.ok) throw new Error('Open-Meteo ' + res.status);
-    const { current } = await res.json();
-    return {
-        at: Date.now(),
-        place: place || (coords ? `${lat.toFixed(2)}, ${lon.toFixed(2)}` : WEATHER_FALLBACK.place + ' (default)'),
-        temp: current.temperature_2m,
-        humidity: current.relative_humidity_2m,
-        heatIndex: current.apparent_temperature,
-        code: current.weather_code,
-        isDay: current.is_day === 1,
-    };
-}
-
-function renderAdminWeather(w) {
-    const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
-    const [desc, icon] = weatherLook(w.code, w.isDay);
-    set('adminWeatherPlace', w.place);
-    set('adminWeatherTemp', `${Math.round(w.temp)}°C`);
-    set('adminWeatherDesc', desc);
-    set('adminWeatherFeels', `${Math.round(w.heatIndex)}°C`);
-    set('adminWeatherHumid', `${Math.round(w.humidity)}%`);
-    set('adminWeatherUpdated', 'Updated ' + new Date(w.at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }));
-    const iconEl = document.getElementById('adminWeatherIcon');
-    if (iconEl) {
-        iconEl.innerHTML = `<i data-lucide="${icon}"></i>`;
-        lucide.createIcons();
-    }
-    const risk = weatherRisk(w.heatIndex);
-    document.querySelectorAll('.ht-adash__guide-list [data-risk]').forEach((li) => {
-        li.classList.toggle('is-current', li.dataset.risk === risk);
-    });
-}
-
-async function loadAdminWeather() {
-    let cached = null;
-    try { cached = JSON.parse(localStorage.getItem(WEATHER_CACHE_KEY)); } catch { /* no storage */ }
-    if (cached && Date.now() - cached.at < WEATHER_EVERY_MS) {
-        renderAdminWeather(cached);
-        return;
-    }
-    try {
-        const w = await fetchAdminWeather();
-        renderAdminWeather(w);
-        try { localStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify(w)); } catch { /* no storage */ }
-    } catch (e) {
-        console.warn('Weather fetch failed:', e);
-        if (cached) {
-            renderAdminWeather(cached);   // show the last result rather than nothing
-        } else {
-            document.getElementById('adminWeatherPlace').textContent = 'Location unavailable';
-            document.getElementById('adminWeatherDesc').textContent = 'Weather unavailable. Retrying in 15 minutes.';
-            document.getElementById('adminWeatherUpdated').textContent = 'Offline';
-        }
-    }
-}
-
-function initAdminWeather() {
-    if (!document.getElementById('adminWeatherTemp')) return;
-    loadAdminWeather();
-    clearInterval(adminWeatherTimer);
-    adminWeatherTimer = setInterval(loadAdminWeather, WEATHER_EVERY_MS);
-}
-
 async function initAdminUi() {
     const adminUi = document.getElementById('admin-ui');
     if (!adminUi) return;
@@ -6117,7 +5900,6 @@ async function initAdminUi() {
     adminUiBound = true;
     initAdminProfile();
     initAdminDevices();
-    initAdminWeather();
 
     document.querySelectorAll('[data-admin-route]').forEach((link) => link.addEventListener('click', () => adminSetView(link.dataset.adminRoute)));
     document.getElementById('adminUserSearch')?.addEventListener('input', () => { adminPage.users = 1; renderAdminUsers(); });
