@@ -69,7 +69,7 @@
         if (!thermalImg || !thermalImg.isConnected) {
             // "contain" so no duck box or temperature label is cropped off
             thermalImg = makeFeedImg('thermalCameraContainer', 'thermalFeed',
-                'Thermal camera live view with duck body temperatures', 'contain');
+                'Thermal camera live view with duck surface temperatures', 'contain');
         }
         return thermalImg;
     }
