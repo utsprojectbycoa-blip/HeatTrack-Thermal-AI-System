@@ -1,48 +1,51 @@
 #!/usr/bin/env python3
 """
-HeatTrack logger + bridge (laptop now, mini PC later)
-=====================================================
+HeatTrack logger + bridge (mini PC)
+===================================
 
   Arduino Uno (USB)     -> runs duck_sensor_bridge.ino: relays the MLX90640 thermal
-                           camera and reads the DHT22 (newest values kept in memory;
-                           readings can also be saved to public.environment)
-  Thermal camera        -> every new thermal frame, each duck YOLO sees is measured
-                           (duck_temperature.py); readings are pooled per 10 minutes
-  Every 10 minutes      -> the highest temperature/humidity reading of the slot is kept
-  Every 10 minutes      -> one public.analytics row (interval_minutes = 10) for that slot
-  Every 30 minutes      -> one public.analytics row (interval_minutes = 30) with the HIGHEST
-                           body temperature of the window; the highest air temperature (with
-                           the humidity measured at that moment) goes into heatstress_model_2.pkl,
-                           which predicts the SEVERITY
-                           with the PEAK duck count and the window's body temperatures.
-                           No ducks (or no valid thermal reading) in a window -> no row.
-  Webcam                -> continuous live video (MJPEG) at http://localhost:8000/video
-  YOLO model            -> finds ducks in the video, draws boxes + count on the stream
-  Cloudflare tunnel     -> public https address for that video, saved to devices.device_url
-                           so the HeatTrack website finds it automatically
+                           camera and reads the DHT22
+  Thermal camera        -> each duck YOLO sees is measured (duck_temperature.py)
+  Every 10 minutes      -> one analytics row (interval 10) for that slot
+  Every 30 minutes      -> one analytics row (interval 30) for the whole window
+  Rating (both rows)    -> the thermal camera and the DHT22 decide it together:
+                           1. thermal: the ducks' HIGHEST body temperature gives the
+                              starting level (<=34 LOW, >34 MODERATE, >37 HIGH, >40 CRITICAL)
+                           2. DHT22: the highest air temperature + humidity give the THI
+                              and the trained model's (heatstress_model_2.pkl) air rating
+                           3. hot air raises the level by one, cool air lowers it by one
+                              (see rate_combined); status follows from the severity.
+                           No ducks / no valid thermal reading -> no row.
+  Webcam + YOLO         -> live video (MJPEG) at http://localhost:8000/video, /thermal, /stats
+  Cloudflare tunnel     -> public https address for the video, saved to devices.device_url
 
-Keep thermal_bridge.py and duck_temperature.py in the same folder as this file,
-and flash duck_sensor_bridge.ino onto the Uno (it replaces the old DHT22 sketch).
+  Uploads use this device's own API key (HEATTRACK_DEVICE_API_KEY) through the
+  Supabase functions ingest_environment / ingest_analytics / update_device_url /
+  device_whoami, so the data lands on the account that claimed the device.
+  No secret key is needed on this computer.
 
-Install once:
-    pip install pyserial opencv-python requests ultralytics joblib scikit-learn pandas numpy
-               adafruit-circuitpython-mlx90640
-    winget install --id Cloudflare.cloudflared
-    (or run install_heattrack.ps1 once: it installs cloudflared and starts the
-     logger automatically after every boot)
+Settings (.env next to this file):
+    HEATTRACK_SUPABASE_URL      https://<project>.supabase.co
+    HEATTRACK_SUPABASE_KEY      the publishable / anon key (NOT the secret key)
+    HEATTRACK_DEVICE_ID         e.g. HT-PDCK-001
+    HEATTRACK_DEVICE_API_KEY    this device's API key
+    HEATTRACK_SERIAL_PORT       optional, default COM7
+    HEATTRACK_CAMERA_INDEX      optional, default 0
+
+Keep thermal_bridge.py and duck_temperature.py next to this file, and flash
+duck_sensor_bridge.ino onto the Uno. install_heattrack.ps1 installs everything
+and starts the logger after every boot.
 
 Run:
     python heatstress_logger.py                  (Ctrl + C to stop)
-                                                 finds its owner from DEVICE_CODE in the
-                                                 devices table; waits if not claimed yet
 
 Useful options:
+    python heatstress_logger.py --check          only check the settings and the device key
     python heatstress_logger.py --inspect        show what the severity model expects/returns
-    python heatstress_logger.py --simulate --dry-run --no-camera --interval 2
+    python heatstress_logger.py --simulate --no-camera --interval 2
                                                  fast test: fake sensors + fake ducks, nothing saved
     python heatstress_logger.py --no-camera      sensor + analytics only
 """
-
 import argparse
 import csv
 import json
@@ -90,18 +93,16 @@ ENV_LOADED = load_env_file(ENV_FILE)
 
 # ---------------- settings: come from .env ----------------
 SUPABASE_URL = os.environ.get("HEATTRACK_SUPABASE_URL", "https://yrcsrbejeubfswvrezzd.supabase.co").rstrip("/")
-# Secret key: keep ONLY on this computer (in .env, never in the website)
-SUPABASE_SECRET_KEY = (os.environ.get("HEATTRACK_SUPABASE_SECRET_KEY")
-                       or os.environ.get("SUPABASE_SECRET_KEY")
-                       or "PASTE_YOUR_SECRET_KEY_HERE")
-# This mini PC's Device ID: the same one the user types when signing up on the website
+# The publishable (anon) key; NOT the secret key
+SUPABASE_KEY = os.environ.get("HEATTRACK_SUPABASE_KEY", "").strip()
+# This mini PC's Device ID and its API key (the ones used to sign up on the website)
 DEVICE_CODE = (os.environ.get("HEATTRACK_DEVICE_ID")
-               or os.environ.get("HEATTRACK_DEVICE_CODE") or "HT-PDCK-001").strip()
+               or os.environ.get("HEATTRACK_DEVICE_CODE") or "").strip().upper()
+DEVICE_API_KEY = os.environ.get("HEATTRACK_DEVICE_API_KEY", "").strip()
 # Files the logger writes while running live in their own folder, NOT next to the
 # website: a live-reloading web server (e.g. VS Code Live Server) reloads the page
 # whenever a file in the website folder changes, which looks like a sign-out.
 DATA_DIR = Path(os.environ.get("HEATTRACK_DATA_DIR") or (Path.home() / "HeatTrack data"))
-DEVICE_FILE = DATA_DIR / "device.json"     # cached owner (for offline starts)
 BATCH_COUNT = None                                 # optional environment.batch_count
 
 SERIAL_PORT = os.environ.get("HEATTRACK_SERIAL_PORT", "COM7")
@@ -110,10 +111,14 @@ DHT_READ_EVERY_SEC = 2      # the DHT22 can't update faster than every 2 s
 # Readings outside the DHT22's real range are rejected (never saved or used)
 DHT_TEMP_RANGE = (-40.0, 80.0)     # °C, DHT22 / AM2302 datasheet
 DHT_HUM_RANGE = (0.0, 99.9)        # % RH; a steady 100.0 means the sensor is saturated
-CAMERA_INDEX = int(os.environ.get("HEATTRACK_CAMERA_INDEX", "1"))  # 0 = built-in, 1 = usually USB webcam
+CAMERA_INDEX = int(os.environ.get("HEATTRACK_CAMERA_INDEX", "0"))  # 0 = built-in, 1 = usually USB webcam
 
 STREAM_PORT = 8000
-STREAM_FPS = 12             # frames per second sent to viewers
+# Turn the webcam picture (before duck detection, so boxes and temperatures match):
+#   "none", "vertical" (upside down), "horizontal" (mirror), "both" (rotate 180°)
+WEBCAM_FLIP = os.environ.get("HEATTRACK_WEBCAM_FLIP", "horizontal").strip().lower()
+_FLIP_CODES = {"vertical": 0, "horizontal": 1, "both": -1, "rotate180": -1}
+STREAM_FPS = 20            # frames per second sent to viewers
 FRAME_WIDTH, FRAME_HEIGHT = 640, 360
 JPEG_QUALITY = 60
 
@@ -136,10 +141,111 @@ SMOOTHING = 0.5             # 0 = box jumps to new position, 0.9 = moves very sm
 
 # Heat-stress severity (sklearn model)
 SEVERITY_MODEL_PATH = "heatstress_model_2.pkl"
+# How Status and Severity are decided:
+#   "combined"     = the thermal camera AND the DHT22 decide together (default):
+#                    the thermal level (Status & Severity levels below) is raised or
+#                    lowered by one level by the DHT22's THI + the trained model
+#                    (see rate_combined)
+#   "spectrum"     = thermal camera only: exactly the Status & Severity levels below.
+#                    The DHT22 is still read and logged but does not change the rating.
+#   "spectrum+dht" = the same, but a higher DHT22 environment rating (heatstress_model_2.pkl)
+#                    raises the result by one level
+#   "model"        = heatstress_model_2.pkl only (see SEVERITY_TEMPERATURE)
+SEVERITY_METHOD = os.environ.get("HEATTRACK_SEVERITY_METHOD", "combined").strip().lower()
+SEVERITY_ORDER = ["LOW", "MODERATE", "HIGH", "CRITICAL"]
+# With "model": which temperature goes into the model's "temperature" input:
+#   "body" = highest duck body temperature (thermal camera), "air" = DHT22 air temperature
+SEVERITY_TEMPERATURE = os.environ.get("HEATTRACK_SEVERITY_TEMPERATURE", "body").strip().lower()
+
+# Status & Severity levels (same as the website's Status & Severity section):
+#   34 C or below          -> LOW       -> NORMAL       (keep routine monitoring)
+#   above 34 C, up to 37 C -> MODERATE  -> MILD         (take preventive steps)
+#   above 37 C, up to 40 C -> HIGH      -> HEAT STRESS  (start cooling now)
+#   above 40 C             -> CRITICAL  -> HEAT STRESS  (emergency action, call a vet)
+# Each edge belongs to the LOWER level: exactly 34.0 is LOW, 34.1 is MODERATE.
+SPECTRUM_BANDS = [(40.0, "CRITICAL"), (37.0, "HIGH"), (34.0, "MODERATE")]   # else LOW
+
+
+def severity_from_spectrum(body_c):
+    for edge, severity in SPECTRUM_BANDS:
+        if body_c > edge:
+            return severity
+    return "LOW"
+
+
+# ---- DHT22 support for "combined": Temperature-Humidity Index (THI) ----
+# THI = 0.8*T + RH*(T - 14.3)/100 + 46.3   (T = air °C, RH = %; NRC 1971 form)
+# Livestock Weather Safety Index zones for this THI:
+#   74 or below = normal, 75-78 = alert, 79-83 = danger, 84 or above = emergency
+THI_COOL_MAX = 74.0       # THI at or below this: comfortable air
+THI_HOT_MIN = 84.0        # THI at or above this: emergency (hot) air
+
+
+def thi_of(air_c, humidity):
+    return 0.8 * air_c + humidity * (air_c - 14.3) / 100.0 + 46.3
+
+
+def thi_zone(thi):
+    if thi >= THI_HOT_MIN:
+        return "emergency"
+    if thi >= 79:
+        return "danger"
+    if thi >= 75:
+        return "alert"
+    return "normal"
+
+
+def rate_combined(body_c, air_c, humidity, model=None):
+    """The thermal camera and the DHT22 decide the severity together.
+
+    1. Thermal camera: the ducks' highest body temperature -> starting level
+       (34 / 37 / 40 °C, the Status & Severity levels).
+    2. DHT22: air temperature + humidity -> THI, and the trained model's rating
+       of the air (heatstress_model_2.pkl).
+    3. RAISE one level when the air is hot: THI 84 or above (emergency),
+       OR the trained model rates the air higher than the ducks' level.
+       LOWER one level when the air is cool: THI 74 or below (normal)
+       AND the trained model rates the air lower than the ducks' level.
+       Raising needs one warning; lowering needs both to agree (safety first).
+       Never more than one level; a duck above 40 °C always stays CRITICAL.
+    Without a DHT22 reading the thermal level is used as is.
+    Returns (severity, explanation for the log)."""
+    base = severity_from_spectrum(body_c)
+    how = f"thermal {body_c:.1f}°C = {base}"
+    if air_c is None or humidity is None:
+        return base, how + "; no DHT22 reading, thermal only"
+
+    thi = thi_of(air_c, humidity)
+    how += f"; DHT22 {air_c:.1f}°C / {humidity:.1f}% -> THI {thi:.1f} ({thi_zone(thi)})"
+    env = None
+    if model is not None:
+        try:
+            env, _ = model.predict(air_c, humidity)
+            how += f", model {env}"
+        except Exception as err:          # model problem: THI alone
+            how += f", model skipped ({err})"
+
+    b = SEVERITY_ORDER.index(base)
+    e = SEVERITY_ORDER.index(env) if env else None
+    if thi >= THI_HOT_MIN or (e is not None and e > b):
+        if b < len(SEVERITY_ORDER) - 1:
+            return SEVERITY_ORDER[b + 1], how + " -> hot air: raised one level"
+        return base, how + " -> hot air (already CRITICAL)"
+    if thi <= THI_COOL_MAX and (e is None or e < b):
+        if base == "CRITICAL":
+            return base, how + " -> cool air, but above 40 °C stays CRITICAL"
+        if b > 0:
+            return SEVERITY_ORDER[b - 1], how + " -> cool air: lowered one level"
+    return base, how + " -> no change"
 SLOT_ROW_MINUTES = 10
 SAMPLE_INTERVAL_SEC = SLOT_ROW_MINUTES * 60   # one analytics row per 10-minute slot
 SAMPLES_PER_WINDOW = 3          # 3 x 10 min = 30-minute window
 MAX_READING_AGE_SEC = 120       # a sample older than this counts as "sensor not responding"
+# Ambient (barn) temperature: the DHT22 first. When the DHT22 has no good reading
+# for MAX_READING_AGE_SEC (not answering, or out of range), the thermal camera's
+# background temperature (median of the thermal image) is used instead, together
+# with the last good DHT22 humidity (if it is not older than this):
+AMBIENT_HUMIDITY_MAX_AGE_SEC = 60 * 60
 
 # What goes into public.environment (the dashboard's temperature/humidity chart):
 #   "every_reading" = every line the Arduino sends (live chart, like bridge.py did)
@@ -150,7 +256,9 @@ ENVIRONMENT_EVERY_SEC = 10      # with "every_reading": save at most one row thi
 
 # Thermal camera (MLX90640 through the Uno)
 THERMAL_EMISSIVITY = 0.98       # bare skin
-THERMAL_FLIP_H = False          # set so the thermal image faces the same way as the webcam
+# The thermal image is never flipped: it is used exactly as the camera sends it
+# (HEATTRACK_THERMAL_FLIP in .env is ignored)
+THERMAL_FLIP_H = False
 THERMAL_FLIP_V = False
 # Camera refresh in sub-pages per second; the image updates this often.
 # 8 is the most the Uno link handles well; 4 = less sensor noise, 16 = Uno can't keep up.
@@ -216,13 +324,11 @@ STATUS_FROM_SEVERITY = {
     "LOW": "NORMAL",
 }
 
-HEADERS = {"apikey": SUPABASE_SECRET_KEY}
-if not SUPABASE_SECRET_KEY.startswith("sb_"):
-    HEADERS["Authorization"] = f"Bearer {SUPABASE_SECRET_KEY}"
+HEADERS = {"apikey": SUPABASE_KEY}
+if SUPABASE_KEY and not SUPABASE_KEY.startswith("sb_"):
+    HEADERS["Authorization"] = f"Bearer {SUPABASE_KEY}"   # legacy anon key (JWT)
 
 DRY_RUN = False   # set from --dry-run
-USER_ID = None    # filled in by resolve_identity() at startup
-DEVICE_ID = None
 
 
 def now_iso():
@@ -233,245 +339,308 @@ def log(msg):
     print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {msg}", flush=True)
 
 
-# ======================= Supabase =======================
+# ======================= Supabase (device API key) =======================
+# Every upload goes through a database function that checks this device's API
+# key (stored hashed in public.devices) and files the data under the account
+# that claimed the device. No secret key is needed or wanted on this computer.
 
-def insert_row(table, row):
+# Problems an admin can fix in Supabase or .env: rows are kept and sent again later
+FIXABLE = ("Could not find the function", "PGRST202", "schema cache", "Unauthorized device",
+           "does not exist", "permission denied")
+
+
+class DeviceRejected(Exception):
+    """Supabase refused an upload. keep=True: worth sending again later."""
+
+    def __init__(self, message, keep=False):
+        super().__init__(message)
+        self.keep = keep
+
+
+def check_settings():
+    """Stop with a clear message if the device settings are missing or unsafe."""
+    missing = [name for name, value in (
+        ("HEATTRACK_SUPABASE_URL", SUPABASE_URL),
+        ("HEATTRACK_SUPABASE_KEY", SUPABASE_KEY),
+        ("HEATTRACK_DEVICE_ID", DEVICE_CODE),
+        ("HEATTRACK_DEVICE_API_KEY", DEVICE_API_KEY),
+    ) if not value]
+    if missing:
+        where = ENV_FILE if ENV_LOADED else f"{ENV_FILE} (not found)"
+        sys.exit("Missing settings: " + ", ".join(missing) + f"\nAdd them to {where}.")
+    if not re.fullmatch(r"HT-PDCK-\d{3}", DEVICE_CODE) or DEVICE_CODE == "HT-PDCK-000":
+        sys.exit(f"HEATTRACK_DEVICE_ID should look like HT-PDCK-001 (got {DEVICE_CODE!r}).")
+    if SUPABASE_KEY.startswith("sb_secret_") or _is_service_role_jwt(SUPABASE_KEY):
+        sys.exit("HEATTRACK_SUPABASE_KEY is a SECRET key. Use the publishable (anon) key: this device "
+                 "only needs its own API key, and a secret key here could expose every account.")
+    if os.environ.get("HEATTRACK_SUPABASE_SECRET_KEY"):
+        log("NOTE: .env still has HEATTRACK_SUPABASE_SECRET_KEY. It isn't used anymore; "
+            "delete that line so the secret key isn't stored on this computer.")
+
+
+def _is_service_role_jwt(key):
+    try:
+        import base64
+        payload = key.split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+        return json.loads(base64.urlsafe_b64decode(payload)).get("role") == "service_role"
+    except Exception:
+        return False
+
+
+def rpc(fn, args):
+    """Call a Supabase database function with this device's API key."""
     if DRY_RUN:
-        log(f"DRY RUN -> {table}: {json.dumps(row)}")
-        return
+        log(f"DRY RUN -> {fn}: {json.dumps(args, default=str)}")
+        return None
     r = requests.post(
-        f"{SUPABASE_URL}/rest/v1/{table}",
-        headers={**HEADERS, "Content-Type": "application/json", "Prefer": "return=minimal"},
-        json=row,
-        timeout=10,
+        f"{SUPABASE_URL}/rest/v1/rpc/{fn}",
+        headers={**HEADERS, "Content-Type": "application/json"},
+        json={**args, "p_api_key": DEVICE_API_KEY},
+        timeout=15,
     )
+    if r.status_code >= 500:
+        r.raise_for_status()              # server trouble: treated like being offline
     if r.status_code >= 400:
-        print(f"Supabase said: {r.text}")
-        if '"23514"' in r.text or "check constraint" in r.text:
-            rule = re.search(r'constraint \\?"([a-z_]+)', r.text)
-            log(f"A rule on the {table} table ({rule.group(1) if rule else 'check constraint'}) refuses "
-                f"this row. Run fix_analytics_checks.sql in the Supabase SQL Editor; refused rows "
-                f"are kept and sent again afterwards.")
-        if "record_key" in r.text and "column" in r.text:
-            log("The analytics table has no record_key column yet: run analytics_batch_numbers.sql "
-                "in the Supabase SQL Editor. Rows are kept and sent again afterwards.")
-        if "interval_minutes" in r.text:
-            log("The analytics table has no interval_minutes column yet: run analytics_interval.sql "
-                "in the Supabase SQL Editor. Rows are kept in pending_rows.jsonl until then.")
-    r.raise_for_status()
+        try:
+            info = r.json()
+            message = info.get("message") or r.text
+            if info.get("code"):
+                message = f"{message} [{info['code']}]"
+        except ValueError:
+            message = r.text
+        raise DeviceRejected(message, keep=any(k in message for k in FIXABLE))
+    return r.json() if r.content else None
+
+
+def _explain(fn, message):
+    if "Could not find the function" in message or "PGRST202" in message:
+        log(f"Supabase has no matching {fn}() yet: run heattrack_device_ingest.sql in the "
+            f"Supabase SQL Editor. The data is kept and sent again afterwards.")
+    elif "Unauthorized device" in message:
+        log("Supabase doesn't recognise HEATTRACK_DEVICE_API_KEY. Check the key in .env "
+            "(the data is kept and sent again once it's right).")
 
 
 def insert_reading(temp, hum):
     if not OWNER_ACTIVE:
         return
-    row = {"userid": USER_ID, "device_id": DEVICE_ID, "timestamp": now_iso(),
-           "temperature": temp, "humidity": hum}
-    if BATCH_COUNT is not None:
-        row["batch_count"] = BATCH_COUNT
-    insert_row("environment", row)
+    rpc("ingest_environment", {"p_temperature": temp, "p_humidity": hum,
+                               "p_batch_count": BATCH_COUNT, "p_recorded_at": now_iso()})
+
+
+def _legacy_item(item):
+    """Queue entries written by the secret-key version: analytics rows are
+    converted, anything else is dropped."""
+    if item.get("table") != "analytics":
+        return None
+    row = item.get("row") or {}
+    return {"fn": "ingest_analytics", "args": {
+        "p_status": row.get("status"), "p_severity": row.get("severity"),
+        "p_lowest_body_temperature": row.get("lowest_body_temperature"),
+        "p_highest_body_temperature": row.get("highest_body_temperature"),
+        "p_average_body_temperature": row.get("average_body_temperature"),
+        "p_duck_count": row.get("duck_count"), "p_batch_count": None,
+        "p_recorded_at": row.get("timestamp"), "p_interval_minutes": row.get("interval_minutes"),
+        "p_record_key": row.get("record_key") or row.get("batch_count"),
+    }}
 
 
 def flush_pending():
-    """Send analytics rows that were saved while the internet was down."""
+    """Send uploads saved while offline (or while Supabase needed fixing)."""
     if not PENDING_FILE.exists():
         return
     lines = [l for l in PENDING_FILE.read_text().splitlines() if l.strip()]
+    sent = dropped = 0
     for i, line in enumerate(lines):
-        item = json.loads(line)
         try:
-            insert_row(item["table"], item["row"])
-        except requests.HTTPError as e:
-            if e.response is not None and e.response.status_code == 409:
-                continue      # already saved earlier (same record_key): drop the copy
-            PENDING_FILE.write_text("\n".join(lines[i:]) + "\n")
-            return
+            item = json.loads(line)
+        except ValueError:
+            dropped += 1
+            continue
+        if "fn" not in item:
+            item = _legacy_item(item)
+            if item is None:
+                dropped += 1
+                continue
+        try:
+            rpc(item["fn"], item["args"])
+            sent += 1
+        except DeviceRejected as e:
+            if e.keep:                     # still needs fixing: keep this and the rest
+                PENDING_FILE.write_text("\n".join(lines[i:]) + "\n")
+                return
+            log(f"Dropped a queued {item['fn']} upload: {e}")
+            dropped += 1
         except requests.RequestException:
             PENDING_FILE.write_text("\n".join(lines[i:]) + "\n")
             return
     PENDING_FILE.unlink()
-    if lines:
-        log(f"Sent {len(lines)} queued row(s)")
+    if sent or dropped:
+        log(f"Queued uploads: {sent} sent" + (f", {dropped} dropped" if dropped else ""))
 
 
-def insert_or_queue(table, row):
+def insert_or_queue(fn, args):
+    """Upload now, or keep it for later. The API key is never written to the
+    queue file (it's added again when the upload is sent)."""
+    def queue():
+        with PENDING_FILE.open("a") as f:
+            f.write(json.dumps({"fn": fn, "args": args}, default=str) + "\n")
     try:
         flush_pending()
-        insert_row(table, row)
+        rpc(fn, args)
         return True
-    except requests.HTTPError as e:
-        code = e.response.status_code if e.response is not None else "?"
-        log(f"Supabase refused the {table} row (HTTP {code}); kept in {PENDING_FILE} "
-            f"and it will be sent again automatically once the problem is fixed")
-        with PENDING_FILE.open("a") as f:
-            f.write(json.dumps({"table": table, "row": row}) + "\n")
+    except DeviceRejected as e:
+        print(f"Supabase said: {e}")
+        if "not linked" in str(e):
+            _device_unlinked()
+            return False
+        if e.keep:
+            _explain(fn, str(e))
+            queue()
+        else:
+            log(f"Supabase refused the {fn} upload: {e}")
         return False
     except requests.RequestException as e:
-        log(f"Could not reach Supabase ({e}); saved the {table} row for later")
-        with PENDING_FILE.open("a") as f:
-            f.write(json.dumps({"table": table, "row": row}) + "\n")
+        log(f"Could not reach Supabase ({e}); saved the {fn} upload for later")
+        queue()
         return False
+
+
+# ---- Local IP + Wi-Fi name -> devices.local_ip / wifi_name (for SSH) ----
+NETWORK_CHECK_SEC = 60
+
+
+def current_network():
+    """(local IPv4 used for the internet, Wi-Fi name or None)."""
+    import socket
+    ip = None
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))          # no data is sent; picks the outgoing interface
+            ip = s.getsockname()[0]
+    except OSError:
+        pass
+    wifi = None
+    if os.name == "nt":
+        try:
+            out = subprocess.run(["netsh", "wlan", "show", "interfaces"], capture_output=True,
+                                 text=True, errors="ignore", timeout=10,
+                                 creationflags=0x08000000).stdout
+            m = re.search(r"^\s*SSID\s*:\s*(.+)$", out, re.M)
+            wifi = m.group(1).strip() if m else None
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return ip, wifi
+
+
+def network_reporter():
+    """Report the local IP / Wi-Fi to Supabase at start and whenever they change."""
+    def work():
+        sent = None
+        while True:
+            ip, wifi = current_network()
+            if ip and (ip, wifi) != sent:
+                try:
+                    rpc("update_device_network", {"p_local_ip": ip, "p_wifi_name": wifi})
+                    log(f"Network: local IP {ip}" + (f" on Wi-Fi '{wifi}'" if wifi else "") + " (saved to Supabase)")
+                    sent = (ip, wifi)
+                except DeviceRejected as e:
+                    if "Could not find the function" in str(e) or "PGRST202" in str(e):
+                        log(f"Network: local IP {ip}" + (f" on Wi-Fi '{wifi}'" if wifi else "")
+                            + " (run device_network.sql in Supabase to save it there)")
+                        sent = (ip, wifi)
+                    else:
+                        log(f"Could not save the local IP: {e}")
+                except requests.RequestException:
+                    pass                          # offline: try again next round
+            time.sleep(NETWORK_CHECK_SEC)
+    if not DRY_RUN:
+        threading.Thread(target=work, daemon=True).start()
 
 
 def publish_stream_url(url):
-    """Save the live video address on this device's row in public.devices
-    (device_url + url_updated_at). None = offline."""
-    if DRY_RUN:
-        log(f"DRY RUN -> devices.device_url: {url}")
-        return
+    """Tell the website where this device's live video is (None = offline)."""
     try:
-        r = requests.patch(
-            f"{SUPABASE_URL}/rest/v1/devices",
-            headers={**HEADERS, "Content-Type": "application/json", "Prefer": "return=minimal"},
-            params={"device_code": f"eq.{DEVICE_CODE}"},
-            json={"device_url": url, "url_updated_at": now_iso()},
-            timeout=10,
-        )
-        if r.status_code >= 400:
-            print(f"Could not save the stream address: {r.text}")
+        rpc("update_device_url", {"p_url": url})
+    except DeviceRejected as e:
+        print(f"Could not save the stream address: {e}")
+        _explain("update_device_url", str(e))
     except requests.RequestException as e:
         print(f"Could not save the stream address: {e}")
 
 
-# ======================= Identity =======================
-# The mini PC knows only its own DEVICE_CODE (e.g. HT-PDCK-001). At startup
-# it looks that code up in public.devices:
-#   devices.id       -> DEVICE_ID (written to environment.device_id)
-#   devices.owner_id -> USER_ID   (set when a user signs up with this device)
-# Nothing to log in to, nothing that expires. If no one owns the device yet,
-# the logger waits (24/7) and starts the moment a user signs up with it.
-# device.json caches the answer so the logger can also start offline.
+# ======================= Device check =======================
+# Which account owns this device is decided in Supabase from the API key:
+# device_whoami() says which device the key belongs to and whether an account
+# has claimed it. Until one has, nothing is uploaded and the logger waits.
 
-PLACEHOLDER_ID = "00000000-0000-0000-0000-000000000000"
-OWNER_POLL_SEC = 5              # how often to check while the device is unclaimed
+OWNER_POLL_SEC = 30             # how often to check while the device is unclaimed
 OWNER_REMIND_SEC = 10 * 60      # repeat the "waiting" message this often
-
-OWNER_ACTIVE = True     # False while no account owns this device: no rows are written
+OWNER_ACTIVE = True             # False while no account owns this device: nothing is uploaded
 _waiting = threading.Lock()
 
 
-def load_identity():
-    try:
-        data = json.loads(DEVICE_FILE.read_text())
-        if data.get("user_id") and data.get("device_id") and data.get("device_code") == DEVICE_CODE:
-            return data
-    except (OSError, ValueError):
-        pass
-    return None
-
-
-def save_identity(data):
-    tmp = DEVICE_FILE.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data, indent=2))
-    os.replace(tmp, DEVICE_FILE)      # never leaves a half-written file
-
-
-def set_identity(data):
-    global USER_ID, DEVICE_ID
-    USER_ID, DEVICE_ID = data["user_id"], data["device_id"]
-
-
-def fetch_device():
-    """This device's row from public.devices, or None if the code isn't registered.
+def device_whoami():
+    """{'device_code': ..., 'linked': bool} or None if the key is unknown.
     Raises requests.RequestException when Supabase can't be reached."""
-    r = requests.get(f"{SUPABASE_URL}/rest/v1/devices", headers=HEADERS,
-                     params={"select": "id,owner_id,device_name", "device_code": f"eq.{DEVICE_CODE}"},
-                     timeout=10)
-    if r.status_code >= 400:
-        print(f"Supabase said: {r.text}")
-    r.raise_for_status()
-    rows = r.json()
-    return rows[0] if rows else None
+    info = rpc("device_whoami", {})
+    if isinstance(info, list):            # set-returning version of the function
+        info = info[0] if info else None
+    return info
 
 
-def _identity_from_row(row):
-    data = {"device_code": DEVICE_CODE, "device_id": row["id"], "user_id": row["owner_id"],
-            "device_name": row.get("device_name") or ""}
-    saved = load_identity() or {}
-    if any(saved.get(k) != v for k, v in data.items()):   # rewrite only on a change
-        save_identity({**data, "checked_at": now_iso()})
-    return data
+def verify_device(wait=True):
+    """Run before anything else starts. Returns True once the device is
+    linked (or Supabase can't be reached right now)."""
+    reminded = 0.0
+    while True:
+        try:
+            info = device_whoami()
+        except DeviceRejected as e:
+            if "Could not find the function" in str(e) or "PGRST202" in str(e):
+                sys.exit("Supabase has no device_whoami() function. Run heattrack_devices.sql and "
+                         "heattrack_device_ingest.sql in the Supabase SQL Editor first.")
+            sys.exit(f"Supabase refused the device check: {e}")
+        except requests.RequestException as e:
+            log(f"Could not reach Supabase to check the device ({e}); continuing, uploads are queued")
+            return True
+        if not info:
+            sys.exit("HEATTRACK_DEVICE_API_KEY is not registered in Supabase (devices table). "
+                     "Check the key in .env.")
+        if str(info.get("device_code", "")).upper() != DEVICE_CODE:
+            sys.exit(f"This API key belongs to {info.get('device_code')}, but HEATTRACK_DEVICE_ID "
+                     f"is {DEVICE_CODE}. Fix one of them in .env.")
+        if info.get("linked"):
+            log(f"Device {DEVICE_CODE} is linked to an account: uploads go to that account")
+            return True
+        if not wait:
+            log(f"Device {DEVICE_CODE} has no owner yet")
+            return False
+        if time.time() - reminded >= OWNER_REMIND_SEC:
+            log(f"Device {DEVICE_CODE} has no owner yet. Nothing is uploaded until someone signs up "
+                f"on the HeatTrack website with {DEVICE_CODE} and its API key; checking every "
+                f"{OWNER_POLL_SEC} s.")
+            reminded = time.time()
+        time.sleep(OWNER_POLL_SEC)
 
 
-def wait_for_owner():
-    """Block until this device has an owner; returns the identity."""
-    with _waiting:
-        next_note = 0.0
-        while True:
-            try:
-                row = fetch_device()
-            except requests.RequestException as e:
-                log(f"Can't reach Supabase ({e}); retrying in 10 s")
-                time.sleep(10)
-                continue
-            if row is None:
-                if time.monotonic() >= next_note:
-                    log(f"Device {DEVICE_CODE} is not in the devices table. Check DEVICE_CODE "
-                        f"in the settings; checking again every {OWNER_POLL_SEC} s")
-                    next_note = time.monotonic() + OWNER_REMIND_SEC
-            elif row.get("owner_id"):
-                data = _identity_from_row(row)
-                log(f"Device {DEVICE_CODE} belongs to account {data['user_id']}; logging for it")
-                return data
-            elif time.monotonic() >= next_note:
-                log(f"Device {DEVICE_CODE} has no owner yet. It will start automatically as soon as "
-                    f"someone signs up on the HeatTrack website with this Device ID.")
-                next_note = time.monotonic() + OWNER_REMIND_SEC
-            time.sleep(OWNER_POLL_SEC)
-
-
-def resolve_identity():
-    """Run before anything else starts. Waits for an owner rather than log without one."""
-    if not DEVICE_CODE or DEVICE_CODE.startswith("HT-PDCK-XXX"):
-        sys.exit("Set DEVICE_CODE in the settings (e.g. HT-PDCK-001) first.")
-    try:
-        row = fetch_device()
-    except requests.RequestException as e:
-        cached = load_identity()
-        if cached:
-            log(f"Offline ({e}); using the saved owner of {DEVICE_CODE}")
-            set_identity(cached)
-            return
-        log(f"Offline ({e}) and no saved owner yet")
-        row = None
-    if row and row.get("owner_id"):
-        data = _identity_from_row(row)
-        log(f"Device {DEVICE_CODE} ({data['device_name'] or data['device_id']}) "
-            f"belongs to account {data['user_id']}")
-        set_identity(data)
+def _device_unlinked():
+    """Supabase says no account owns this device (anymore): pause uploads
+    and resume as soon as one does."""
+    global OWNER_ACTIVE
+    if not OWNER_ACTIVE or _waiting.locked():
         return
-    set_identity(wait_for_owner())
+    OWNER_ACTIVE = False
+    log(f"Device {DEVICE_CODE} is no longer linked to an account; uploads paused until it is claimed")
 
-
-def _wait_in_background():
     def work():
         global OWNER_ACTIVE
-        set_identity(wait_for_owner())
-        OWNER_ACTIVE = True
-        log("Logging resumed")
-    if not _waiting.locked():
-        threading.Thread(target=work, daemon=True).start()
-
-
-def recheck_owner():
-    """Every 30-minute window: re-read the owner from public.devices.
-    Follows a change of owner; stops writing if the device was released.
-    Returns True if rows may be written."""
-    global OWNER_ACTIVE
-    if DRY_RUN or not OWNER_ACTIVE:
-        return OWNER_ACTIVE
-    try:
-        row = fetch_device()
-    except requests.RequestException:
-        return True                  # offline: keep going, rows are queued
-    if row and row.get("owner_id"):
-        if row["owner_id"] != USER_ID or row["id"] != DEVICE_ID:
-            log(f"Device {DEVICE_CODE} now belongs to account {row['owner_id']}; switching")
-        set_identity(_identity_from_row(row))
-        return True
-    log(f"Device {DEVICE_CODE} no longer has an owner; no rows will be written until it is claimed again")
-    OWNER_ACTIVE = False
-    _wait_in_background()
-    return False
+        with _waiting:
+            verify_device(wait=True)
+            OWNER_ACTIVE = True
+            log("Uploads resumed")
+    threading.Thread(target=work, daemon=True).start()
 
 
 # ======================== Camera ========================
@@ -553,6 +722,9 @@ class Camera:
                 continue
             next_frame = now + interval
 
+            if WEBCAM_FLIP in _FLIP_CODES:          # HEATTRACK_WEBCAM_FLIP
+                frame = cv2.flip(frame, _FLIP_CODES[WEBCAM_FLIP])
+
             with self.raw_lock:
                 self.raw = frame
             if self.detector:
@@ -582,8 +754,9 @@ class Camera:
 class Detector:
     """Runs the YOLO model on the newest frame in the background."""
 
-    # Box colors (BGR) follow each duck's status, same colors and thresholds as the
-    # website (LIVE_TEMP_LEVELS in script.js): above 34 C = Mild, above 37 C = Heat Stress
+    # Box colors (BGR) follow each duck's status, same thresholds as the Status &
+    # Severity levels and the website (LIVE_TEMP_LEVELS in script.js):
+    # above 34 C = Mild, above 37 C = Heat Stress
     STATUS_COLORS = {"normal": (128, 222, 74), "mild": (36, 191, 251), "stress": (113, 113, 248)}
     NO_READING_COLOR = (160, 160, 160)   # grey: no body temperature for this duck
     MILD_C, STRESS_C = 34.0, 37.0
@@ -1037,7 +1210,14 @@ def save_environment_async(temp, hum):
     def work():
         try:
             insert_reading(temp, hum)
-            log(f"{temp:.1f}°C  {hum:.1f}%  saved")
+            if OWNER_ACTIVE and not DRY_RUN:
+                log(f"{temp:.1f}°C  {hum:.1f}%  saved")
+        except DeviceRejected as e:
+            if "not linked" in str(e):
+                _device_unlinked()
+            else:
+                log(f"Sensor reading refused: {e}")
+                _explain("ingest_environment", str(e))
         except requests.RequestException as e:
             log(f"Sensor insert failed: {e}")
     threading.Thread(target=work, daemon=True).start()
@@ -1072,6 +1252,8 @@ class BridgeSensor:
         self.thermal_fps = None                        # measured image updates per second
         self._last_frame_at = None
         self._last_env_save = 0.0
+        self._last_humidity = None        # (humidity, time) of the last good DHT22 reading
+        self.ambient_source = "dht22"     # "dht22" | "thermal" | None (shown in the log and /stats)
         self._last_dht_warning = 0.0
         self._air_peak = None          # highest (temp, hum) since take_air_peak()
         self._next_thermal_try = 0.0
@@ -1141,8 +1323,10 @@ class BridgeSensor:
             return
         with self.lock:
             self.latest = (d.temperature_c, d.humidity_pct, time.time())
+            self._last_humidity = (d.humidity_pct, time.time())
             if self._air_peak is None or d.temperature_c > self._air_peak[0]:
                 self._air_peak = (d.temperature_c, d.humidity_pct)
+        self._note_ambient_source("dht22")
         if ENVIRONMENT_LOG == "every_reading" and time.time() - self._last_env_save >= ENVIRONMENT_EVERY_SEC:
             self._last_env_save = time.time()
             save_environment_async(d.temperature_c, d.humidity_pct)
@@ -1157,13 +1341,14 @@ class BridgeSensor:
                     if now >= next_dht:
                         next_dht = now + DHT_READ_EVERY_SEC
                         self._read_dht(bridge)
+                        self._thermal_ambient_tick()
                     if cam is None and now >= self._next_thermal_try:
                         self._next_thermal_try = now + 60
                         cam = self._start_thermal(bridge)
                     if cam is None:
                         time.sleep(0.2)
                         continue
-                    air = self.read()
+                    air = self.read_dht()        # reflected temperature: DHT22 only
                     frame = cam.read_frame(reflected_temp_c=air[0] if air else None)
                     t_now = time.time()
                     if self._last_frame_at is not None:
@@ -1194,12 +1379,63 @@ class BridgeSensor:
                     pass
                 time.sleep(2)
 
-    def read(self):
-        """Newest (temp, hum), or None if the DHT22 hasn't answered recently."""
+    def read_dht(self):
+        """Newest DHT22 (temp, hum), or None if it hasn't answered recently."""
         with self.lock:
             if self.latest is None or time.time() - self.latest[2] > MAX_READING_AGE_SEC:
                 return None
             return self.latest[0], self.latest[1]
+
+    def thermal_ambient(self):
+        """Background temperature of the newest thermal frame (median of all
+        pixels, so a few warm ducks hardly move it), or None."""
+        with self.lock:
+            frame, at = self.frame, self._last_frame_at
+        if frame is None or not at or time.time() - at > 10:
+            return None
+        return round(float(np.median(frame)), 2)
+
+    def _note_ambient_source(self, source):
+        if source != self.ambient_source:
+            if source == "thermal":
+                log("DHT22 has no good reading: ambient temperature now from the thermal camera "
+                    "(background of the thermal image), humidity = last good DHT22 value")
+            elif source == "dht22":
+                log("DHT22 is back: ambient temperature from the DHT22 again")
+            else:
+                log("No ambient temperature: DHT22 not responding and no thermal frame/humidity to fall back on")
+            self.ambient_source = source
+
+    def read(self):
+        """Ambient (temp, hum): the DHT22 when it has a good recent reading; otherwise
+        the thermal camera's background temperature with the last good DHT22
+        humidity. None when neither is available."""
+        dht = self.read_dht()
+        if dht is not None:
+            return dht
+        ambient = self.thermal_ambient()
+        with self.lock:
+            hum = self._last_humidity
+        if ambient is not None and hum and time.time() - hum[1] <= AMBIENT_HUMIDITY_MAX_AGE_SEC:
+            self._note_ambient_source("thermal")
+            return ambient, hum[0]
+        self._note_ambient_source(None)
+        return None
+
+    def _thermal_ambient_tick(self):
+        """While the DHT22 is out: keep the air peak and the environment chart
+        going with the thermal-camera ambient temperature."""
+        if self.read_dht() is not None:
+            return
+        air = self.read()
+        if air is None:
+            return
+        with self.lock:
+            if self._air_peak is None or air[0] > self._air_peak[0]:
+                self._air_peak = (air[0], air[1])
+        if ENVIRONMENT_LOG == "every_reading" and time.time() - self._last_env_save >= ENVIRONMENT_EVERY_SEC:
+            self._last_env_save = time.time()
+            save_environment_async(air[0], air[1])
 
     def peek_air_peak(self):
         with self.lock:
@@ -1585,8 +1821,13 @@ class SeverityModel:
         print("Classes        :", list(getattr(self.model, "classes_", [])) or "(not available)")
         if self.label_encoder is not None:
             print("Label encoder  :", list(self.label_encoder.classes_))
-        print("\nSample predictions (temp °C, humidity %):")
-        for t, h in [(28, 60), (32, 70), (35, 75), (38, 80), (41, 85)]:
+        body = SEVERITY_TEMPERATURE != "air"
+        print(f"\nSeverity uses: {'BODY temperature (thermal camera)' if body else 'AIR temperature (DHT22)'}"
+              " + humidity (DHT22)")
+        print("Sample predictions (temp °C, humidity %):")
+        samples = ([(38, 60), (39, 70), (40, 70), (41, 75), (42, 80), (43, 85)] if body
+                   else [(28, 60), (32, 70), (35, 75), (38, 80), (41, 85)])
+        for t, h in samples:
             try:
                 sev, raw = self.predict(t, h)
                 print(f"  {t:>4}  {h:>4}  ->  raw={raw!r:<14} severity={sev}")
@@ -1620,41 +1861,71 @@ def build_analytics_row(model, samples, slots, interval_minutes, at=None):
     if not temps:
         log(f"{label}: ducks detected but no valid thermal reading; nothing saved")
         return None
-    if not samples:
+    if not samples and SEVERITY_METHOD == "model":
         log(f"{label}: no air temperature/humidity reading; nothing saved")
         return None
 
     # Highest air temperature in the period, with the humidity read at that moment
-    peak = max(samples, key=lambda s: s["temperature"])
-    severity, raw = model.predict(peak["temperature"], peak["humidity"])
+    peak = max(samples, key=lambda s: s["temperature"]) if samples else None
 
     # Highest body temperature that held for CONFIRM_SECONDS; falls back to the raw max
     highest = max(h[0] for h in highs) if highs else max(temps)
+
+    if SEVERITY_METHOD == "model":
+        # Severity model: body (thermal camera) or air (DHT22) temperature + DHT22 humidity
+        if SEVERITY_TEMPERATURE == "air":
+            model_temp, source = peak["temperature"], "air (DHT22)"
+        else:
+            model_temp, source = highest, "body (thermal camera)"
+        severity, raw = model.predict(model_temp, peak["humidity"])
+        how = f"model: {source} {model_temp:.1f}°C + {peak['humidity']:.1f}%"
+    elif SEVERITY_METHOD == "combined":
+        # Thermal camera (starting level) + DHT22 (THI and the trained model) together
+        severity, how = rate_combined(highest, peak["temperature"] if peak else None,
+                                      peak["humidity"] if peak else None, model)
+    else:
+        # MAIN: Thermal Color Spectrum band of the highest body temperature (thermal camera)
+        severity = body_severity = severity_from_spectrum(highest)
+        how = f"severity levels: body {highest:.1f}°C = {body_severity}"
+        # SUPPORT: DHT22 environment rating; a hotter/more humid environment raises
+        # the result by one level at most, and never lowers it
+        if SEVERITY_METHOD != "spectrum" and peak is not None:
+            try:
+                env_severity, _ = model.predict(peak["temperature"], peak["humidity"])
+                how += f"; DHT22 {peak['temperature']:.1f}°C / {peak['humidity']:.1f}% = {env_severity}"
+                b, e = SEVERITY_ORDER.index(body_severity), SEVERITY_ORDER.index(env_severity)
+                if e > b:
+                    severity = SEVERITY_ORDER[min(b + 1, len(SEVERITY_ORDER) - 1)]
+                    how += " (raised one level)"
+            except Exception as err:          # model problem: keep the body temperature result
+                how += f"; DHT22 support skipped ({err})"
+        elif SEVERITY_METHOD != "spectrum":
+            how += "; no DHT22 reading, body temperature only"
+    air = f"air {peak['temperature']:.1f}°C / {peak['humidity']:.1f}%" if peak else "no air reading"
     log(f"{label}: highest body {highest:.1f}°C ({len(temps)} readings, peak {peak_count} duck(s){note}); "
-        f"highest air {peak['temperature']:.1f}°C / {peak['humidity']:.1f}% -> {severity}")
+        f"{air}; {how} -> {severity} / {STATUS_FROM_SEVERITY[severity]}")
 
     # Timestamped at the slot's / window's own mark (also for rows saved late)
     now = datetime.fromtimestamp(at, timezone.utc) if at else datetime.now(timezone.utc)
+    # Arguments for ingest_analytics(); Supabase fills in the account and device
     return {
-        "userid": USER_ID,
-        "device_id": DEVICE_ID,
-        "timestamp": now.isoformat(),
-        "status": STATUS_FROM_SEVERITY[severity],
-        "severity": severity,
-        "lowest_body_temperature": round(min(temps), 2),
-        "highest_body_temperature": round(highest, 2),
-        "average_body_temperature": round(sum(temps) / len(temps), 2),
-        "duck_count": peak_count,
-        "interval_minutes": interval_minutes,
-        # batch_count (1, 2, 3 ...) is assigned by the database; record_key is
-        # this row's own unique ID, so a row sent twice is never saved twice
-        "record_key": f"{DEVICE_ID[:8]}-{now:%Y%m%d-%H%M%S}-{interval_minutes}m",
+        "p_status": STATUS_FROM_SEVERITY[severity],
+        "p_severity": severity,
+        "p_lowest_body_temperature": round(min(temps), 2),
+        "p_highest_body_temperature": round(highest, 2),
+        "p_average_body_temperature": round(sum(temps) / len(temps), 2),
+        "p_duck_count": peak_count,
+        "p_batch_count": None,                  # numbered 1, 2, 3 ... by the database
+        "p_recorded_at": now.isoformat(),
+        "p_interval_minutes": interval_minutes,
+        # This row's own unique ID, so a row sent twice is never saved twice
+        "p_record_key": f"{DEVICE_CODE}-{now:%Y%m%d-%H%M%S}-{interval_minutes}m",
     }
 
 
-def save_analytics(row):
-    if row and recheck_owner():
-        insert_or_queue("analytics", row)
+def save_analytics(args):
+    if args:
+        insert_or_queue("ingest_analytics", args)
 
 
 def _next_boundary(interval, after):
@@ -1699,7 +1970,7 @@ def save_progress(interval, slot_end, window_end, samples, slots, sensor):
     # Highest air reading of this slot so far; the latest reading if there is none yet
     air = (peek_air() if peek_air else None) or sensor.read()
     data = {
-        "version": 1, "interval": interval, "device_id": DEVICE_ID,
+        "version": 1, "interval": interval, "device_id": DEVICE_CODE,
         "slot_end": slot_end, "window_end": window_end, "saved_at": time.time(),
         "samples": samples, "slots": [_slot_to_json(s) for s in slots],
         "partial": _slot_to_json(collector.peek_slot()),
@@ -1718,7 +1989,7 @@ def load_progress(interval):
         data = json.loads(PROGRESS_FILE.read_text())
     except (OSError, ValueError):
         return None
-    if data.get("version") != 1 or data.get("interval") != interval or data.get("device_id") != DEVICE_ID:
+    if data.get("version") != 1 or data.get("interval") != interval or data.get("device_id") != DEVICE_CODE:
         return None
     return data
 
@@ -1901,6 +2172,7 @@ def main():
     p.add_argument("--no-camera", action="store_true",
                    help="skip webcam, YOLO, stream and tunnel (with --simulate: fake ducks)")
     p.add_argument("--once", action="store_true", help="stop after one 30-minute window")
+    p.add_argument("--check", action="store_true", help="only check the settings and the device key")
     args = p.parse_args()
 
     if args.inspect:
@@ -1908,7 +2180,7 @@ def main():
         return
 
     prepare_data_dir()
-    log(f"Data files (device.json, slot_log.csv, pending_rows.jsonl): {DATA_DIR}")
+    log(f"Data files (slot_log.csv, pending_rows.jsonl, logs): {DATA_DIR}")
     if ENV_LOADED:
         log(f"Settings from {ENV_FILE.name}: device {DEVICE_CODE}, serial {SERIAL_PORT}, camera {CAMERA_INDEX}")
     else:
@@ -1918,20 +2190,18 @@ def main():
     # Fake data must never reach the real account
     if args.simulate and not args.dry_run:
         log("--simulate implies --dry-run: nothing will be saved")
-    DRY_RUN = args.dry_run or args.simulate
-    if not DRY_RUN:
-        if SUPABASE_SECRET_KEY.startswith("PASTE_"):
-            where = ENV_FILE.name if ENV_LOADED else f"{ENV_FILE.name} (not found next to this script)"
-            sys.exit(f"Add HEATTRACK_SUPABASE_SECRET_KEY to {where} first.")
-        if SUPABASE_SECRET_KEY.startswith("sb_publishable_"):
-            sys.exit("HEATTRACK_SUPABASE_SECRET_KEY holds the publishable key; it needs the secret key "
-                     "(Supabase > Project Settings > API Keys > Secret keys).")
-
+    DRY_RUN = (args.dry_run or args.simulate) and not args.check
+    if args.check:
+        # Used by install_heattrack.ps1: settings + device key, then stop
+        check_settings()
+        linked = verify_device(wait=False)
+        print("CHECK OK" + ("" if linked else " (device not linked to an account yet)"))
+        return
     if DRY_RUN:
-        set_identity({"user_id": PLACEHOLDER_ID, "device_id": PLACEHOLDER_ID})
-        log("Test mode: using placeholder user and device ids")
+        log("Test mode: nothing is uploaded")
     else:
-        resolve_identity()
+        check_settings()
+        verify_device(wait=True)
 
     model = SeverityModel(args.severity_model)
     sensor = FakeSensor() if args.simulate else BridgeSensor()
@@ -1945,10 +2215,11 @@ def main():
         threading.Thread(target=server.serve_forever, daemon=True).start()
         print(f"Local stream: http://localhost:{STREAM_PORT}/video   thermal view: http://localhost:{STREAM_PORT}/thermal")
         tunnel = Tunnel()
+    network_reporter()
 
     detector = camera.detector if camera else (FakeDetector() if args.simulate else None)
     if detector is None:
-        log("No duck detector running: surface temperature can't be measured, so no analytics rows")
+        log("No duck detector running: body temperature can't be measured, so no analytics rows")
     collector = ThermalCollector(sensor, detector)
 
     try:
