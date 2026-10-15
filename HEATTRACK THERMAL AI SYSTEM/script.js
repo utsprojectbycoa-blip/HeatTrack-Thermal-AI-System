@@ -1185,8 +1185,19 @@ const state = {
     }
 };
 
-// Severity levels
+// Severity levels (internal keys, highest first)
 const severityLevels = ['CRITICAL', 'HIGH', 'MODERATE', 'LOW'];
+
+// HeatTrack's 4-level heat-stress scale, from the ducks' highest body-area temperature:
+//   35.7 °C or below Normal · 35.8–43.6 Mild · 43.7–44.9 Moderate · 45.0 or above Severe
+// The database saves NORMAL / MILD / MODERATE / SEVERE (as both status and severity).
+// Inside the page each level keeps a fixed key, so the existing colours, charts and
+// recommendations stay in step: Normal = LOW, Mild = MODERATE, Moderate = HIGH,
+// Severe = CRITICAL. levelName() turns a key into the name that is shown.
+const LEVEL_NAME = { LOW: 'Normal', MODERATE: 'Mild', HIGH: 'Moderate', CRITICAL: 'Severe' };
+const levelName = (sev) => LEVEL_NAME[String(sev || '').toUpperCase()] || 'Normal';
+const levelUpper = (sev) => levelName(sev).toUpperCase();
+const DB_LEVEL_KEY = { NORMAL: 'LOW', MILD: 'MODERATE', MODERATE: 'HIGH', SEVERE: 'CRITICAL' };
 
 // Recommendations based on severity
 const recommendations = {
@@ -1242,7 +1253,7 @@ function getRecTip(rec) {
     if (rec.tip) return rec.tip;
     const tips = {
         CRITICAL: 'Treat as highest priority—confirm on-site and recheck within 3 minutes.',
-        HIGH: 'Apply cooling steps now and reassess ambient conditions within 10 minutes.',
+        HIGH: 'Apply cooling steps now and reassess barn conditions within 10 minutes.',
         MODERATE: 'Preventive measures recommended—monitor trends every 15 minutes.',
         LOW: 'Conditions are stable—maintain routine checks and alert readiness.',
     };
@@ -1994,7 +2005,9 @@ function getDetectionCounts(detections = summaryDetections()) {
 }
 
 function applyDetectionCountsToStats(counts = getDetectionCounts()) {
-    state.stats.stressCount = counts.stress;
+    // 4 KPI cards: normalCount = Normal, mildCount = Mild,
+    // stressCount = Moderate, criticalCount = Severe
+    state.stats.stressCount = counts.high;
     state.stats.mildCount = counts.mild;
     state.stats.normalCount = counts.normal;
     state.stats.criticalCount = counts.critical;
@@ -2003,7 +2016,7 @@ function applyDetectionCountsToStats(counts = getDetectionCounts()) {
     const normalEl = document.getElementById('normalCount');
     const mildEl = document.getElementById('mildCount');
     const criticalEl = document.getElementById('criticalCount');
-    if (stressEl) stressEl.textContent = counts.stress;
+    if (stressEl) stressEl.textContent = counts.high;
     if (normalEl) normalEl.textContent = counts.normal;
     if (mildEl) mildEl.textContent = counts.mild;
     if (criticalEl) criticalEl.textContent = counts.critical;
@@ -2223,9 +2236,10 @@ function updateAnnotations() {
     const counts = getDetectionCounts();
     const statsHtml = `
         <div>Ducks: ${counts.total}</div>
-        <div>Normal: ${counts.normal}</div>
-        <div>Mild: ${counts.mild}</div>
-        <div>Heat Stress: ${counts.stress}</div>
+        <div>Normal: ${counts.low}</div>
+        <div>Mild: ${counts.moderate}</div>
+        <div>Moderate: ${counts.high}</div>
+        <div>Severe: ${counts.critical}</div>
     `;
     // RGB panel: duck count from the model, statuses from the thermal camera's
     // live readings of the same ducks (both set by livefeed.js)
@@ -2236,7 +2250,8 @@ function updateAnnotations() {
         <div>Ducks: ${live.ducks ?? '--'}</div>
         <div>Normal: ${show(liveStatus?.normal)}</div>
         <div>Mild: ${show(liveStatus?.mild)}</div>
-        <div>Heat Stress: ${show(liveStatus?.stress)}</div>
+        <div>Moderate: ${show(liveStatus?.moderate)}</div>
+        <div>Severe: ${show(liveStatus?.severe)}</div>
     ` : statsHtml;
     // Only touch the page when the text changes (no needless redraws)
     setHtmlIfChanged(normalStats, liveHtml);
@@ -2250,36 +2265,41 @@ function setHtmlIfChanged(el, html) {
     }
 }
 
-// Normal / Mild / Heat Stress counts from the live thermal readings, or null
+// Normal / Mild / Moderate / Severe counts from the live thermal readings, or null
 function liveStatusCounts(thermal) {
     if (!thermal || !Array.isArray(thermal.ducks_now)) return null;
     const temps = thermal.ducks_now.filter((t) => typeof t === 'number');
-    const stress = temps.filter((t) => t > LIVE_TEMP_LEVELS.stress).length;
-    const mild = temps.filter((t) => t > LIVE_TEMP_LEVELS.mild && t <= LIVE_TEMP_LEVELS.stress).length;
-    return { normal: temps.length - mild - stress, mild, stress };
+    const n = (key) => temps.filter((t) => levelKeyFromTemp(t) === key).length;
+    return { normal: n('LOW'), mild: n('MODERATE'), moderate: n('HIGH'), severe: n('CRITICAL') };
 }
 
 // Live surface temperatures from the thermal camera (window.liveThermal, set by
 // livefeed.js from the logger's /stats). Uses the same thresholds as the
 // Detection Log colours. Returns null when there is no live thermal data.
-// Live per-duck levels only (same as the logger's box colours); saved records
-// use the severity from the database instead:
-// 34 °C or below Normal · above 34 up to 37 Mild · above 37 Heat Stress
-const LIVE_TEMP_LEVELS = { mild: 34, stress: 37, critical: 40 };   // °C: above mild = Mild, above stress = Heat Stress
+// The 4-level scale (same as the logger's box colours and the saved records):
+// 35.7 °C or below Normal · 35.8 to 43.6 Mild · 43.7 to 44.9 Moderate · 45.0 or above Severe
+const LIVE_TEMP_LEVELS = { mild: 35.7, stress: 43.6, critical: 44.9 };   // °C: above mild = Mild, above stress = Moderate, above critical = Severe
+
+// Level key of one temperature (see LEVEL_NAME)
+function levelKeyFromTemp(t) {
+    if (t > LIVE_TEMP_LEVELS.critical) return 'CRITICAL';
+    if (t > LIVE_TEMP_LEVELS.stress) return 'HIGH';
+    if (t > LIVE_TEMP_LEVELS.mild) return 'MODERATE';
+    return 'LOW';
+}
 
 function liveThermalHtml(thermal) {
     if (!thermal || !Array.isArray(thermal.ducks_now)) return null;
     const temps = thermal.ducks_now.filter((t) => typeof t === 'number');
-    const stress = temps.filter((t) => t > LIVE_TEMP_LEVELS.stress).length;
-    const mild = temps.filter((t) => t > LIVE_TEMP_LEVELS.mild && t <= LIVE_TEMP_LEVELS.stress).length;
-    const normal = temps.length - mild - stress;
+    const n = (key) => temps.filter((t) => levelKeyFromTemp(t) === key).length;
     const unmeasured = thermal.ducks_now.length - temps.length;
     const hottest = temps.length ? `${Math.max(...temps).toFixed(1)}°C` : '--';
     return `
         <div>Ducks: ${thermal.ducks_now.length}${unmeasured ? ` (${unmeasured} not measured)` : ''}</div>
-        <div>Normal: ${normal}</div>
-        <div>Mild: ${mild}</div>
-        <div>Heat Stress: ${stress}</div>
+        <div>Normal: ${n('LOW')}</div>
+        <div>Mild: ${n('MODERATE')}</div>
+        <div>Moderate: ${n('HIGH')}</div>
+        <div>Severe: ${n('CRITICAL')}</div>
         <div>Hottest: ${hottest}</div>
     `;
 }
@@ -2317,7 +2337,7 @@ function renderDetectionLogs() {
             // One cell per header column: lowest / average / highest surface temperature
             const tempCell = (t) => {
                 if (t == null) return '<td class="ht-log-cell--mono">--</td>';
-                const cls = t > LIVE_TEMP_LEVELS.stress ? 'ht-log-temp--hi' : t > LIVE_TEMP_LEVELS.mild ? 'ht-log-temp--mid' : 'ht-log-temp--ok';
+                const cls = t > LIVE_TEMP_LEVELS.stress ? 'ht-log-temp--hi' : t > LIVE_TEMP_LEVELS.mild ? 'ht-log-temp--mid' : 'ht-log-temp--ok';   // Moderate/Severe red, Mild amber
                 return `<td class="ht-log-cell--mono ${cls}">${t.toFixed(1)}°C</td>`;
             };
             const batch = d.batchCount != null ? escapeHtml(String(d.batchCount)) : '--';
@@ -2331,7 +2351,7 @@ function renderDetectionLogs() {
                     <td>
                         <div class="${statusWrap}">
                             <i data-lucide="${statusIcon}"></i>
-                            <span>${d.status}</span>
+                            <span>${levelUpper(d.severity)}</span>
                         </div>
                     </td>
                     ${tempCell(d.lowTemp)}
@@ -2339,7 +2359,7 @@ function renderDetectionLogs() {
                     ${tempCell(d.highTemp)}
                     <td class="ht-log-cell--mono ht-log-dur">${duckLabel}</td>
                     <td class="ht-log-cell--mono" style="font-size:.78em;word-break:break-all" title="${batch}">${batch}</td>
-                    <td><span class="${sevPill}">${d.severity}</span></td>
+                    <td><span class="${sevPill}">${levelUpper(d.severity)}</span></td>
                 </tr>
             `;
         }).join('');
@@ -2382,7 +2402,7 @@ function renderLiveDetections() {
                 </div>
                 <div class="ht-live-item__main">
                     <div class="ht-live-item__row">
-                        <span class="ht-live-item__tag">${d.status}</span>
+                        <span class="ht-live-item__tag">${levelUpper(d.severity)}</span>
                     </div>
                     <div class="ht-live-item__meta">${d.bodyTemp}°C • ${d.count} duck${d.count !== 1 ? 's' : ''}</div>
                 </div>
@@ -2492,7 +2512,7 @@ function renderRecommendations() {
                     <div class="ht-rec-card__content">
                         <div class="ht-rec-card__top">
                             <div class="ht-rec-card__action">${escapeHtml(r.action)}</div>
-                            <span class="ht-rec-sev">${r.severity}</span>
+                            <span class="ht-rec-sev">${levelUpper(r.severity)}</span>
                         </div>
                         <div class="ht-rec-card__meta">
                             <span class="ht-rec-card__category">Surface Temp ${formatCardTemp(r.bodyTemp)}</span>
@@ -2647,7 +2667,7 @@ function openRecommendationModal(rec, currentTemp, { keepScroll = false } = {}) 
                     <span class="ht-modal-result__label">Detection Result</span>
                     <h3 class="ht-modal-action">${headline.title}</h3>
                 </div>
-                <span class="ht-modal-sev">${rec.severity}</span>
+                <span class="ht-modal-sev">${levelUpper(rec.severity)}</span>
             </div>
             <p class="ht-modal-meta">${metaHtml}${sourceLabel ? `<span class="ht-modal-meta__src">${sourceLabel}</span>` : ''}</p>
         </div>
@@ -2968,18 +2988,18 @@ function getRecommendationSummary(rec, currentTemp) {
             (counts.critical > 0 ? `, including ${counts.critical} critical case${counts.critical !== 1 ? 's' : ''}.` : '.')
         );
     } else {
-        lines.push('No duck detections are available yet, so this is based on ambient conditions.');
+        lines.push('No duck detections are available yet, so this is based on barn conditions.');
     }
 
     // 2. Conditions behind it
     if (bodyStr && tempStr) {
         const struggling = rec.severity === 'CRITICAL' || rec.severity === 'HIGH';
         lines.push(
-            `Surface temperature reached ${bodyStr} while the ambient temperature is ${tempStr}` +
+            `Surface temperature reached ${bodyStr} while the barn is at ${tempStr}` +
             (struggling ? ', so ducks are struggling to shed heat.' : ', which is still manageable.')
         );
     } else if (tempStr) {
-        lines.push(`The ambient temperature is ${tempStr}; ducks lose heat less easily as the ambient temperature rises.`);
+        lines.push(`The barn is at ${tempStr}; ducks lose heat less easily as the barn gets warmer.`);
     }
     if (humidStr) {
         lines.push(`Humidity is ${humidStr}; higher humidity reduces cooling through panting.`);
@@ -2987,10 +3007,10 @@ function getRecommendationSummary(rec, currentTemp) {
 
     // 3. What it means
     const meaning = {
-        CRITICAL: 'Overall risk is critical: act immediately and confirm on-site.',
-        HIGH: 'Overall risk is high: start cooling now before it gets worse.',
-        MODERATE: 'Overall risk is moderate: take preventive steps and watch the trend.',
-        LOW: 'Overall risk is low: keep routine monitoring in place.',
+        CRITICAL: 'Heat stress is severe: act immediately and confirm on-site.',
+        HIGH: 'Heat stress is moderate: start cooling now before it gets worse.',
+        MODERATE: 'Heat stress is mild: take preventive steps and watch the trend.',
+        LOW: 'Ducks are normal: keep routine monitoring in place.',
     };
     lines.push(meaning[rec.severity] || meaning.MODERATE);
 
@@ -3005,7 +3025,7 @@ function getRecStatus(rec) {
 }
 
 // Severity Level: this result's level compared with the 30-minute reading before it.
-// Up = worse (toward Critical), down = better (toward Low).
+// Up = worse (toward Severe), down = better (toward Normal).
 function severityChangeHtml(rec) {
     const readings = detailDetections().filter((d) => d.timestamp instanceof Date);
     const own = readings.find((d) => d.id === rec.detectionId);
@@ -3018,7 +3038,7 @@ function severityChangeHtml(rec) {
     }
     const rank = (sev) => severityLevels.length - 1 - severityLevels.indexOf(sev);   // LOW 0 ... CRITICAL 3
     const diff = rank(own.severity) - rank(previous.severity);
-    const prevLabel = previous.severity.charAt(0) + previous.severity.slice(1).toLowerCase();
+    const prevLabel = levelName(previous.severity);
     const prevTime = previous.timestamp.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
     const [cls, icon, text] = diff > 0 ? ['up', 'trending-up', `Up from ${prevLabel}`]
         : diff < 0 ? ['down', 'trending-down', `Down from ${prevLabel}`]
@@ -3042,7 +3062,7 @@ function getRecommendationResultSummary(rec, currentTemp) {
     // Same badge markup as the Detection Log History status column
     const statusWrap = status === 'HEAT STRESS' ? 'ht-log-status ht-log-status--stress' : status === 'MILD' ? 'ht-log-status ht-log-status--warn' : 'ht-log-status ht-log-status--ok';
     const statusIcon = status === 'HEAT STRESS' ? 'alert-triangle' : status === 'MILD' ? 'sun' : 'check-circle';
-    const statusBadge = `<div class="${statusWrap}"><i data-lucide="${statusIcon}"></i><span>${status}</span></div>`;
+    const statusBadge = `<div class="${statusWrap}"><i data-lucide="${statusIcon}"></i><span>${levelUpper(rec.severity)}</span></div>`;
 
     // group: which Detection Details section the item renders in; icon: lucide icon beside
     // the label; count + unit: big-number layout; tone: colored dot for severity levels
@@ -3070,7 +3090,7 @@ function getRecommendationResultSummary(rec, currentTemp) {
     const level = status === 'HEAT STRESS'
         ? (rec.severity === 'CRITICAL' ? 'critical' : 'high')
         : status === 'MILD' ? 'moderate' : 'low';
-    const levelLabel = level.charAt(0).toUpperCase() + level.slice(1);
+    const levelLabel = levelName(rec.severity);
     items.push({ group: 'severity', tone: level, label: levelLabel, value: severityChangeHtml(rec) });
 
     // Extra batch details from the analytics table (only for detection-based recommendations)
@@ -3248,7 +3268,7 @@ function markAlertAsViewed(alertId) {
 }
 
 // Pop-up (lower right) for heat stress alerts.
-// It only pops up for heat stress: HIGH or CRITICAL severity.
+// It only pops up for heat stress: Moderate or Severe.
 let toastTimer = null;
 const TOAST_LEVELS = ['HIGH', 'CRITICAL'];
 const isToastLevel = (level) => TOAST_LEVELS.includes(String(level || '').toUpperCase());
@@ -3261,14 +3281,14 @@ function showToast(detection) {
     let action = '';
     try { action = buildRecommendationFromDetection(detection).action || ''; } catch { /* no recommendation text */ }
     const stats = [['Surface temp', fmtTemp(detection.bodyTemp)]];
-    if (detection.ambientTemp != null) stats.push(['Ambient temp', fmtTemp(detection.ambientTemp)]);
+    if (detection.ambientTemp != null) stats.push(['Barn', fmtTemp(detection.ambientTemp)]);
     if (detection.count != null) stats.push(['Ducks', String(detection.count)]);
     renderToast({
         level: detection.severity,
         title: 'Heat stress detected',
         icon: 'alert-triangle',
         stats,
-        action: action || `Severity: ${detection.severity}. Open the details for the recommended actions.`,
+        action: action || `Severity: ${levelName(detection.severity)}. Open the details for the recommended actions.`,
         timestamp: detection.timestamp,
     });
 }
@@ -3282,7 +3302,7 @@ function renderToast({ kind = 'heatstress', level = 'LOW', title, icon, stats = 
     toast.dataset.level = level;
     toast.querySelector('.ht-toast__icon').innerHTML = `<i data-lucide="${icon}"></i>`;
     document.getElementById('toastTitle').textContent = title;
-    document.getElementById('toastLevel').textContent = level;   // LOW / MODERATE / HIGH / CRITICAL, like the Severity pills
+    document.getElementById('toastLevel').textContent = levelUpper(level);   // NORMAL / MILD / MODERATE / SEVERE, like the Severity pills
 
     const statsEl = document.getElementById('toastStats');
     statsEl.innerHTML = '';
@@ -3356,10 +3376,13 @@ let envChart, detectionChart, severityChart;
 const detectionLegendState = {
     Normal: false,
     Mild: false,
-    'Heat Stress': false,
+    Moderate: false,
+    Severe: false,
 };
 
-const detectionStatusLabels = ['Normal', 'Mild', 'Heat Stress'];
+// The 4 levels, lowest first (key: see LEVEL_NAME)
+const detectionStatusLabels = ['Normal', 'Mild', 'Moderate', 'Severe'];
+const DETECTION_LEVEL_KEYS = ['LOW', 'MODERATE', 'HIGH', 'CRITICAL'];
 
 function initCharts() {
     const chartDefaults = {
@@ -3455,12 +3478,12 @@ function initCharts() {
         data: {
             labels: detectionStatusLabels,
             datasets: [{
-                data: [state.stats.normalCount || 0, state.stats.mildCount || 0, state.stats.stressCount || 0],
-                backgroundColor: ['#22c55e', '#f59e0b', '#ef4444'],
-                borderColor: ['#16a34a', '#d97706', '#dc2626'],
+                data: getDetectionDistributionValues(),
+                backgroundColor: ['#22c55e', '#f59e0b', '#f97316', '#ef4444'],
+                borderColor: ['#16a34a', '#d97706', '#ea580c', '#dc2626'],
                 borderWidth: 2,
                 hoverBorderWidth: 4,
-                hoverBorderColor: ['#ffffff', '#ffffff', '#ffffff'],
+                hoverBorderColor: ['#ffffff', '#ffffff', '#ffffff', '#ffffff'],
             }]
         },
         options: {
@@ -3497,7 +3520,7 @@ function initCharts() {
     severityChart = new Chart(sevCtx, {
         type: 'bar',
         data: {
-            labels: ['Low', 'Moderate', 'High', 'Critical'],   // same order as getSeverityData()
+            labels: ['Normal', 'Mild', 'Moderate', 'Severe'],   // same order as getSeverityData()
             datasets: [{
                 label: 'Ducks',
                 data: severityData,
@@ -3587,7 +3610,7 @@ function getSeverityData() {
     const sum = (sev) => readings
         .filter(d => d.severity === sev)
         .reduce((total, d) => total + (d.count ?? 1), 0);
-    // Low -> Critical, matching the chart's labels and colours
+    // Normal -> Severe, matching the chart's labels and colours
     return [sum('LOW'), sum('MODERATE'), sum('HIGH'), sum('CRITICAL')];
 }
 
@@ -3602,12 +3625,9 @@ function updateEnvChart() {
 // Same 30-minute readings as the KPI cards
 function getDetectionDistributionValues() {
     const readings = thirtyMinuteReadings();
-    const counts = detectionStatusLabels.map(label => {
-        const status = label.toUpperCase();
-        return readings
-            .filter(d => d.status === status)
-            .reduce((total, d) => total + (d.count ?? 1), 0);
-    });
+    const counts = DETECTION_LEVEL_KEYS.map(key => readings
+        .filter(d => d.severity === key)
+        .reduce((total, d) => total + (d.count ?? 1), 0));
 
     return counts.map((count, idx) => detectionLegendState[detectionStatusLabels[idx]] ? 0 : count);
 }
@@ -3674,7 +3694,10 @@ function getFilteredLogDetections({ allRows = false } = {}) {
     let filtered = attachThirtyMinutePeaks(allRows ? summaryDetections() : logEntryDetections());
     // An entry matches the filter if either its own or its 30-minute peak status does
     const hasStatus = (d, s) => d.status === s || d.peak30?.status === s;
-    if (statusFilter === 'heatstress') filtered = filtered.filter(d => hasStatus(d, 'HEAT STRESS'));
+    if (statusFilter === 'heatstress') filtered = filtered.filter(d => hasStatus(d, 'HEAT STRESS'));   // Moderate + Severe
+    // 4-level filter values (if the dropdown offers them): one level each
+    const levelOf = { severe: 'CRITICAL', moderate: 'HIGH' }[statusFilter];
+    if (levelOf) filtered = filtered.filter(d => d.severity === levelOf || d.peak30?.severity === levelOf);
     if (statusFilter === 'mild') filtered = filtered.filter(d => hasStatus(d, 'MILD'));
     if (statusFilter === 'normal') filtered = filtered.filter(d => hasStatus(d, 'NORMAL'));
 
@@ -3788,7 +3811,7 @@ function exportDetectionsToExcel() {
     const cards = [
         ['sCardNormalVal', 'sCardNormalLbl', counts.normal, 'Normal Ducks' + share(counts.normal)],
         ['sCardMildVal', 'sCardMildLbl', counts.mild, 'Mild Ducks' + share(counts.mild)],
-        ['sCardHeatstressVal', 'sCardHeatstressLbl', counts.stress, 'Heat Stress Ducks' + share(counts.stress)],
+        ['sCardHeatstressVal', 'sCardHeatstressLbl', counts.stress, 'Moderate / Severe Ducks' + share(counts.stress)],
     ];
     const cardStart = [2, 6, 10];               // columns B, F, J (3 wide, 1 gap between)
     tableXml += '<Row ss:Height="22"><Cell/>' + cards.map((c, i) =>
@@ -3820,10 +3843,10 @@ function exportDetectionsToExcel() {
         const tsCell = Number.isNaN(ts.getTime())
             ? textCell(odd ? 'sDataRow1Timestamp' : 'sDataRow2Timestamp', '--', 1)
             : '<Cell ss:MergeAcross="1" ss:StyleID="' + (odd ? 'sDataRow1Timestamp' : 'sDataRow2Timestamp') + '"><Data ss:Type="DateTime">' + xlsDate(ts) + '</Data></Cell>';
-        const sevText = { CRITICAL: 'Critical', HIGH: 'High', MODERATE: 'Moderate', LOW: 'Low' }[d.severity] || 'Low';
+        const sevText = levelName(d.severity);
         const center = odd ? 'sDataCenterRow1' : 'sDataCenterRow2';
         const recStyle = odd ? 'sRecRow1' : 'sRecRow2';
-        const statusText = d.status === 'HEAT STRESS' ? 'Heat Stress' : d.status === 'MILD' ? 'Mild' : 'Normal';
+        const statusText = levelName(d.severity);
         const statusStyle = d.status === 'HEAT STRESS' ? 'sStatusHeatstress' : d.status === 'MILD' ? 'sStatusMild' : 'sStatusNormal';
         const sevStyle = d.severity === 'CRITICAL' ? 'sSevCritical' : d.severity === 'HIGH' ? 'sSevHigh'
             : d.severity === 'MODERATE' ? 'sSevModerate' : 'sSevLow';
@@ -4668,11 +4691,21 @@ function normalizeSeverity(value) {
     return severityLevels.includes(s) ? s : 'LOW';
 }
 
-// analytics row -> the "detection" shape the UI already understands
-// Severity is shown exactly as saved in the database (set by the logger's
-// heat-stress model from the DHT22 air temperature and humidity); the status
-// follows from it the same way the logger maps it:
-// LOW = Normal · MODERATE = Mild · HIGH / CRITICAL = Heat Stress
+// Level key of a saved row. The level comes from the row's highest body-area
+// temperature (the 4-level scale), so every row follows the same rule, also rows
+// saved before the scale changed. Rows without a temperature use the saved value:
+// NORMAL / MILD / MODERATE / SEVERE, or the old LOW / MODERATE / HIGH / CRITICAL.
+function levelKeyOfRow(row, highTemp) {
+    if (highTemp != null && !Number.isNaN(highTemp)) return levelKeyFromTemp(highTemp);
+    const sev = String(row.severity || '').trim().toUpperCase();
+    const st = String(row.status || '').trim().toUpperCase();
+    if (DB_LEVEL_KEY[sev] && (sev === st || sev === 'NORMAL' || sev === 'SEVERE')) return DB_LEVEL_KEY[sev];
+    return normalizeSeverity(sev);
+}
+
+// analytics row -> the "detection" shape the UI already understands.
+// status groups the levels for the filters, counts and alerts:
+// Normal = NORMAL · Mild = MILD · Moderate / Severe = HEAT STRESS (alerts + pop-ups)
 const STATUS_OF_SEVERITY = { LOW: 'NORMAL', MODERATE: 'MILD', HIGH: 'HEAT STRESS', CRITICAL: 'HEAT STRESS' };
 
 function levelForRow(savedSeverity) {
@@ -4683,7 +4716,7 @@ function mapAnalyticsRow(row) {
     const low = toNum(row[DB_COLS.lowTemp]);
     const high = toNum(row[DB_COLS.highTemp]);
     const avg = toNum(row[DB_COLS.avgTemp]);
-    const level = levelForRow(normalizeSeverity(row.severity));
+    const level = levelForRow(levelKeyOfRow(row, high));
     const status = level.status;
     // 10 = 10-minute slot row, 30 = 30-minute window row; rows saved before
     // the interval column existed are 30-minute rows
