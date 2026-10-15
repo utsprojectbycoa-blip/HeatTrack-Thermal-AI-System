@@ -1242,7 +1242,7 @@ function getRecTip(rec) {
     if (rec.tip) return rec.tip;
     const tips = {
         CRITICAL: 'Treat as highest priority—confirm on-site and recheck within 3 minutes.',
-        HIGH: 'Apply cooling steps now and reassess barn conditions within 10 minutes.',
+        HIGH: 'Apply cooling steps now and reassess ambient conditions within 10 minutes.',
         MODERATE: 'Preventive measures recommended—monitor trends every 15 minutes.',
         LOW: 'Conditions are stable—maintain routine checks and alert readiness.',
     };
@@ -2968,18 +2968,18 @@ function getRecommendationSummary(rec, currentTemp) {
             (counts.critical > 0 ? `, including ${counts.critical} critical case${counts.critical !== 1 ? 's' : ''}.` : '.')
         );
     } else {
-        lines.push('No duck detections are available yet, so this is based on barn conditions.');
+        lines.push('No duck detections are available yet, so this is based on ambient conditions.');
     }
 
     // 2. Conditions behind it
     if (bodyStr && tempStr) {
         const struggling = rec.severity === 'CRITICAL' || rec.severity === 'HIGH';
         lines.push(
-            `Surface temperature reached ${bodyStr} while the barn is at ${tempStr}` +
+            `Surface temperature reached ${bodyStr} while the ambient temperature is ${tempStr}` +
             (struggling ? ', so ducks are struggling to shed heat.' : ', which is still manageable.')
         );
     } else if (tempStr) {
-        lines.push(`The barn is at ${tempStr}; ducks lose heat less easily as the barn gets warmer.`);
+        lines.push(`The ambient temperature is ${tempStr}; ducks lose heat less easily as the ambient temperature rises.`);
     }
     if (humidStr) {
         lines.push(`Humidity is ${humidStr}; higher humidity reduces cooling through panting.`);
@@ -3261,7 +3261,7 @@ function showToast(detection) {
     let action = '';
     try { action = buildRecommendationFromDetection(detection).action || ''; } catch { /* no recommendation text */ }
     const stats = [['Surface temp', fmtTemp(detection.bodyTemp)]];
-    if (detection.ambientTemp != null) stats.push(['Barn', fmtTemp(detection.ambientTemp)]);
+    if (detection.ambientTemp != null) stats.push(['Ambient temp', fmtTemp(detection.ambientTemp)]);
     if (detection.count != null) stats.push(['Ducks', String(detection.count)]);
     renderToast({
         level: detection.severity,
