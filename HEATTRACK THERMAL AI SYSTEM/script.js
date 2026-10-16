@@ -5658,7 +5658,40 @@ async function loadAdminDevices() {
     const trash = await sb.rpc('admin_list_device_trash');
     if (trash.error) console.warn('Device trash unavailable (run device_trash.sql in Supabase).', trash.error);
     adminDeviceTrashReady = !trash.error;
+    adminDeviceTrashReady = !trash.error;
     adminDeviceTrash = trash.error ? [] : (trash.data || []);
+    checkAdminDeviceReach();
+}
+
+// A saved device_url only means the logger once started a tunnel: it stays saved
+// when the mini PC loses power or crashes. So "Online" is decided by asking the
+// logger's /stats at that address (same request the live feed makes).
+const ADMIN_DEVICE_CHECK_MS = 60 * 1000;
+const ADMIN_DEVICE_TIMEOUT_MS = 8000;
+const adminDeviceReach = new Map();   // device_url -> true (answered) | false (no answer)
+let adminDeviceCheckTimer = null;
+
+async function checkAdminDeviceReach() {
+    const urls = [...new Set(adminDevices.map((device) => device.device_url).filter(Boolean))];
+    const results = await Promise.all(urls.map(async (url) => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), ADMIN_DEVICE_TIMEOUT_MS);
+        try {
+            const base = url.replace(/\/video\/?(\?.*)?$/, '');
+            const res = await fetch(`${base}/stats?t=${Date.now()}`, { cache: 'no-store', signal: controller.signal });
+            return [url, res.ok];
+        } catch (_) {
+            return [url, false];
+        } finally {
+            clearTimeout(timer);
+        }
+    }));
+    let changed = false;
+    results.forEach(([url, ok]) => {
+        if (adminDeviceReach.get(url) !== ok) changed = true;
+        adminDeviceReach.set(url, ok);
+    });
+    if (changed) renderAdminDevices();
 }
 
 function renderAdminDevices() {
@@ -5692,13 +5725,15 @@ function renderAdminDevices() {
         });
         html = rows.map((device) => {
             const owner = adminFindProfile(device.owner_id);
-            const online = !!device.device_url;
+            // No address: offline. Address saved: online only once the logger has answered.
+            const reach = device.device_url ? adminDeviceReach.get(device.device_url) : false;
+            const online = reach === true;
+            const reachText = online ? 'Online' : reach === undefined ? 'Checking...' : 'Offline';
             const code = escapeHtml(device.device_code);
             const ownerText = device.owner_id
                 ? `<span>Owner:</span> ${escapeHtml(owner ? `${adminFullName(owner)} (@${owner.username})` : 'Unknown account')}`
                 : '<span>No owner yet</span>';
-            return `<li class="ht-admin-device__item"><span class="ht-admin-device__icon${online ? ' is-online' : ''}"><i data-lucide="cpu"></i></span><div class="ht-admin-device__info"><div class="ht-admin-device__row"><span class="ht-admin-device__code">${code}</span><span class="ht-adash__chip ht-adash__chip--${device.owner_id ? 'approved' : 'pending'}">${device.owner_id ? 'Linked' : 'Available'}</span></div><span class="ht-admin-device__owner">${ownerText}</span><span class="ht-admin-device__meta"><span class="ht-admin-device__dot${online ? ' is-online' : ''}"></span>${online ? 'Online' : 'Offline'}</span></div><div class="ht-admin-device__tools"><button type="button" class="ht-admin-device__copy" data-device-copy="${code}" aria-label="Copy ${code}" data-tooltip="Copy Device ID"><i data-lucide="copy"></i></button><button type="button" class="ht-admin-device__copy" data-device-edit="${code}" aria-label="Edit ${code}" data-tooltip="Edit"><i data-lucide="pencil"></i></button><button type="button" class="ht-admin-device__copy ht-admin-device__copy--danger" data-device-delete="${code}" aria-label="Delete ${code}" data-tooltip="Delete"><i data-lucide="trash-2"></i></button></div></li>`;
-        }).join('');
+            return `<li class="ht-admin-device__item"><span class="ht-admin-device__icon${online ? ' is-online' : ''}"><i data-lucide="cpu"></i></span><div class="ht-admin-device__info"><div class="ht-admin-device__row"><span class="ht-admin-device__code">${code}</span><span class="ht-adash__chip ht-adash__chip--${device.owner_id ? 'approved' : 'pending'}">${device.owner_id ? 'Linked' : 'Available'}</span></div><span class="ht-admin-device__owner">${ownerText}</span><span class="ht-admin-device__meta"><span class="ht-admin-device__dot${online ? ' is-online' : ''}"></span>${reachText}</span></div><div class="ht-admin-device__tools"><button type="button" class="ht-admin-device__copy" data-device-copy="${code}" aria-label="Copy ${code}" data-tooltip="Copy Device ID"><i data-lucide="copy"></i></button><button type="button" class="ht-admin-device__copy" data-device-edit="${code}" aria-label="Edit ${code}" data-tooltip="Edit"><i data-lucide="pencil"></i></button><button type="button" class="ht-admin-device__copy ht-admin-device__copy--danger" data-device-delete="${code}" aria-label="Delete ${code}" data-tooltip="Delete"><i data-lucide="trash-2"></i></button></div></li>`;
     }
     const emptyText = adminDeviceFilter === 'trash' ? 'Trash is empty' : search ? 'No devices match your search' : 'No devices registered yet';
     list.innerHTML = html || `<li class="ht-admin-device__empty"><i data-lucide="${adminDeviceFilter === 'trash' ? 'trash-2' : 'cpu'}"></i>${emptyText}</li>`;
@@ -6249,6 +6284,8 @@ async function initAdminUi() {
     initAdminProfile();
     initAdminDevices();
     initAdminWeather();
+    clearInterval(adminDeviceCheckTimer);
+    adminDeviceCheckTimer = setInterval(() => { if (adminDevices.length) checkAdminDeviceReach(); }, ADMIN_DEVICE_CHECK_MS);
 
     document.querySelectorAll('[data-admin-route]').forEach((link) => link.addEventListener('click', () => adminSetView(link.dataset.adminRoute)));
     document.getElementById('adminUserSearch')?.addEventListener('input', () => { adminPage.users = 1; renderAdminUsers(); });
