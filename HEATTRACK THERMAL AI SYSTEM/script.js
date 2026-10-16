@@ -5882,17 +5882,9 @@ function openAdminConfirm(message, callback) {
 async function updateAdminProfile(id, values) {
     const duplicate = adminProfiles.some((profile) => profile.id !== id && profile.username.toLowerCase() === values.username.toLowerCase());
     if (duplicate) throw new Error('That username is already taken.');
-    const profile = adminFindProfile(id);
-    // The sign-in email lives in Supabase Auth, so change it there (and in profiles) server-side
-    if (values.email && values.email.toLowerCase() !== (profile?.email || '').toLowerCase()) {
-        const { data: emailResult, error: emailError } = await sb.rpc('admin_update_user_email', { target_user: id, new_email: values.email });
-        if (emailError) throw emailError;
-        if (emailResult === 'exists') throw new Error('That email is already used by another account.');
-        if (emailResult === 'invalid') throw new Error(INVALID_EMAIL_MSG);
-        values.email = values.email.trim().toLowerCase();
-    }
-    const { error } = await sb.from('profiles').update({ firstname: values.firstName, lastname: values.lastName, username: values.username }).eq('id', id);
+    const { error } = await sb.from('profiles').update({ firstname: values.firstName, lastname: values.lastName, username: values.username, email: values.email }).eq('id', id);
     if (error) throw error;
+    const profile = adminFindProfile(id);
     Object.assign(profile, values);
 }
 
