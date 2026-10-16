@@ -8,14 +8,15 @@ HeatTrack logger + bridge (mini PC)
   Thermal camera        -> each duck YOLO sees is measured (duck_temperature.py)
   Every 10 minutes      -> one analytics row (interval 10) for that slot
   Every 30 minutes      -> one analytics row (interval 30) for the whole window
-  Rating (both rows)    -> the thermal camera and the DHT22 together (see rate_thi):
-                           1. the ducks' HIGHEST body-area temperature gives the level:
+  Rating (both rows)    -> from the ducks' HIGHEST body-area temperature (thermal camera):
                               35.7 C or below LOW · 35.8-43.6 MODERATE · 43.7-44.9 HIGH ·
                               45.0 or above CRITICAL
-                           2. the DHT22's highest air temperature + its humidity give the
-                              THI: 84 or above raises the level by one, 74 or below lowers
-                              it by one (45 C or above stays CRITICAL)
-                           3. status: LOW NORMAL · MODERATE MILD · HIGH/CRITICAL HEAT STRESS
+                           STATUS: thermal camera only, from that level:
+                              LOW NORMAL · MODERATE MILD · HIGH/CRITICAL HEAT STRESS
+                           SEVERITY: thermal camera + DHT22 (see rate_thi): the level
+                              moved by the THI of the highest air temperature + its
+                              humidity: 84 or above up one, 74 or below down one
+                              (45 C or above stays CRITICAL)
                            Same rule as the database (body_temp_thi_levels.sql).
                            No ducks / no valid thermal reading -> no row.
   Webcam + YOLO         -> live video (MJPEG) at http://localhost:8000/video, /thermal, /stats
@@ -144,9 +145,9 @@ SMOOTHING = 0.5             # 0 = box jumps to new position, 0.9 = moves very sm
 # Heat-stress severity (sklearn model)
 SEVERITY_MODEL_PATH = "heatstress_model_2.pkl"
 # How Status and Severity are decided:
-#   "thi"          = body-area temperature levels below, raised or lowered by one level
-#                    by the DHT22's THI (default; see rate_thi). Same rule as the
-#                    database's body_temp_thi_levels.sql.
+#   "thi"          = (default) STATUS from the body-area temperature levels below only;
+#                    SEVERITY from those levels, raised or lowered by one level by the
+#                    DHT22's THI (see rate_thi). Same rule as body_temp_thi_levels.sql.
 #   "spectrum"     = body-area temperature only: exactly the levels below.
 #                    The DHT22 is still read, saved and logged but does not change the rating.
 #   "combined"     = the levels below, raised or lowered by one level by the DHT22's
@@ -1928,15 +1929,22 @@ def build_analytics_row(model, samples, slots, interval_minutes, at=None):
                 how += f"; DHT22 support skipped ({err})"
         elif SEVERITY_METHOD != "spectrum":
             how += "; no DHT22 reading, body temperature only"
+    # Status: thermal camera only (the body-area temperature level). With "thi" the
+    # severity can differ by one level (the DHT22's THI); the other methods keep
+    # the status that goes with their severity.
+    if SEVERITY_METHOD == "thi":
+        status = STATUS_FROM_SEVERITY[severity_from_spectrum(highest)]
+    else:
+        status = STATUS_FROM_SEVERITY[severity]
     air = f"air {peak['temperature']:.1f}°C / {peak['humidity']:.1f}%" if peak else "no air reading"
     log(f"{label}: highest body {highest:.1f}°C ({len(temps)} readings, peak {peak_count} duck(s){note}); "
-        f"{air}; {how} -> {severity} / {STATUS_FROM_SEVERITY[severity]}")
+        f"{air}; {how} -> severity {severity}, status {status} (thermal)")
 
     # Timestamped at the slot's / window's own mark (also for rows saved late)
     now = datetime.fromtimestamp(at, timezone.utc) if at else datetime.now(timezone.utc)
     # Arguments for ingest_analytics(); Supabase fills in the account and device
     return {
-        "p_status": STATUS_FROM_SEVERITY[severity],
+        "p_status": status,
         "p_severity": severity,
         "p_lowest_body_temperature": round(min(temps), 2),
         "p_highest_body_temperature": round(highest, 2),
@@ -2196,4 +2204,72 @@ def main():
     p.add_argument("--inspect", action="store_true", help="print severity-model info and sample predictions")
     p.add_argument("--simulate", action="store_true", help="fake temperature/humidity instead of the Arduino")
     p.add_argument("--dry-run", action="store_true", help="print rows instead of saving them")
-    p.add_argum
+    p.add_argument("--no-camera", action="store_true",
+                   help="skip webcam, YOLO, stream and tunnel (with --simulate: fake ducks)")
+    p.add_argument("--once", action="store_true", help="stop after one 30-minute window")
+    p.add_argument("--check", action="store_true", help="only check the settings and the device key")
+    args = p.parse_args()
+
+    if args.inspect:
+        SeverityModel(args.severity_model).describe()
+        return
+
+    prepare_data_dir()
+    log(f"Data files (slot_log.csv, pending_rows.jsonl, logs): {DATA_DIR}")
+    if ENV_LOADED:
+        log(f"Settings from {ENV_FILE.name}: device {DEVICE_CODE}, serial {SERIAL_PORT}, camera {CAMERA_INDEX}")
+    else:
+        log(f"WARNING: no {ENV_FILE.name} found in {ENV_FILE.parent}; using built-in defaults "
+            f"(device {DEVICE_CODE}, serial {SERIAL_PORT}, camera {CAMERA_INDEX})")
+
+    # Fake data must never reach the real account
+    if args.simulate and not args.dry_run:
+        log("--simulate implies --dry-run: nothing will be saved")
+    DRY_RUN = (args.dry_run or args.simulate) and not args.check
+    if args.check:
+        # Used by install_heattrack.ps1: settings + device key, then stop
+        check_settings()
+        linked = verify_device(wait=False)
+        print("CHECK OK" + ("" if linked else " (device not linked to an account yet)"))
+        return
+    if DRY_RUN:
+        log("Test mode: nothing is uploaded")
+    else:
+        check_settings()
+        verify_device(wait=True)
+
+    model = SeverityModel(args.severity_model)
+    sensor = FakeSensor() if args.simulate else BridgeSensor()
+
+    server = tunnel = None
+    if not args.no_camera:
+        camera = Camera()
+        camera.detector = start_detector(camera)
+        server = ThreadingHTTPServer(("127.0.0.1", STREAM_PORT), StreamHandler)
+        server.daemon_threads = True
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        print(f"Local stream: http://localhost:{STREAM_PORT}/video   thermal view: http://localhost:{STREAM_PORT}/thermal")
+        tunnel = Tunnel()
+    network_reporter()
+
+    detector = camera.detector if camera else (FakeDetector() if args.simulate else None)
+    if detector is None:
+        log("No duck detector running: body temperature can't be measured, so no analytics rows")
+    collector = ThermalCollector(sensor, detector)
+
+    try:
+        analytics_loop(model, sensor, args.interval, once=args.once)
+    except KeyboardInterrupt:
+        print("\nStopping...")
+    finally:
+        if camera:
+            publish_stream_url(None)      # website shows "No camera connected"
+            camera.running = False
+        if tunnel:
+            tunnel.stop()
+        if server:
+            server.shutdown()
+
+
+if __name__ == "__main__":
+    main()
