@@ -86,8 +86,8 @@ const RESPONSE_SCHEMA = {
         category: { type: 'STRING', enum: CATEGORIES, description: 'Which kind of action the headline is.' },
         tip: { type: 'STRING', description: 'One sentence (max 140 characters) explaining how to carry out the headline action well.' },
         explanation: { type: 'STRING', description: '2 short sentences: what the readings of THIS result mean and why the actions are recommended. Mention the actual numbers.' },
-        suggested_actions: { type: 'ARRAY', items: { type: 'STRING' }, description: '3-5 concrete actions to take now for this result, most urgent first. Each max 20 words.' },
-        prevention: { type: 'ARRAY', items: { type: 'STRING' }, description: '3-5 heat stress prevention measures to stop it getting worse or happening again. Each max 20 words.' },
+        suggested_actions: { type: 'ARRAY', items: { type: 'STRING' }, minItems: 5, maxItems: 5, description: 'Exactly 5 concrete actions to take now for this result, most urgent first. Each max 20 words.' },
+        prevention: { type: 'ARRAY', items: { type: 'STRING' }, minItems: 5, maxItems: 5, description: 'Exactly 5 heat stress prevention measures to stop it getting worse or happening again. Each max 20 words.' },
         environmental_insights: { type: 'ARRAY', items: { type: 'STRING' }, description: '2-3 observations about the air temperature, humidity and their trend for this result. Each max 25 words.' },
         temperature_guidance: { type: 'ARRAY', items: { type: 'STRING' }, description: '2-3 points about the ducks\' surface temperatures in this result and when to recheck. Each max 25 words.' },
     },
@@ -102,8 +102,8 @@ const JSON_SHAPE = `Answer with ONLY a JSON object with exactly these keys:
   "category": one of ${CATEGORIES.map((c) => `"${c}"`).join(', ')},
   "tip": "one sentence, max 140 characters, how to carry out the headline action well",
   "explanation": "2 short sentences: what THIS result's readings mean and why; mention the actual numbers",
-  "suggested_actions": ["3-5 concrete actions to take now, most urgent first, each max 20 words"],
-  "prevention": ["3-5 heat stress prevention measures, each max 20 words"],
+  "suggested_actions": ["exactly 5 concrete actions to take now, most urgent first, each max 20 words"],
+  "prevention": ["exactly 5 heat stress prevention measures, each max 20 words"],
   "environmental_insights": ["2-3 observations about air temperature, humidity and trend, each max 25 words"],
   "temperature_guidance": ["2-3 points about the ducks' surface temperatures and when to recheck, each max 25 words"]
 }`;
@@ -119,8 +119,18 @@ Rules:
 - When humidity is high, note that evaporative cooling (misting/sprinklers) works less well and must be paired with strong ventilation.
 - Surface temperatures are thermal-camera estimates; advise confirming visually (panting, wing spreading, lethargy) before drastic action.
 - Use the recheck time given for the severity.
+- When you name the level or status in your text, use only the website's names: urgency Routine, Monitor, Urgent or Critical (never Low, Moderate or High), and status Thermal Comfort, Mild Heat Stress, Moderate Heat Stress or Severe Heat Stress (never Normal, Mild or Heat Stress alone).
 - Every result must get a UNIQUE recommendation, even when its severity or status is the same as earlier results. Never reuse a headline, tip, explanation or list item from the RECENT RECOMMENDATIONS, word for word or with only small changes. Lead with a different guideline action than the recent headlines when possible, and make each point specific to THIS result's numbers, duck count and trend.
 - Plain, practical language a farm worker can follow. No markdown, no emojis.`;
+
+// Names shown on the website (homepage Status & Urgency Levels). The status
+// follows the highest surface temperature strictly; the urgency is the severity.
+const URGENCY_NAME: Record<string, string> = { LOW: 'Routine', MODERATE: 'Monitor', HIGH: 'Urgent', CRITICAL: 'Critical' };
+const statusName = (t: number | null) => (t === null ? 'unknown'
+    : t > 44.9 ? 'Severe Heat Stress'
+    : t > 43.6 ? 'Moderate Heat Stress'
+    : t > 35.7 ? 'Mild Heat Stress'
+    : 'Thermal Comfort');
 
 const num = (v: unknown) => (v === null || v === undefined || v === '' || Number.isNaN(Number(v)) ? null : Number(v));
 const fmt = (v: number | null, unit: string) => (v === null ? 'unknown' : `${v.toFixed(1)}${unit}`);
@@ -384,14 +394,14 @@ Deno.serve(async (req) => {
 
     const prompt = [
         `RESULT (${interval}-minute interval ending ${at.toISOString()})`,
-        `Severity (from trained model): ${severity}`,
-        `Status: ${row.status ?? 'unknown'}`,
+        `Severity (from trained model): ${severity} (urgency level "${URGENCY_NAME[severity]}")`,
+        `Status (from the highest surface temperature): ${statusName(high)}`,
         `Ducks detected: ${num(row.duck_count) ?? 'unknown'}`,
         `Estimated surface temperature: lowest ${fmt(low, '°C')}, average ${fmt(avg, '°C')}, highest ${fmt(high, '°C')}`,
         `Peak air temperature in the interval: ${fmt(num(peak?.temperature), '°C')} with humidity ${fmt(num(peak?.humidity), '%')}`,
         `Latest air reading: ${fmt(num(latest?.temperature), '°C')}, humidity ${fmt(num(latest?.humidity), '%')}`,
         prev
-            ? `Previous result: severity ${prev.severity}, highest body ${fmt(prevHigh, '°C')}, ${num(prev.duck_count) ?? '?'} ducks`
+            ? `Previous result: severity ${prev.severity} (urgency "${URGENCY_NAME[String(prev.severity || '').toUpperCase()] ?? prev.severity}"), highest body ${fmt(prevHigh, '°C')}, ${num(prev.duck_count) ?? '?'} ducks`
               + (prevHigh !== null && high !== null ? ` (surface temperature change ${high - prevHigh >= 0 ? '+' : ''}${(high - prevHigh).toFixed(1)}°C)` : '')
             : 'Previous result: none',
         `Recheck time for this severity: ${RECHECK[severity]}`,
