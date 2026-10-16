@@ -793,7 +793,7 @@
                                             <span class="ht-about-highlight__icon ht-about-highlight__icon--ai"><i data-lucide="lightbulb"></i></span>
                                             <div>
                                                 <strong>AI-guided actions</strong>
-                                                <p>Heat stress alerts with AI-recommended actions.</p>
+                                                <p>Urgent and Critical alerts with AI-recommended actions.</p>
                                             </div>
                                         </li>
                                     </ul>
@@ -825,7 +825,7 @@
                                     <i data-lucide="line-chart"></i>
                                 </div>
                                 <h3 class="ht-jump-card__title">Analytics</h3>
-                                <p class="ht-jump-card__text">Review the Detection Log History, Severity Levels, and Detection Distribution charts, and export Excel reports.</p>
+                                <p class="ht-jump-card__text">Review the Detection Log History, Urgency Levels, and Detection Distribution charts, and export Excel reports.</p>
                                 <span class="ht-jump-card__cta">Open Analytics <i data-lucide="chevron-right"></i></span>
                             </a>
                             <a href="#insights" class="ht-jump-card">
@@ -848,7 +848,7 @@
                     </div>
                 </div>
 
-                <!-- QUICK REFERENCE: Thermal Color Spectrum + Status & Severity -->
+                <!-- QUICK REFERENCE: Thermal Color Spectrum + Status & Urgency Levels -->
                 <section class="ht-home-section ht-spectrum-section-simple">
                     <div class="ht-wrap">
                         <header class="ht-section-head ht-section-head--center">
@@ -861,7 +861,7 @@
                                 <div class="ht-article-card__icon ht-article-card__icon--thermal"><i data-lucide="eye"></i></div>
                                 <h3 class="ht-article-card__h">Thermal Color Spectrum</h3>
                             </div>
-                            <p class="ht-prose ht-quickref-intro">The Thermal Monitor on the Live page shows surface heat on a fixed 25–45°C color scale: dark purple is coolest and pale yellow is hottest. Each duck the system finds gets a box. A white box shows the duck's estimated surface temperature, taken from its hottest spot (marked with a white cross). A gray box means the duck could not be measured, for example when it is at the edge of the frame, too far away, or overlapping another duck. The colors show heat only; the heat stress rating comes from the Status &amp; Severity levels below.</p>
+                            <p class="ht-prose ht-quickref-intro">The Thermal Monitor on the Live page shows surface heat on a fixed 25–45°C color scale: dark purple is coolest and pale yellow is hottest. Each duck the system finds gets a box. A white box shows the duck's estimated surface temperature, taken from its hottest spot (marked with a white cross). A gray box means the duck could not be measured, for example when it is at the edge of the frame, too far away, or overlapping another duck. The colors show heat only; the heat stress rating comes from the Status &amp; Urgency levels below.</p>
                             <div class="ht-spectrum" role="region" aria-label="Thermal Color Spectrum">
                                 <div class="ht-spectrum__scale" aria-hidden="true">
                                     <div class="ht-spectrum__bar">
@@ -924,67 +924,115 @@
                         <article class="ht-article-card ht-article-card--wide ht-status-guide-card">
                             <div class="ht-article-card__row ht-quickref-head">
                                 <div class="ht-article-card__icon ht-article-card__icon--thermal"><i data-lucide="gauge"></i></div>
-                                <h3 class="ht-article-card__h">Status &amp; Severity Levels</h3>
+                                <h3 class="ht-article-card__h">Status &amp; Urgency Levels</h3>
                             </div>
-                            <p class="ht-prose ht-quickref-intro">At the first detection and every 30 minutes of monitoring after it, HeatTrack records a reading with two labels. The <strong>Status</strong> tells you whether the ducks are heat-stressed: <strong>Normal</strong> (no), <strong>Mild</strong> (not yet, but an early warning), or <strong>Heat Stress</strong> (yes). The <strong>Severity Level</strong> (Low, Moderate, High, or Critical) tells you how urgent it is. Severity starts from the highest duck surface temperature measured by the thermal camera in that period, then the ambient temperature and humidity from the DHT22 sensor can move it up or down one level: very hot, humid air raises it, and cool air can lower it. A duck above 40°C is always Critical. The status follows from the final severity, as shown below. Each record also lists the ducks' lowest and average surface temperatures and the ambient temperature and humidity. Check the status at a glance, then let the severity tell you how fast to act.</p>
+                            <p class="ht-prose ht-quickref-intro">At the first detection and every 30 minutes of monitoring after it, HeatTrack records a reading with two labels. The <strong>Status</strong> tells you how much heat stress the ducks are under: <strong>Thermal Comfort</strong>, <strong>Mild Heat Stress</strong>, <strong>Moderate Heat Stress</strong>, or <strong>Severe Heat Stress</strong>. The <strong>Urgency Level</strong> (Routine, Monitor, Urgent, or Critical) tells you how fast to act. The status follows the highest duck surface temperature measured by the thermal camera in that period, strictly by the temperature ranges shown below. The urgency starts at the usual level for that status, then the ambient temperature and humidity from the DHT22 sensor can move it one level: very hot, humid air raises it, and cool air can lower it. So a Mild Heat Stress reading can be Urgent on a hot, humid day. Severe Heat Stress is always Critical. Each record also lists the ducks' lowest and average surface temperatures and the ambient temperature and humidity. Check the status at a glance, then let the urgency level tell you how fast to act.</p>
                             <div class="ht-status-guide">
-                                <!-- Mapping: 4 severity levels grouped under 3 statuses -->
-                                <div class="ht-status-map" role="img" aria-label="Low is Normal, Moderate is Mild, High and Critical are Heat Stress">
-                                    <span class="ht-status-map__caption">Severity Level</span>
-                                    <div class="ht-status-map__levels" aria-hidden="true">
-                                        <span class="ht-status-map__level ht-status-map__level--low">Low</span>
-                                        <span class="ht-status-map__level ht-status-map__level--moderate">Moderate</span>
-                                        <span class="ht-status-map__level ht-status-map__level--high">High</span>
-                                        <span class="ht-status-map__level ht-status-map__level--critical">Critical</span>
+                                <!-- Mapping: surface temperature -> status (strict), then the
+                                     usual urgency for each status and the one-level moves the
+                                     ambient temperature and humidity can make -->
+                                <div class="ht-status-map" role="img" aria-label="Status by highest surface temperature: 35.7°C or below is Thermal Comfort, usually Routine, Monitor in hot humid air. 35.8 to 43.6°C is Mild Heat Stress, usually Monitor, Urgent in hot humid air, Routine in cool air. 43.7 to 44.9°C is Moderate Heat Stress, usually Urgent, Critical in hot humid air, Monitor in cool air. 45.0°C or above is Severe Heat Stress, always Critical.">
+                                    <span class="ht-status-map__caption">Surface Temperature &amp; Status</span>
+                                    <!-- Highest duck surface temperature for each status (LIVE_TEMP_LEVELS in script.js) -->
+                                    <div class="ht-status-map__bar" aria-hidden="true">
+                                        <span class="ht-status-map__temp">&le; 35.7°C</span>
+                                        <span class="ht-status-map__temp">35.8–43.6°C</span>
+                                        <span class="ht-status-map__temp">43.7–44.9°C</span>
+                                        <span class="ht-status-map__temp">&ge; 45.0°C</span>
                                     </div>
                                     <div class="ht-status-map__groups" aria-hidden="true">
-                                        <span class="ht-status-map__group ht-status-map__group--normal"><i data-lucide="check-circle"></i>Normal</span>
-                                        <span class="ht-status-map__group ht-status-map__group--mild"><i data-lucide="sun"></i>Mild</span>
-                                        <span class="ht-status-map__group ht-status-map__group--stress"><i data-lucide="alert-triangle"></i>Heat Stress</span>
+                                        <span class="ht-status-map__group ht-status-map__group--comfort"><i data-lucide="check-circle"></i>Thermal Comfort</span>
+                                        <span class="ht-status-map__group ht-status-map__group--mild"><i data-lucide="sun"></i>Mild Heat Stress</span>
+                                        <span class="ht-status-map__group ht-status-map__group--moderate"><i data-lucide="alert-triangle"></i>Moderate Heat Stress</span>
+                                        <span class="ht-status-map__group ht-status-map__group--severe"><i data-lucide="siren"></i>Severe Heat Stress</span>
                                     </div>
-                                    <span class="ht-status-map__caption">Status</span>
+
+                                    <span class="ht-status-map__caption ht-status-map__caption--urgency">Urgency Level</span>
+                                    <!-- Rows: raised (hot, humid air) / usual / lowered (cool air) -->
+                                    <div class="ht-status-map__urgency" aria-hidden="true">
+                                        <div class="ht-status-map__options">
+                                            <span class="ht-status-map__option ht-status-map__level--moderate">↑ Monitor</span>
+                                            <span class="ht-status-map__option ht-status-map__option--usual ht-status-map__level--low">Routine</span>
+                                            <span class="ht-status-map__option ht-status-map__option--none"></span>
+                                        </div>
+                                        <div class="ht-status-map__options">
+                                            <span class="ht-status-map__option ht-status-map__level--high">↑ Urgent</span>
+                                            <span class="ht-status-map__option ht-status-map__option--usual ht-status-map__level--moderate">Monitor</span>
+                                            <span class="ht-status-map__option ht-status-map__level--low">↓ Routine</span>
+                                        </div>
+                                        <div class="ht-status-map__options">
+                                            <span class="ht-status-map__option ht-status-map__level--critical">↑ Critical</span>
+                                            <span class="ht-status-map__option ht-status-map__option--usual ht-status-map__level--high">Urgent</span>
+                                            <span class="ht-status-map__option ht-status-map__level--moderate">↓ Monitor</span>
+                                        </div>
+                                        <div class="ht-status-map__options">
+                                            <span class="ht-status-map__option ht-status-map__option--none"></span>
+                                            <span class="ht-status-map__option ht-status-map__option--usual ht-status-map__level--critical">Critical</span>
+                                            <span class="ht-status-map__option ht-status-map__option--none"></span>
+                                        </div>
+                                    </div>
+                                    <div class="ht-status-map__legend" aria-hidden="true">
+                                        <span><span class="ht-status-map__swatch ht-status-map__swatch--usual"></span>Usual level</span>
+                                        <span><span class="ht-status-map__swatch"></span>↑ Very hot, humid air &nbsp;·&nbsp; ↓ Cool air</span>
+                                    </div>
                                 </div>
 
                                 <ol class="ht-status-guide__cards">
-                                    <li class="ht-tier-card ht-tier-card--normal">
+                                    <li class="ht-tier-card ht-tier-card--comfort">
                                         <div class="ht-tier-card__head">
                                             <i data-lucide="check-circle" class="ht-tier-card__icon" aria-hidden="true"></i>
-                                            <strong class="ht-tier-card__title">Normal</strong>
+                                            <strong class="ht-tier-card__title">Thermal Comfort</strong>
                                             <div class="ht-tier-card__pills">
-                                                <span class="ht-pill ht-pill--low">LOW</span>
+                                                <span class="ht-pill ht-pill--low">ROUTINE</span>
                                             </div>
                                         </div>
                                         <div class="ht-tier-card__body">
-                                            <p>The highest duck surface temperature is <strong>34°C or below</strong>. The ducks are shedding heat normally, so no intervention is needed. Keep water, shade, and airflow as usual.</p>
+                                            <p>The highest duck surface temperature is <strong>35.7°C or below</strong>. The ducks are shedding heat normally, so no intervention is needed. Keep water, shade, and airflow as usual.</p>
+                                            <p class="ht-tier-card__urgency">Usually <strong>Routine</strong>; <strong>Monitor</strong> when the air is very hot and humid.</p>
                                         </div>
                                         <div class="ht-tier-card__action"><i data-lucide="circle-check"></i> Keep routine monitoring</div>
                                     </li>
                                     <li class="ht-tier-card ht-tier-card--mild">
                                         <div class="ht-tier-card__head">
                                             <i data-lucide="sun" class="ht-tier-card__icon" aria-hidden="true"></i>
-                                            <strong class="ht-tier-card__title">Mild</strong>
+                                            <strong class="ht-tier-card__title">Mild Heat Stress</strong>
                                             <div class="ht-tier-card__pills">
-                                                <span class="ht-pill ht-pill--moderate">MODERATE</span>
+                                                <span class="ht-pill ht-pill--moderate">MONITOR</span>
                                             </div>
                                         </div>
                                         <div class="ht-tier-card__body">
-                                            <p>The highest duck surface temperature is <strong>above 34°C, up to 37°C</strong>. Heat is building up and early signs such as panting may appear. Act early so the ducks do not climb into heat stress.</p>
+                                            <p>The highest duck surface temperature is <strong>35.8°C to 43.6°C</strong>. Heat is building up and early signs such as panting may appear. Watch the ducks closely and act early so they do not climb into heavier heat stress.</p>
+                                            <p class="ht-tier-card__urgency">Usually <strong>Monitor</strong>; <strong>Urgent</strong> when the air is very hot and humid, <strong>Routine</strong> when it is cool.</p>
                                         </div>
                                         <div class="ht-tier-card__action"><i data-lucide="shield"></i> Take preventive steps</div>
                                     </li>
-                                    <li class="ht-tier-card ht-tier-card--stress">
+                                    <li class="ht-tier-card ht-tier-card--moderate">
                                         <div class="ht-tier-card__head">
                                             <i data-lucide="alert-triangle" class="ht-tier-card__icon" aria-hidden="true"></i>
-                                            <strong class="ht-tier-card__title">Heat Stress</strong>
+                                            <strong class="ht-tier-card__title">Moderate Heat Stress</strong>
                                             <div class="ht-tier-card__pills">
-                                                <span class="ht-pill ht-pill--high">HIGH</span>
+                                                <span class="ht-pill ht-pill--high">URGENT</span>
+                                            </div>
+                                        </div>
+                                        <div class="ht-tier-card__body">
+                                            <p>The highest duck surface temperature is <strong>43.7°C to 44.9°C</strong>. The ducks can no longer shed heat well. Start cooling now with shade, airflow, water, and misting.</p>
+                                            <p class="ht-tier-card__urgency">Usually <strong>Urgent</strong>; <strong>Critical</strong> when the air is very hot and humid, <strong>Monitor</strong> when it is cool.</p>
+                                        </div>
+                                        <div class="ht-tier-card__action"><i data-lucide="fan"></i> Cool down immediately</div>
+                                    </li>
+                                    <li class="ht-tier-card ht-tier-card--severe">
+                                        <div class="ht-tier-card__head">
+                                            <i data-lucide="siren" class="ht-tier-card__icon" aria-hidden="true"></i>
+                                            <strong class="ht-tier-card__title">Severe Heat Stress</strong>
+                                            <div class="ht-tier-card__pills">
                                                 <span class="ht-pill ht-pill--critical">CRITICAL</span>
                                             </div>
                                         </div>
                                         <div class="ht-tier-card__body">
-                                            <p>The ducks can no longer shed heat well. At <strong>High</strong> (highest surface temperature above 37°C, up to 40°C), start cooling now; at <strong>Critical</strong> (above 40°C), take emergency action and contact a veterinarian.</p>
+                                            <p>The highest duck surface temperature is <strong>45.0°C or above</strong>. The ducks are in danger. Take emergency cooling action right away and contact a veterinarian.</p>
+                                            <p class="ht-tier-card__urgency">Always <strong>Critical</strong>, whatever the air conditions.</p>
                                         </div>
-                                        <div class="ht-tier-card__action"><i data-lucide="siren"></i> Cool down immediately</div>
+                                        <div class="ht-tier-card__action"><i data-lucide="siren"></i> Emergency action, call a vet</div>
                                     </li>
                                 </ol>
                             </div>
@@ -1038,7 +1086,7 @@
                                     <span class="ht-howto-step__num">Monitor</span>
                                 </div>
                                 <h3 class="ht-howto-step__title">Watch the Live Page</h3>
-                                <p class="ht-howto-step__text">Open <strong>Live</strong> to see the camera feeds, duck count, and ambient temperature and humidity. <strong>ACTIVE</strong> on the sensor panel means your device is connected. Every 30 minutes, ducks are rated <strong>Normal</strong>, <strong>Mild</strong>, or <strong>Heat Stress</strong>.</p>
+                                <p class="ht-howto-step__text">Open <strong>Live</strong> to see the camera feeds, duck count, and ambient temperature and humidity. <strong>ACTIVE</strong> on the sensor panel means your device is connected. Every 30 minutes, ducks are rated <strong>Thermal Comfort</strong>, <strong>Mild Heat Stress</strong>, <strong>Moderate Heat Stress</strong>, or <strong>Severe Heat Stress</strong>.</p>
                             </li>
                             <li class="ht-howto-step">
                                 <div class="ht-howto-step__marker">
@@ -1046,7 +1094,7 @@
                                     <span class="ht-howto-step__num">Insights</span>
                                 </div>
                                 <h3 class="ht-howto-step__title">Follow the Insights</h3>
-                                <p class="ht-howto-step__text">Open <strong>Insights</strong> for duck counts and AI recommendations. Click any result to see its details and the suggested actions. Each result shows a severity from <strong>Low</strong> to <strong>Critical</strong>, so you know what to act on first.</p>
+                                <p class="ht-howto-step__text">Open <strong>Insights</strong> for duck counts and AI recommendations. Click any result to see its details and the suggested actions. Each result shows its status, from <strong>Thermal Comfort</strong> to <strong>Severe Heat Stress</strong>, and an urgency level from <strong>Routine</strong> to <strong>Critical</strong>, so you know what to act on first.</p>
                             </li>
                             <li class="ht-howto-step">
                                 <div class="ht-howto-step__marker">
@@ -1062,7 +1110,7 @@
                                     <span class="ht-howto-step__num">Alerts</span>
                                 </div>
                                 <h3 class="ht-howto-step__title">Manage Alerts &amp; Settings</h3>
-                                <p class="ht-howto-step__text">The bell icon lists your Heat Stress alerts. The gear icon opens Settings, where you can turn the cameras, AI detection, and alert notifications on or off.</p>
+                                <p class="ht-howto-step__text">The bell icon lists your Urgent and Critical alerts. The gear icon opens Settings, where you can turn the cameras, AI detection, and alert notifications on or off.</p>
                             </li>
                         </ol>
                         </div>
@@ -1083,7 +1131,7 @@
                                     <span class="ht-guide-card__icon"><i data-lucide="thermometer-sun"></i></span>
                                     <h3 class="ht-guide-card__title">What is heat stress?</h3>
                                 </div>
-                                <p class="ht-guide-card__text">Heat stress occurs when a duck cannot shed heat fast enough and its surface temperature rises above safe limits. HeatTrack rates the risk from each duck's surface temperature, read by a thermal camera.</p>
+                                <p class="ht-guide-card__text">Heat stress occurs when a duck cannot shed heat fast enough and its surface temperature rises above safe limits. HeatTrack rates each reading's status from the ducks' highest surface temperature, read by a thermal camera, and its urgency level from that status together with the ambient temperature and humidity.</p>
                                 <div class="ht-guide-card__box">
                                     <p class="ht-guide-card__label">Signs to watch for</p>
                                     <ul class="ht-guide-card__list">
@@ -1146,7 +1194,7 @@
                                 <p class="ht-cap-card__text">An AI model finds and counts the ducks on the RGB feed, while the thermal feed boxes each duck with its estimated surface temperature in real time.</p>
                                 <ul class="ht-cap-card__list">
                                     <li>Side-by-side RGB and thermal feeds</li>
-                                    <li>Normal, Mild, and Heat Stress counts</li>
+                                    <li>Thermal Comfort, Mild, Moderate, and Severe Heat Stress counts</li>
                                     <li>Fullscreen view and FPS counter on each camera</li>
                                 </ul>
                                 <a href="#live" class="ht-cap-card__link">Open Live <i data-lucide="arrow-right"></i></a>
@@ -1169,10 +1217,10 @@
                                     <span class="ht-cap-card__icon"><i data-lucide="line-chart"></i></span>
                                     <h3 class="ht-cap-card__title">Detection Analytics</h3>
                                 </div>
-                                <p class="ht-cap-card__text">Every 30-minute reading is saved with its status and severity, so you can spot patterns across days and weather changes.</p>
+                                <p class="ht-cap-card__text">Every 30-minute reading is saved with its status and urgency level, so you can spot patterns across days and weather changes.</p>
                                 <ul class="ht-cap-card__list">
                                     <li>Detection log filtered by status and date</li>
-                                    <li>Severity Levels and Detection Distribution charts</li>
+                                    <li>Urgency Levels and Detection Distribution charts</li>
                                     <li>Excel report export</li>
                                 </ul>
                                 <a href="#analytics" class="ht-cap-card__link">Open Analytics <i data-lucide="arrow-right"></i></a>
@@ -1180,11 +1228,11 @@
                             <article class="ht-cap-card ht-cap-card--alert">
                                 <div class="ht-cap-card__head">
                                     <span class="ht-cap-card__icon"><i data-lucide="bell-ring"></i></span>
-                                    <h3 class="ht-cap-card__title">Severity-Based Alerts</h3>
+                                    <h3 class="ht-cap-card__title">Urgency-Based Alerts</h3>
                                 </div>
-                                <p class="ht-cap-card__text">When a 30-minute reading shows Heat Stress, HeatTrack alerts you right away with the severity, surface temperature, and time, so you can act first where it matters.</p>
+                                <p class="ht-cap-card__text">When a 30-minute reading is Urgent or Critical, HeatTrack alerts you right away with the urgency level, surface temperature, and time, so you can act first where it matters.</p>
                                 <ul class="ht-cap-card__list">
-                                    <li>Pop-up when a reading shows Heat Stress</li>
+                                    <li>Pop-up when a reading is Urgent or Critical</li>
                                     <li>Alert list under the bell icon</li>
                                     <li>Turn alerts on or off in Settings</li>
                                 </ul>
@@ -1207,17 +1255,17 @@
                             <article class="ht-rec-preview-card ht-rec-preview-card--thermal">
                                 <div class="ht-rec-preview-card__icon"><i data-lucide="clipboard-list"></i></div>
                                 <h3 class="ht-rec-preview-card__title">Detection Details</h3>
-                                <p class="ht-rec-preview-card__text">The record's status, severity, body and ambient temperatures, duck count, and time.</p>
+                                <p class="ht-rec-preview-card__text">The record's status, urgency level, surface and ambient temperatures, duck count, and time.</p>
                             </article>
                             <article class="ht-rec-preview-card ht-rec-preview-card--info">
                                 <div class="ht-rec-preview-card__icon"><i data-lucide="file-text"></i></div>
                                 <h3 class="ht-rec-preview-card__title">Summary</h3>
-                                <p class="ht-rec-preview-card__text">What was found, such as how many ducks show signs of heat stress and the overall risk.</p>
+                                <p class="ht-rec-preview-card__text">What was found, such as how many ducks show signs of heat stress and what the urgency level means.</p>
                             </article>
                             <article class="ht-rec-preview-card ht-rec-preview-card--urgent">
                                 <div class="ht-rec-preview-card__icon"><i data-lucide="zap"></i></div>
                                 <h3 class="ht-rec-preview-card__title">Suggested Actions</h3>
-                                <p class="ht-rec-preview-card__text">Cooling, relocation, and hydration steps matched to the record's severity level.</p>
+                                <p class="ht-rec-preview-card__text">Cooling, relocation, and hydration steps matched to the record's urgency level.</p>
                             </article>
                             <article class="ht-rec-preview-card ht-rec-preview-card--caution">
                                 <div class="ht-rec-preview-card__icon"><i data-lucide="shield"></i></div>
@@ -1257,7 +1305,7 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>Check the <strong>Live</strong> page for the camera feeds and ambient conditions, <strong>Insights</strong> for duck counts and AI recommendations, and <strong>Analytics</strong> for the detection history, charts, and Excel reports. Heat Stress alerts appear under the bell icon, and Settings is under the gear icon. For the full step-by-step guide, see <a href="#about-howto">How to Use HeatTrack</a> on the About page.</p>
+                                        <p>Check the <strong>Live</strong> page for the camera feeds and ambient conditions, <strong>Insights</strong> for duck counts and AI recommendations, and <strong>Analytics</strong> for the detection history, charts, and Excel reports. Urgent and Critical alerts appear under the bell icon, and Settings is under the gear icon. For the full step-by-step guide, see <a href="#about-howto">How to Use HeatTrack</a> on the About page.</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
@@ -1268,7 +1316,7 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>HeatTrack combines three sources: a live RGB camera where an AI model detects and counts your ducks, a thermal camera that estimates each duck's surface temperature, and a DHT22 sensor that measures ambient temperature and humidity. At the first detection and every 30 minutes of monitoring after it, HeatTrack rates the ducks' highest surface temperature together with the ambient temperature and humidity, and records a <strong>Status</strong> (are the ducks heat-stressed?) and a <strong>Severity Level</strong> (how urgent is it?), so you can act before conditions get worse.</p>
+                                        <p>HeatTrack combines three sources: a live RGB camera where an AI model detects and counts your ducks, a thermal camera that estimates each duck's surface temperature, and a DHT22 sensor that measures ambient temperature and humidity. At the first detection and every 30 minutes of monitoring after it, HeatTrack rates the ducks' highest surface temperature together with the ambient temperature and humidity, and records a <strong>Status</strong> (how heat-stressed are the ducks?) and an <strong>Urgency Level</strong> (how fast should you act?), so you can act before conditions get worse.</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
@@ -1290,7 +1338,7 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>The colors show surface heat on a fixed 25–45°C scale, not a risk rating. <strong>Black to purple (25–30°C)</strong> is the coolest, usually the floor, water, and shade. <strong>Red (30–35°C)</strong> is warm, such as a duck's feathered body. <strong>Orange (35–40°C)</strong> is hot, such as the head, eyes, bill, and legs. <strong>Yellow to white (40–45°C)</strong> is the hottest spot in view. The heat stress rating comes from the Status and Severity Level, not from the colors. Always check the thermal view together with the ducks' behavior on the RGB feed.</p>
+                                        <p>The colors show surface heat on a fixed 25–45°C scale, not a risk rating. <strong>Black to purple (25–30°C)</strong> is the coolest, usually the floor, water, and shade. <strong>Red (30–35°C)</strong> is warm, such as a duck's feathered body. <strong>Orange (35–40°C)</strong> is hot, such as the head, eyes, bill, and legs. <strong>Yellow to white (40–45°C)</strong> is the hottest spot in view. The heat stress rating comes from the Status and Urgency Level, not from the colors. Always check the thermal view together with the ducks' behavior on the RGB feed.</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
@@ -1301,18 +1349,18 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>The Insights page shows one recommendation for every 30-minute reading in which ducks were detected, newest first. Each one is labeled with its Severity Level, from Low to Critical, and its steps are matched to that level. When available, AI rewrites them for the current conditions, marked with an <strong>AI</strong> badge. Tap any card for its Detection Details, Summary, Suggested Actions (cooling, moving ducks, hydration), and Heat Stress Prevention (airflow, shade, water, feeding times).</p>
+                                        <p>The Insights page shows one recommendation for every 30-minute reading in which ducks were detected, newest first. Each one is labeled with its Urgency Level, from Routine to Critical, and its steps are matched to that level. When available, AI rewrites them for the current conditions, marked with an <strong>AI</strong> badge. Tap any card for its Detection Details, Summary, Suggested Actions (cooling, moving ducks, hydration), and Heat Stress Prevention (airflow, shade, water, feeding times).</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
                                     <summary class="ht-faq__trigger">
                                         <span class="ht-faq__tag ht-faq__tag--monitor">Monitoring</span>
                                         <span class="ht-faq__icon ht-faq__icon--monitor" aria-hidden="true"><i data-lucide="gauge"></i></span>
-                                        <span class="ht-faq__question">What is the difference between Status and Severity Level?</span>
+                                        <span class="ht-faq__question">What is the difference between Status and Urgency Level?</span>
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>The <strong>Status</strong> tells you whether the ducks are heat-stressed: <strong>Normal</strong> (no), <strong>Mild</strong> (not yet, but an early warning), or <strong>Heat Stress</strong> (yes). The <strong>Severity Level</strong> (Low, Moderate, High, or Critical) tells you how urgent it is. Severity starts from the ducks' highest surface temperature from the thermal camera: Low (34°C or below), Moderate (above 34°C, up to 37°C), High (above 37°C, up to 40°C), or Critical (above 40°C). The ambient temperature and humidity from the DHT22 sensor can then move it up or down one level; a duck above 40°C is always Critical. The status follows from the final severity: Low is Normal, Moderate is Mild, and High or Critical is Heat Stress. Use the status for a quick check and the severity to decide how fast to act.</p>
+                                        <p>The <strong>Status</strong> tells you how much heat stress the ducks are under, strictly from their highest surface temperature on the thermal camera: <strong>Thermal Comfort</strong> (35.7°C or below), <strong>Mild Heat Stress</strong> (35.8–43.6°C), <strong>Moderate Heat Stress</strong> (43.7–44.9°C), or <strong>Severe Heat Stress</strong> (45.0°C or above). The <strong>Urgency Level</strong> (Routine, Monitor, Urgent, or Critical) tells you how fast to act. It starts at the usual level for the status (Routine, Monitor, Urgent, Critical in the same order), then the ambient temperature and humidity from the DHT22 sensor can move it one level: very hot, humid air raises it and cool air can lower it. So a Mild Heat Stress reading can be Urgent on a hot, humid day. Severe Heat Stress is always Critical. Use the status for a quick check and the urgency level to decide how fast to act.</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
@@ -1323,7 +1371,7 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>HeatTrack alerts you when a 30-minute reading has the <strong>Heat Stress</strong> status, meaning a High or Critical severity. The first detection itself does not raise an alert. The alert is added to the <strong>Alerts &amp; Notifications</strong> panel under the bell icon, and a pop-up appears on screen for about 5 seconds. Each alert shows the surface temperature, severity, and time so you can handle the most urgent cases first. Normal and Mild records do not trigger alerts.</p>
+                                        <p>HeatTrack alerts you when a 30-minute reading has an <strong>Urgent</strong> or <strong>Critical</strong> urgency level, whatever its status. The first detection itself does not raise an alert. The alert is added to the <strong>Alerts &amp; Notifications</strong> panel under the bell icon (orange for Urgent Level, red for Critical Level), and a pop-up appears on screen for about 5 seconds. Each alert shows the surface temperature, urgency level, and time so you can handle the most urgent cases first. Routine and Monitor readings do not trigger alerts.</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
@@ -1345,7 +1393,7 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>The camera feeds stream continuously while Camera Streams is on. DHT22 readings are saved about every 10 seconds, updating the Temperature and Humidity tiles and the Environmental Trend chart. When ducks are first detected, that detection is added to the Detection Log History. After that, a new Status and Severity reading, marked <strong>30 min</strong>, is added 20 minutes later (completing the first 30 minutes of monitoring) and then every 30 minutes, and the KPI cards, Analytics charts, and recommendations update to match. Periods with no ducks detected, or with ducks the thermal camera could not measure, add no record, and if there is no reading for 10 minutes (no ducks, or ducks without a surface temperature), the next detection starts a new count.</p>
+                                        <p>The camera feeds stream continuously while Camera Streams is on. DHT22 readings are saved about every 10 seconds, updating the Temperature and Humidity tiles and the Environmental Trend chart. When ducks are first detected, that detection is added to the Detection Log History. After that, a new Status and Urgency Level reading, marked <strong>30 min</strong>, is added 20 minutes later (completing the first 30 minutes of monitoring) and then every 30 minutes, and the KPI cards, Analytics charts, and recommendations update to match. Periods with no ducks detected, or with ducks the thermal camera could not measure, add no record, and if there is no reading for 10 minutes (no ducks, or ducks without a surface temperature), the next detection starts a new count.</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
@@ -1367,7 +1415,7 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>Absolutely. HeatTrack is an assistive monitoring tool—not a replacement for on-site welfare checks or veterinarian guidance. AI detections and recommendations may contain errors. Always confirm alerts with direct observation and follow your farm protocols before taking critical action, especially for High or Critical severity.</p>
+                                        <p>Absolutely. HeatTrack is an assistive monitoring tool—not a replacement for on-site welfare checks or veterinarian guidance. AI detections and recommendations may contain errors. Always confirm alerts with direct observation and follow your farm protocols before taking critical action, especially for Urgent or Critical urgency levels.</p>
                                     </div>
                                 </details>
                             </div>
@@ -1409,8 +1457,10 @@
                                     <div class="ht-chip" id="normalTimestamp">--</div>
                                     <div class="ht-chip ht-chip--stack" id="normalDuckStats">
                                         <div>Ducks: --</div>
-                                        <div>Normal: --</div>
-                                        <div>Heat Stress: --</div>
+                                        <div>Thermal Comfort: --</div>
+                                        <div>Mild Heat Stress: --</div>
+                                        <div>Moderate Heat Stress: --</div>
+                                        <div>Severe Heat Stress: --</div>
                                     </div>
                                 </div>
                                 <div class="ht-camera__hud ht-camera__hud--bl">
@@ -1437,8 +1487,10 @@
                                     <div class="ht-chip" id="thermalTimestamp">--</div>
                                     <div class="ht-chip ht-chip--stack" id="thermalDuckStats">
                                         <div>Ducks: --</div>
-                                        <div>Normal: --</div>
-                                        <div>Heat Stress: --</div>
+                                        <div>Thermal Comfort: --</div>
+                                        <div>Mild Heat Stress: --</div>
+                                        <div>Moderate Heat Stress: --</div>
+                                        <div>Severe Heat Stress: --</div>
                                     </div>
                                 </div>
                                 <div class="ht-camera__hud ht-camera__hud--bl">
@@ -1550,9 +1602,10 @@
                             <div class="ht-toolbar ht-toolbar--wrap">
                                 <select id="logFilter" class="ht-select">
                                     <option value="all">All Events</option>
-                                    <option value="heatstress">Heat Stress Only</option>
-                                    <option value="mild">Mild Only</option>
-                                    <option value="normal">Normal Only</option>
+                                    <option value="severe">Severe Heat Stress Only</option>
+                                    <option value="moderate">Moderate Heat Stress Only</option>
+                                    <option value="mild">Mild Heat Stress Only</option>
+                                    <option value="comfort">Thermal Comfort Only</option>
                                 </select>
                                 <select id="logDateRange" class="ht-select">
                                     <option value="all">All Times</option>
@@ -1593,7 +1646,7 @@
                                         <th>Highest Surface Temp</th>
                                         <th>Duck Count</th>
                                         <th>Batch Count</th>
-                                        <th>Severity</th>
+                                        <th>Urgency Level</th>
                                     </tr>
                                 </thead>
                                 <tbody id="detectionLogBody"></tbody>
@@ -1602,13 +1655,13 @@
                                 <tfoot class="ht-log-sizer" aria-hidden="true">
                                     <tr>
                                         <td class="ht-log-cell--mono"><div class="ht-log-sizer__cell">September 30, 2026, 12:00:00 PM <span style="display:inline-block;margin-left:.4rem;padding:.05rem .45rem;border-radius:999px;font:700 .68rem 'DM Sans',system-ui,sans-serif;vertical-align:middle">30 min</span></div></td>
-                                        <td><div class="ht-log-sizer__cell"><div class="ht-log-status"><i data-lucide="alert-triangle"></i><span>HEAT STRESS</span></div></div></td>
+                                        <td><div class="ht-log-sizer__cell"><div class="ht-log-status"><i data-lucide="alert-triangle"></i><span>MODERATE HEAT STRESS</span></div></div></td>
                                         <td class="ht-log-cell--mono"><div class="ht-log-sizer__cell">00.0°C</div></td>
                                         <td class="ht-log-cell--mono"><div class="ht-log-sizer__cell">00.0°C</div></td>
                                         <td class="ht-log-cell--mono"><div class="ht-log-sizer__cell">00.0°C</div></td>
                                         <td class="ht-log-cell--mono"><div class="ht-log-sizer__cell">999 ducks</div></td>
                                         <td class="ht-log-cell--mono"><div class="ht-log-sizer__cell">9999</div></td>
-                                        <td><div class="ht-log-sizer__cell"><span class="ht-pill ht-pill--moderate">MODERATE</span></div></td>
+                                        <td><div class="ht-log-sizer__cell"><span class="ht-pill ht-pill--moderate">CRITICAL</span></div></td>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -1627,7 +1680,7 @@
                             <div class="ht-panel__head">
                                 <div class="ht-panel__label">
                                     <i data-lucide="bar-chart-3"></i>
-                                    <span>Severity Levels</span>
+                                    <span>Urgency Levels</span>
                                 </div>
                             </div>
                             <div class="ht-panel__pad">
@@ -1672,22 +1725,22 @@
                         <div class="ht-kpi">
                             <div class="ht-kpi__icon ht-kpi__icon--low"><i data-lucide="check-circle"></i></div>
                             <div id="normalCount" class="ht-kpi__value">0</div>
-                            <div class="ht-kpi__label">Normal Ducks</div>
+                            <div class="ht-kpi__label">Thermal Comfort</div>
                         </div>
                         <div class="ht-kpi">
-                            <div class="ht-kpi__icon ht-kpi__icon--moderate"><i data-lucide="sun-medium"></i></div>
+                            <div class="ht-kpi__icon ht-kpi__icon--moderate"><i data-lucide="sun"></i></div>
                             <div id="mildCount" class="ht-kpi__value">0</div>
-                            <div class="ht-kpi__label">Mild Detections</div>
+                            <div class="ht-kpi__label">Mild Heat Stress</div>
                         </div>
                         <div class="ht-kpi">
                             <div class="ht-kpi__icon ht-kpi__icon--high"><i data-lucide="alert-triangle"></i></div>
                             <div id="stressCount" class="ht-kpi__value">0</div>
-                            <div class="ht-kpi__label">Heat Stress Detected</div>
+                            <div class="ht-kpi__label">Moderate Heat Stress</div>
                         </div>
                         <div class="ht-kpi">
                             <div class="ht-kpi__icon ht-kpi__icon--critical"><i data-lucide="siren"></i></div>
                             <div id="criticalCount" class="ht-kpi__value">0</div>
-                            <div class="ht-kpi__label">Critical Cases</div>
+                            <div class="ht-kpi__label">Severe Heat Stress</div>
                         </div>
                     </div>
 
@@ -1844,7 +1897,7 @@
         <section id="alertToast" class="ht-toast" role="status" aria-live="polite" aria-label="Notification">
             <div class="ht-toast__body">
                 <div class="ht-toast__head">
-                    <span class="ht-toast__title"><span class="ht-toast__icon"><i data-lucide="alert-triangle"></i></span><span id="toastTitle">Heat stress detected</span></span>
+                    <span class="ht-toast__title"><span class="ht-toast__icon"><i data-lucide="alert-triangle"></i></span><span id="toastTitle">Urgent Level</span></span>
                     <span id="toastLevel" class="ht-toast__level"></span>
                 </div>
                 <p id="toastStats" class="ht-toast__stats"></p>
