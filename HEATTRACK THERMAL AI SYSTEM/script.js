@@ -693,8 +693,7 @@ function initAuth() {
         document.querySelector('.ht-role-switcher')?.classList.add('u-hidden');
         authApp.classList.add('u-hidden');
         loadAlertsPreference();
-        updateSystemToggleStates();
-        await loadAccountSettings();
+        loadDeviceSettings();
         showView(route || getRouteFromHash());
         await loadCloudData();
         subscribeRealtime(currentUser.id);
@@ -1197,8 +1196,8 @@ const state = {
     alertsPageSize: 10,
     recommendationsDisplayed: 0,
     recommendationsPageSize: 8,
-    cameraActive: true,     // account-wide (user_settings), same on every device
-    aiActive: true,         // account-wide (user_settings), same on every device
+    cameraActive: true,     // this device's Camera Streams choice (browser storage)
+    aiActive: true,         // this device's AI Detection choice (browser storage)
     alertsWanted: true,     // this device's Alert Notifications choice (browser storage)
     alertsEnabled: true,    // alertsWanted, and only while cameras and AI are on
     lastToastDetection: null,
@@ -3128,12 +3127,11 @@ function loadSavedAlerts() {
 }
 
 // ============================================
-// SETTINGS: Camera Streams and AI Detection Model are saved for the account
-// (public.user_settings, see user_settings.sql), so turning them off on one
-// device turns them off on every device signed in to it. Alert Notifications
-// are saved in this browser only, so each device chooses for itself.
+// SETTINGS: Camera Streams, AI Detection Model and Alert Notifications are
+// saved in this browser per account, so each device chooses for itself.
 // ============================================
 const alertsPrefKey = () => (currentUser?.id ? `heattrack-alerts-on-${currentUser.id}` : null);
+const deviceSettingsKey = () => (currentUser?.id ? `heattrack-settings-${currentUser.id}` : null);
 
 function loadAlertsPreference() {
     let saved = null;
@@ -3147,51 +3145,22 @@ function saveAlertsPreference() {
     try { localStorage.setItem(key, state.alertsWanted ? 'on' : 'off'); } catch (_) { /* no storage */ }
 }
 
-// A change saved on this device is not overwritten by an older copy read
-// back from the server while the save is still on its way
-let accountSettingsSaving = 0;
-
-// row: a user_settings row, or null for "never changed" (both on)
-function applyAccountSettings(row) {
-    if (accountSettingsSaving) return;
-    const camera = row?.camera_streams !== false;
-    const ai = camera && row?.ai_detection !== false;
-    if (camera === state.cameraActive && ai === state.aiActive) return;
-    state.cameraActive = camera;
-    state.aiActive = ai;
+// Nothing saved yet = both on
+function loadDeviceSettings() {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(deviceSettingsKey()) || 'null'); } catch (_) { /* no storage */ }
+    state.cameraActive = saved?.camera !== false;
+    state.aiActive = state.cameraActive && saved?.ai !== false;
     updateSystemToggleStates();
     drawAnnotations();
 }
 
-async function loadAccountSettings() {
-    const uid = currentUser?.id;
-    if (!uid) return;
-    const { data, error } = await sb.from('user_settings')
-        .select('camera_streams, ai_detection').eq('user_id', uid).maybeSingle();
-    if (error) {
-        console.warn('Could not load settings (has user_settings.sql been run?):', error);
-        return;
-    }
-    applyAccountSettings(data);
-}
-
-async function saveAccountSettings() {
-    const uid = currentUser?.id;
-    if (!uid) return;
-    accountSettingsSaving++;
+function saveDeviceSettings() {
+    const key = deviceSettingsKey();
+    if (!key) return;
     try {
-        const { error } = await sb.from('user_settings').upsert({
-            user_id: uid,
-            camera_streams: state.cameraActive,
-            ai_detection: state.aiActive,
-            updated_at: new Date().toISOString(),
-        });
-        if (error) console.warn('Could not save settings for the account:', error);
-    } finally {
-        accountSettingsSaving--;
-    }
-    // Show what the account really has (the saved values, or the old ones if saving failed)
-    await loadAccountSettings();
+        localStorage.setItem(key, JSON.stringify({ camera: state.cameraActive, ai: state.aiActive }));
+    } catch (_) { /* no storage: the choice lasts for this visit only */ }
 }
 
 // Heat-stress notifications: the 30-minute readings with Urgent or Critical
@@ -4240,21 +4209,20 @@ function setupEventListeners() {
         syncCameraZoomCursor(thermalCameraContainer);
     });
 
-    // System toggles: Camera Streams and AI Detection apply to the whole account,
-    // Alert Notifications only to this device
+    // System toggles: each one applies to this device only
     document.getElementById('cameraToggle')?.addEventListener('change', (e) => {
         state.cameraActive = e.target.checked;
         if (!state.cameraActive) state.aiActive = false;
         updateSystemToggleStates();
         drawAnnotations();
-        saveAccountSettings();
+        saveDeviceSettings();
     });
 
     document.getElementById('aiToggle')?.addEventListener('change', (e) => {
         state.aiActive = e.target.checked;
         updateSystemToggleStates();
         drawAnnotations();
-        saveAccountSettings();
+        saveDeviceSettings();
     });
 
     document.getElementById('alertToggle')?.addEventListener('change', (e) => {
@@ -5110,9 +5078,6 @@ function subscribeRealtime(userId) {
         .on('postgres_changes',
             { event: 'INSERT', schema: 'public', table: 'analytics', filter: `userid=eq.${userId}` },
             (payload) => handleAnalyticsInsert(payload.new))
-        .on('postgres_changes',
-            { event: '*', schema: 'public', table: 'user_settings', filter: `user_id=eq.${userId}` },
-            (payload) => applyAccountSettings(payload.eventType === 'DELETE' ? null : payload.new))
         .subscribe((status) => {
             if (status === 'CHANNEL_ERROR') console.warn('Realtime channel error. Is Realtime enabled for these tables?');
         });
@@ -5139,7 +5104,6 @@ async function pollNewRows(userId) {
         ]);
         (envRes.data || []).forEach(handleEnvironmentInsert);
         (analyticsRes.data || []).forEach(handleAnalyticsInsert);   // oldest first, so newest ends on top
-        await loadAccountSettings();   // Settings changed on another device
     } catch (err) {
         console.warn('HeatTrack: could not check for new rows', err);
     } finally {
@@ -5658,7 +5622,6 @@ async function loadAdminDevices() {
     const trash = await sb.rpc('admin_list_device_trash');
     if (trash.error) console.warn('Device trash unavailable (run device_trash.sql in Supabase).', trash.error);
     adminDeviceTrashReady = !trash.error;
-    adminDeviceTrashReady = !trash.error;
     adminDeviceTrash = trash.error ? [] : (trash.data || []);
     checkAdminDeviceReach();
 }
@@ -5734,6 +5697,7 @@ function renderAdminDevices() {
                 ? `<span>Owner:</span> ${escapeHtml(owner ? `${adminFullName(owner)} (@${owner.username})` : 'Unknown account')}`
                 : '<span>No owner yet</span>';
             return `<li class="ht-admin-device__item"><span class="ht-admin-device__icon${online ? ' is-online' : ''}"><i data-lucide="cpu"></i></span><div class="ht-admin-device__info"><div class="ht-admin-device__row"><span class="ht-admin-device__code">${code}</span><span class="ht-adash__chip ht-adash__chip--${device.owner_id ? 'approved' : 'pending'}">${device.owner_id ? 'Linked' : 'Available'}</span></div><span class="ht-admin-device__owner">${ownerText}</span><span class="ht-admin-device__meta"><span class="ht-admin-device__dot${online ? ' is-online' : ''}"></span>${reachText}</span></div><div class="ht-admin-device__tools"><button type="button" class="ht-admin-device__copy" data-device-copy="${code}" aria-label="Copy ${code}" data-tooltip="Copy Device ID"><i data-lucide="copy"></i></button><button type="button" class="ht-admin-device__copy" data-device-edit="${code}" aria-label="Edit ${code}" data-tooltip="Edit"><i data-lucide="pencil"></i></button><button type="button" class="ht-admin-device__copy ht-admin-device__copy--danger" data-device-delete="${code}" aria-label="Delete ${code}" data-tooltip="Delete"><i data-lucide="trash-2"></i></button></div></li>`;
+        }).join('');
     }
     const emptyText = adminDeviceFilter === 'trash' ? 'Trash is empty' : search ? 'No devices match your search' : 'No devices registered yet';
     list.innerHTML = html || `<li class="ht-admin-device__empty"><i data-lucide="${adminDeviceFilter === 'trash' ? 'trash-2' : 'cpu'}"></i>${emptyText}</li>`;
