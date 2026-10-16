@@ -692,6 +692,9 @@ function initAuth() {
         document.body.classList.remove('ht-auth-mode');
         document.querySelector('.ht-role-switcher')?.classList.add('u-hidden');
         authApp.classList.add('u-hidden');
+        loadAlertsPreference();
+        updateSystemToggleStates();
+        await loadAccountSettings();
         showView(route || getRouteFromHash());
         await loadCloudData();
         subscribeRealtime(currentUser.id);
@@ -1194,9 +1197,10 @@ const state = {
     alertsPageSize: 10,
     recommendationsDisplayed: 0,
     recommendationsPageSize: 8,
-    cameraActive: true,
-    aiActive: true,
-    alertsEnabled: true,
+    cameraActive: true,     // account-wide (user_settings), same on every device
+    aiActive: true,         // account-wide (user_settings), same on every device
+    alertsWanted: true,     // this device's Alert Notifications choice (browser storage)
+    alertsEnabled: true,    // alertsWanted, and only while cameras and AI are on
     lastToastDetection: null,
     stats: {
         stressCount: 0,
@@ -3123,6 +3127,73 @@ function loadSavedAlerts() {
     renderAlerts();
 }
 
+// ============================================
+// SETTINGS: Camera Streams and AI Detection Model are saved for the account
+// (public.user_settings, see user_settings.sql), so turning them off on one
+// device turns them off on every device signed in to it. Alert Notifications
+// are saved in this browser only, so each device chooses for itself.
+// ============================================
+const alertsPrefKey = () => (currentUser?.id ? `heattrack-alerts-on-${currentUser.id}` : null);
+
+function loadAlertsPreference() {
+    let saved = null;
+    try { saved = localStorage.getItem(alertsPrefKey()); } catch (_) { /* no storage */ }
+    state.alertsWanted = saved !== 'off';
+}
+
+function saveAlertsPreference() {
+    const key = alertsPrefKey();
+    if (!key) return;
+    try { localStorage.setItem(key, state.alertsWanted ? 'on' : 'off'); } catch (_) { /* no storage */ }
+}
+
+// A change saved on this device is not overwritten by an older copy read
+// back from the server while the save is still on its way
+let accountSettingsSaving = 0;
+
+// row: a user_settings row, or null for "never changed" (both on)
+function applyAccountSettings(row) {
+    if (accountSettingsSaving) return;
+    const camera = row?.camera_streams !== false;
+    const ai = camera && row?.ai_detection !== false;
+    if (camera === state.cameraActive && ai === state.aiActive) return;
+    state.cameraActive = camera;
+    state.aiActive = ai;
+    updateSystemToggleStates();
+    drawAnnotations();
+}
+
+async function loadAccountSettings() {
+    const uid = currentUser?.id;
+    if (!uid) return;
+    const { data, error } = await sb.from('user_settings')
+        .select('camera_streams, ai_detection').eq('user_id', uid).maybeSingle();
+    if (error) {
+        console.warn('Could not load settings (has user_settings.sql been run?):', error);
+        return;
+    }
+    applyAccountSettings(data);
+}
+
+async function saveAccountSettings() {
+    const uid = currentUser?.id;
+    if (!uid) return;
+    accountSettingsSaving++;
+    try {
+        const { error } = await sb.from('user_settings').upsert({
+            user_id: uid,
+            camera_streams: state.cameraActive,
+            ai_detection: state.aiActive,
+            updated_at: new Date().toISOString(),
+        });
+        if (error) console.warn('Could not save settings for the account:', error);
+    } finally {
+        accountSettingsSaving--;
+    }
+    // Show what the account really has (the saved values, or the old ones if saving failed)
+    await loadAccountSettings();
+}
+
 // Heat-stress notifications: the 30-minute readings with Urgent or Critical
 // urgency (see heatStressAlertIds). Covers results loaded
 // with the page and results that arrive live.
@@ -3326,13 +3397,9 @@ function updateSystemToggleStates() {
     const normalCameraContainer = document.getElementById('normalCameraContainer');
     const thermalCameraContainer = document.getElementById('thermalCameraContainer');
 
-    if (!state.cameraActive) {
-        state.aiActive = false;
-        state.alertsEnabled = false;
-    }
-    if (!state.aiActive) {
-        state.alertsEnabled = false;
-    }
+    if (!state.cameraActive) state.aiActive = false;
+    // Alerts need the cameras and the AI; this device's choice comes back with them
+    state.alertsEnabled = state.alertsWanted && state.cameraActive && state.aiActive;
 
     if (cameraToggle) {
         cameraToggle.checked = state.cameraActive;
@@ -4173,31 +4240,27 @@ function setupEventListeners() {
         syncCameraZoomCursor(thermalCameraContainer);
     });
 
-    // System toggles
+    // System toggles: Camera Streams and AI Detection apply to the whole account,
+    // Alert Notifications only to this device
     document.getElementById('cameraToggle')?.addEventListener('change', (e) => {
         state.cameraActive = e.target.checked;
-        if (!state.cameraActive) {
-            state.aiActive = false;
-            state.alertsEnabled = false;
-        }
+        if (!state.cameraActive) state.aiActive = false;
         updateSystemToggleStates();
         drawAnnotations();
+        saveAccountSettings();
     });
 
     document.getElementById('aiToggle')?.addEventListener('change', (e) => {
         state.aiActive = e.target.checked;
-        if (!state.aiActive) {
-            state.alertsEnabled = false;
-        }
         updateSystemToggleStates();
         drawAnnotations();
+        saveAccountSettings();
     });
 
     document.getElementById('alertToggle')?.addEventListener('change', (e) => {
-        state.alertsEnabled = e.target.checked;
-        if (!state.alertsEnabled) {
-            document.getElementById('alertToast')?.classList.remove('is-visible');
-        }
+        state.alertsWanted = e.target.checked;
+        saveAlertsPreference();
+        updateSystemToggleStates();
     });
 
     updateSystemToggleStates();
@@ -4948,6 +5011,11 @@ function refreshDashboard() {
 }
 
 function resetDashboardData() {
+    // Settings go back to the defaults until the next account's are loaded
+    state.cameraActive = true;
+    state.aiActive = true;
+    state.alertsWanted = true;
+    updateSystemToggleStates();
     state.detections = [];
     state.lastEnvId = null;
     state.sensorHistory.temp = [];
@@ -5042,6 +5110,9 @@ function subscribeRealtime(userId) {
         .on('postgres_changes',
             { event: 'INSERT', schema: 'public', table: 'analytics', filter: `userid=eq.${userId}` },
             (payload) => handleAnalyticsInsert(payload.new))
+        .on('postgres_changes',
+            { event: '*', schema: 'public', table: 'user_settings', filter: `user_id=eq.${userId}` },
+            (payload) => applyAccountSettings(payload.eventType === 'DELETE' ? null : payload.new))
         .subscribe((status) => {
             if (status === 'CHANNEL_ERROR') console.warn('Realtime channel error. Is Realtime enabled for these tables?');
         });
@@ -5068,6 +5139,7 @@ async function pollNewRows(userId) {
         ]);
         (envRes.data || []).forEach(handleEnvironmentInsert);
         (analyticsRes.data || []).forEach(handleAnalyticsInsert);   // oldest first, so newest ends on top
+        await loadAccountSettings();   // Settings changed on another device
     } catch (err) {
         console.warn('HeatTrack: could not check for new rows', err);
     } finally {
@@ -5810,9 +5882,17 @@ function openAdminConfirm(message, callback) {
 async function updateAdminProfile(id, values) {
     const duplicate = adminProfiles.some((profile) => profile.id !== id && profile.username.toLowerCase() === values.username.toLowerCase());
     if (duplicate) throw new Error('That username is already taken.');
-    const { error } = await sb.from('profiles').update({ firstname: values.firstName, lastname: values.lastName, username: values.username, email: values.email }).eq('id', id);
-    if (error) throw error;
     const profile = adminFindProfile(id);
+    // The sign-in email lives in Supabase Auth, so change it there (and in profiles) server-side
+    if (values.email && values.email.toLowerCase() !== (profile?.email || '').toLowerCase()) {
+        const { data: emailResult, error: emailError } = await sb.rpc('admin_update_user_email', { target_user: id, new_email: values.email });
+        if (emailError) throw emailError;
+        if (emailResult === 'exists') throw new Error('That email is already used by another account.');
+        if (emailResult === 'invalid') throw new Error(INVALID_EMAIL_MSG);
+        values.email = values.email.trim().toLowerCase();
+    }
+    const { error } = await sb.from('profiles').update({ firstname: values.firstName, lastname: values.lastName, username: values.username }).eq('id', id);
+    if (error) throw error;
     Object.assign(profile, values);
 }
 
