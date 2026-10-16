@@ -7463,10 +7463,12 @@ button.ht-cap-card__link {
 .ht-auth__forgot-card .ht-auth__form input[aria-invalid="true"] { border-color: #dc2626; box-shadow: 0 0 0 2px rgba(220, 38, 38, .12); }
 .ht-auth__forgot-card .ht-auth__eye { right: .45rem; color: #999; }
 .ht-auth__forgot-card .ht-auth__eye svg { width: 1rem; height: 1rem; }
-.ht-auth__forgot-card .ht-auth__hint { margin: -.65rem 0 0; color: #E07B45; font-size: .75rem; line-height: 1.35; }
+.ht-auth__forgot-card .ht-auth__hint { margin: -.1rem 0 .15rem; color: #E07B45; font-size: .75rem; line-height: 1.35; }
 .ht-auth__forgot-card .ht-auth__hint.is-valid { color: #16a34a; }
 .ht-auth__forgot-card .ht-auth__hint.is-invalid { color: #dc2626; }
-.ht-auth__forgot-card .ht-auth__field-error { margin: -.65rem 0 0; color: #dc2626; font-size: .75rem; line-height: 1.35; }
+.ht-auth__forgot-card .ht-auth__strength { color: #737373; }
+.ht-auth__forgot-card .ht-auth__strength span { font-weight: 700; }
+.ht-auth__forgot-card .ht-auth__field-error { margin: -.1rem 0 .15rem; color: #dc2626; font-size: .75rem; line-height: 1.35; }
 .ht-auth__forgot-card .ht-auth__submit { min-height: 2.2rem; margin-top: .55rem; font-size: .85rem; background: #ed620f; }
 .ht-auth__forgot-card .ht-auth__submit:hover { background: #d95108; }
 .ht-auth__forgot-card .ht-auth__submit:disabled { opacity: .58; cursor: not-allowed; }
@@ -7606,7 +7608,7 @@ button.ht-cap-card__link {
     .ht-auth__forgot-card { width: min(440px, 100%); padding: 1.75rem 1.25rem 1.5rem; }
     .ht-auth__forgot-card h2 { margin-bottom: 1.1rem; white-space: normal; }
     .ht-auth__forgot-card .ht-auth__hint,
-    .ht-auth__forgot-card .ht-auth__field-error { margin-top: -.45rem; }
+    .ht-auth__forgot-card .ht-auth__field-error { margin-top: 0; }
     .ht-auth__back { font-size: .875rem; }
     .ht-auth__back button { min-height: 2.25rem; font-size: inherit; }
 }
@@ -8135,6 +8137,10 @@ body.ht-login-loading-open { overflow: hidden; }
 .ht-admin-device__field { display: grid; gap: .35rem; }
 .ht-admin-device__field > label { color: var(--ht-surface-300); font-size: var(--ht-text-sm); font-weight: 600; }
 .ht-admin-device__required { color: #dc2626; margin-left: .15rem; }
+.ht-admin-device__key-field { display: flex; align-items: stretch; gap: .5rem; min-width: 0; }
+.ht-admin-device__key-field .ht-auth__password { flex: 1; min-width: 0; }
+/* Orange .ht-btn--primary, sized to sit level with the 2.6rem key input */
+.ht-admin-device__generate { flex-shrink: 0; height: 2.6rem; padding: 0 1.1rem; white-space: nowrap; }
 .ht-admin-device .ht-auth__device-id input,
 .ht-admin-device .ht-auth__password input,
 .ht-admin-device__input { width: 100%; height: 2.6rem; padding: 0 .8rem; border: 1px solid var(--ht-input-border); border-radius: .6rem; background: #fff; color: var(--ht-surface-50); font: 500 var(--ht-text-base) var(--ht-font); outline: none; transition: border-color .15s, box-shadow .15s; }
