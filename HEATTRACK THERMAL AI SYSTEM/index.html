@@ -905,7 +905,7 @@
                                             <span class="ht-spectrum__level">35–40°C</span>
                                         </div>
                                         <strong>Orange — Hot</strong>
-                                        <p>Hot spots where heat leaves the body, such as the head, eyes, bill, and legs. HeatTrack reads the hottest spot on each duck to estimate its surface temperature.</p>
+                                        <p>Hot spots where heat leaves the body, such as the head, eyes, bill, and legs. These spots are not used for the rating: HeatTrack takes each duck's surface temperature from its body area.</p>
                                         <span class="ht-spectrum__action"><i data-lucide="scan-eye"></i> Hot</span>
                                     </li>
                                     <li class="ht-spectrum__item ht-spectrum__item--critical">
@@ -926,7 +926,7 @@
                                 <div class="ht-article-card__icon ht-article-card__icon--thermal"><i data-lucide="gauge"></i></div>
                                 <h3 class="ht-article-card__h">Status &amp; Urgency Levels</h3>
                             </div>
-                            <p class="ht-prose ht-quickref-intro">At the first detection and every 30 minutes of monitoring after it, HeatTrack records a reading with two labels. The <strong>Status</strong> tells you how much heat stress the ducks are under: <strong>Thermal Comfort</strong>, <strong>Mild Heat Stress</strong>, <strong>Moderate Heat Stress</strong>, or <strong>Severe Heat Stress</strong>. The <strong>Urgency Level</strong> (Routine, Monitor, Urgent, or Critical) tells you how fast to act. The status follows the highest duck surface temperature measured by the thermal camera in that period, strictly by the temperature ranges shown below. The urgency starts at the usual level for that status, then the ambient temperature and humidity from the DHT22 sensor can move it one level: very hot, humid air raises it, and cool air can lower it. So a Mild Heat Stress reading can be Urgent on a hot, humid day. Severe Heat Stress is always Critical. Each record also lists the ducks' lowest and average surface temperatures and the ambient temperature and humidity. Check the status at a glance, then let the urgency level tell you how fast to act.</p>
+                            <p class="ht-prose ht-quickref-intro">At the first detection and every 30 minutes of monitoring after it, HeatTrack records a reading with two labels. The <strong>Status</strong> tells you how much heat stress the ducks are under: <strong>Thermal Comfort</strong>, <strong>Mild Heat Stress</strong>, <strong>Moderate Heat Stress</strong>, or <strong>Severe Heat Stress</strong>. The <strong>Urgency Level</strong> (Routine, Monitor, Urgent, or Critical) tells you how fast to act. The status follows the ducks' highest surface temperature measured by the thermal camera in that period (the body only, not the head, eyes, wings, or feet), strictly by the temperature ranges shown below. The urgency starts at the usual level for that status, then the ambient temperature and humidity from the DHT22 sensor can move it one level: very hot, humid air raises it, and cool air can lower it. So a Mild Heat Stress reading can be Urgent on a hot, humid day. Severe Heat Stress is always Critical. Each record also lists the ducks' lowest and average surface temperatures and the ambient temperature and humidity. Check the status at a glance, then let the urgency level tell you how fast to act.</p>
                             <div class="ht-status-guide">
                                 <!-- Mapping: surface temperature -> status (strict), then the
                                      usual urgency for each status and the one-level moves the
@@ -987,7 +987,7 @@
                                             </div>
                                         </div>
                                         <div class="ht-tier-card__body">
-                                            <p>The highest duck surface temperature is <strong>35.7°C or below</strong>. The ducks are shedding heat normally, so no intervention is needed. Keep water, shade, and airflow as usual.</p>
+                                            <p>The ducks' highest surface temperature is <strong>35.7°C or below</strong>. The ducks are shedding heat normally, so no intervention is needed. Keep water, shade, and airflow as usual.</p>
                                             <p class="ht-tier-card__urgency">Usually <strong>Routine</strong>; <strong>Monitor</strong> when the air is very hot and humid.</p>
                                         </div>
                                         <div class="ht-tier-card__action"><i data-lucide="circle-check"></i> Keep routine monitoring</div>
@@ -1001,7 +1001,7 @@
                                             </div>
                                         </div>
                                         <div class="ht-tier-card__body">
-                                            <p>The highest duck surface temperature is <strong>35.8°C to 43.6°C</strong>. Heat is building up and early signs such as panting may appear. Watch the ducks closely and act early so they do not climb into heavier heat stress.</p>
+                                            <p>The ducks' highest surface temperature is <strong>35.8°C to 43.6°C</strong>. Heat is building up and early signs such as panting may appear. Watch the ducks closely and act early so they do not climb into heavier heat stress.</p>
                                             <p class="ht-tier-card__urgency">Usually <strong>Monitor</strong>; <strong>Urgent</strong> when the air is very hot and humid, <strong>Routine</strong> when it is cool.</p>
                                         </div>
                                         <div class="ht-tier-card__action"><i data-lucide="shield"></i> Take preventive steps</div>
@@ -1015,7 +1015,7 @@
                                             </div>
                                         </div>
                                         <div class="ht-tier-card__body">
-                                            <p>The highest duck surface temperature is <strong>43.7°C to 44.9°C</strong>. The ducks can no longer shed heat well. Start cooling now with shade, airflow, water, and misting.</p>
+                                            <p>The ducks' highest surface temperature is <strong>43.7°C to 44.9°C</strong>. The ducks can no longer shed heat well. Start cooling now with shade, airflow, water, and misting.</p>
                                             <p class="ht-tier-card__urgency">Usually <strong>Urgent</strong>; <strong>Critical</strong> when the air is very hot and humid, <strong>Monitor</strong> when it is cool.</p>
                                         </div>
                                         <div class="ht-tier-card__action"><i data-lucide="fan"></i> Cool down immediately</div>
@@ -1029,7 +1029,7 @@
                                             </div>
                                         </div>
                                         <div class="ht-tier-card__body">
-                                            <p>The highest duck surface temperature is <strong>45.0°C or above</strong>. The ducks are in danger. Take emergency cooling action right away and contact a veterinarian.</p>
+                                            <p>The ducks' highest surface temperature is <strong>45.0°C or above</strong>. The ducks are in danger. Take emergency cooling action right away and contact a veterinarian.</p>
                                             <p class="ht-tier-card__urgency">Always <strong>Critical</strong>, whatever the air conditions.</p>
                                         </div>
                                         <div class="ht-tier-card__action"><i data-lucide="siren"></i> Emergency action, call a vet</div>
@@ -1316,7 +1316,7 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>HeatTrack combines three sources: a live RGB camera where an AI model detects and counts your ducks, a thermal camera that estimates each duck's surface temperature, and a DHT22 sensor that measures ambient temperature and humidity. At the first detection and every 30 minutes of monitoring after it, HeatTrack rates the ducks' highest surface temperature together with the ambient temperature and humidity, and records a <strong>Status</strong> (how heat-stressed are the ducks?) and an <strong>Urgency Level</strong> (how fast should you act?), so you can act before conditions get worse.</p>
+                                        <p>HeatTrack combines three sources: a live RGB camera where an AI model detects and counts your ducks, a thermal camera that estimates the surface temperature of each duck's body area, and a DHT22 sensor that measures ambient temperature and humidity. At the first detection and every 30 minutes of monitoring after it, HeatTrack rates the ducks' highest surface temperature together with the ambient temperature and humidity, and records a <strong>Status</strong> (how heat-stressed are the ducks?) and an <strong>Urgency Level</strong> (how fast should you act?), so you can act before conditions get worse.</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
@@ -1327,7 +1327,18 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>Thermal detection uses an infrared camera to read the surface temperature of everything in view. HeatTrack finds each duck, reads its hottest spot, and uses that to estimate its surface temperature. On the Thermal Monitor, a <strong>white box</strong> shows a duck's estimated surface temperature, and a <strong>gray box</strong> means that duck could not be measured (at the edge of the frame, too far away, or overlapping another duck). The ducks' lowest, average, and highest surface temperatures are saved with every detection record.</p>
+                                        <p>Thermal detection uses an infrared camera to read the surface temperature of everything in view. HeatTrack finds each duck and reads the temperature of its body area to estimate its surface temperature. On the Thermal Monitor, a <strong>white box</strong> shows a duck's estimated surface temperature, and a <strong>gray box</strong> means that duck could not be measured (at the edge of the frame, too far away, or overlapping another duck). The ducks' lowest, average, and highest surface temperatures are saved with every detection record.</p>
+                                    </div>
+                                </details>
+                                <details class="ht-faq__item">
+                                    <summary class="ht-faq__trigger">
+                                        <span class="ht-faq__tag ht-faq__tag--thermal">Thermal</span>
+                                        <span class="ht-faq__icon ht-faq__icon--thermal" aria-hidden="true"><i data-lucide="thermometer"></i></span>
+                                        <span class="ht-faq__question">Which part of the duck does the surface temperature come from?</span>
+                                        <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
+                                    </summary>
+                                    <div class="ht-faq__panel">
+                                        <p>The surface temperature is based on the duck's <strong>body area only</strong>. It is not taken from the head, eyes, bill, wings, or feet, which can read hotter on the thermal view because heat leaves the body there. The status (Thermal Comfort, Mild, Moderate, or Severe Heat Stress) follows the highest surface temperature among the ducks in each reading, and the lowest and average surface temperatures are saved with it.</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
