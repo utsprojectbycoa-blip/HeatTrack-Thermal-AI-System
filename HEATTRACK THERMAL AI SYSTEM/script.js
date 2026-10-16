@@ -94,6 +94,28 @@ function updatePasswordChecklist(value, items, wrapper, label) {
     }
 }
 
+// Forgot Password: a simpler Weak / Moderate / Strong meter.
+// Strong only when every rule is met, i.e. the password will be accepted.
+function updateForgotPasswordStrength(value, wrapper, label) {
+    const score = [
+        value.length >= LIMITS.password.min && value.length <= LIMITS.password.max,
+        /[A-Z]/.test(value),
+        /[a-z]/.test(value),
+        /\d/.test(value),
+        /[^A-Za-z0-9]/.test(value),
+    ].filter(Boolean).length;
+    const strength = !value ? '' : PASSWORD_RULE.test(value) ? 'strong' : score <= 2 ? 'weak' : 'moderate';
+    if (wrapper) {
+        // Reuse the sign-up border colours: red, orange, green
+        if (strength) wrapper.dataset.passwordStrength = strength === 'strong' ? 'very-strong' : strength;
+        else delete wrapper.dataset.passwordStrength;
+    }
+    if (label) {
+        label.textContent = { weak: 'Weak', moderate: 'Moderate', strong: 'Strong' }[strength] || 'Not entered';
+        label.dataset.strength = strength === 'strong' ? 'very-strong' : strength;
+    }
+}
+
 // Blocks copy / cut / paste / drag in a password field (same as Sign Up)
 function blockPasswordClipboard(input) {
     ['copy', 'cut', 'paste', 'drop', 'dragstart'].forEach((evt) => {
@@ -483,8 +505,13 @@ function initAuth() {
         const strengthWrapper = isSignupForm ? pwd.closest('[data-password-strength-wrapper]') : null;
         const requirementItems = isSignupForm ? [...form.querySelectorAll('[data-password-requirement]')] : [];
         const strengthLabel = isSignupForm ? form.querySelector('#signupPasswordStrength span') : null;
+        const forgotWrapper = !isSignupForm ? pwd.closest('[data-password-strength-wrapper]') : null;
+        const forgotLabel = !isSignupForm ? form.querySelector('#forgotPasswordHint span') : null;
         const updateSignupPasswordFeedback = () => {
-            if (!isSignupForm) return;
+            if (!isSignupForm) {
+                updateForgotPasswordStrength(pwd.value, forgotWrapper, forgotLabel);
+                return;
+            }
             updatePasswordChecklist(pwd.value, requirementItems, strengthWrapper, strengthLabel);
         };
 
@@ -500,7 +527,6 @@ function initAuth() {
     });
 
     let forgotHasSubmitted = false;
-    const forgotHint = forgotForm?.querySelector('#forgotPasswordHint');
     const forgotErrors = {
         email: forgotForm?.querySelector('#forgotEmailError'),
         password: forgotForm?.querySelector('#forgotPasswordError'),
@@ -529,10 +555,6 @@ function initAuth() {
             setForgotFieldState(email, forgotErrors.email, emailInvalid ? (!email.value.trim() ? 'Email is required.' : INVALID_EMAIL_MSG) : '');
             setForgotFieldState(password, forgotErrors.password, passwordInvalid ? PASSWORD_MSG : '');
             setForgotFieldState(confirm, forgotErrors.confirm, confirmInvalid ? (confirm.value ? 'Passwords do not match.' : 'Confirmation is required.') : '');
-            if (forgotHint) {
-                forgotHint.classList.toggle('is-invalid', passwordInvalid);
-                forgotHint.classList.toggle('is-valid', isReset && Boolean(password.value) && !passwordInvalid);
-            }
         }
         return !emailInvalid && !passwordInvalid && !confirmInvalid;
     }
@@ -608,6 +630,8 @@ function initAuth() {
         authApp.querySelectorAll('.ht-auth__hint').forEach((hint) => {
             hint.classList.remove('is-invalid', 'is-valid');
         });
+        // Re-render the eye icons that were just reset to raw <i data-lucide> tags
+        if (window.lucide) lucide.createIcons();
     }
 
     const showAuthView = (view) => {
@@ -833,7 +857,8 @@ function initAuth() {
 
         // Password goes to Supabase Auth only (it is hashed there, never stored in our tables).
         // The database trigger reads these values to create the profiles row.
-        // The device trigger links the device to the new account and then removes the key.
+        // The device trigger (device_check_fix.sql) links the device to the new account;
+        // the key stays because the mini PC logger signs its uploads with it.
         const { data, error } = await sb.auth.signUp({
             email,
             password,
@@ -941,16 +966,13 @@ function initAuth() {
                 return;
             }
             if (submitBtn) submitBtn.disabled = true;
-            // Spinner on the Log in / Sign up button while the request runs
-            const showSpinner = type === 'login' || type === 'signup';
+            // Spinner on the Log in / Sign up / Forgot Password button while the request runs
+            const showSpinner = type === 'login' || type === 'signup' || type === 'forgot';
             if (showSpinner) {
                 submitBtn?.classList.add('is-loading');
                 submitBtn?.setAttribute('aria-busy', 'true');
             }
             showAuthMessage(form, '');
-            if (type === 'forgot') {
-                showLoginLoading('forgot', form, () => showAuthMessage(form, 'Something went wrong. Please try again.'));
-            }
             try {
                 if (type === 'login') await handleLogin(form);
                 else if (type === 'signup') await handleSignup(form);
@@ -964,7 +986,7 @@ function initAuth() {
                     submitBtn?.classList.remove('is-loading');
                     submitBtn?.removeAttribute('aria-busy');
                 }
-                if (type === 'login' || type === 'forgot') await hideLoginLoading();
+                if (type === 'login') await hideLoginLoading();
                 if (type === 'login') setLoginFormBusy(form, false);
                 else if (submitBtn) submitBtn.disabled = false;
                 if (type === 'login' && document.body.classList.contains('ht-auth-mode')) focusLoginUsername();
@@ -5650,6 +5672,24 @@ function initAdminDevices() {
     [form?.elements.deviceKey, editForm?.elements.deviceKey].forEach((input) => input && blockSpaces(input));
     [form, editForm].forEach((f) => f?.querySelectorAll('[data-password-toggle]').forEach((toggle) => toggle.addEventListener('click', () => togglePasswordGroup(toggle))));
 
+    // Generate a random 32-character key (letters and numbers) and show it so it can be noted down
+    form?.querySelector('[data-generate-device-key]')?.addEventListener('click', () => {
+        const input = form.elements.deviceKey;
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let key = '';
+        while (key.length < 32) {
+            for (const b of crypto.getRandomValues(new Uint8Array(32))) {
+                // 248 = 4 * 62: skip higher bytes so every character is equally likely
+                if (b < 248 && key.length < 32) key += chars[b % chars.length];
+            }
+        }
+        input.readOnly = false;
+        input.value = key;
+        input.setCustomValidity('');
+        if (input.type === 'password') togglePasswordGroup(input.parentElement.querySelector('[data-password-toggle]'));
+        input.focus();
+    });
+
     document.getElementById('adminDeviceSearch')?.addEventListener('input', renderAdminDevices);
     document.querySelectorAll('[data-device-filter]').forEach((button) => button.addEventListener('click', () => {
         adminDeviceFilter = button.dataset.deviceFilter;
@@ -6199,7 +6239,10 @@ async function initAdminUi() {
         const accept = event.target.closest('[data-admin-accept]');
         if (accept) {
             const { error: acceptError } = await sb.from('profiles').update({ status: 'approved' }).eq('id', accept.dataset.adminAccept);
-            if (acceptError) showAdminToast('Could not approve the account.', 'error');
+            if (acceptError) {
+                console.error('Approve account failed:', acceptError);
+                showAdminToast(`Could not approve the account. ${acceptError.message || ''}`.trim(), 'error');
+            }
             else { adminFindProfile(accept.dataset.adminAccept).status = 'approved'; renderAdminAll(); showAdminToast('Account approved.'); }
         }
         const reject = event.target.closest('[data-admin-reject]');
