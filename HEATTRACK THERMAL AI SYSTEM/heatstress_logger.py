@@ -8,13 +8,11 @@ HeatTrack logger + bridge (mini PC)
   Thermal camera        -> each duck YOLO sees is measured (duck_temperature.py)
   Every 10 minutes      -> one analytics row (interval 10) for that slot
   Every 30 minutes      -> one analytics row (interval 30) for the whole window
-  Rating (both rows)    -> the thermal camera and the DHT22 decide it together:
-                           1. thermal: the ducks' HIGHEST body temperature gives the
-                              starting level (<=34 LOW, >34 MODERATE, >37 HIGH, >40 CRITICAL)
-                           2. DHT22: the highest air temperature + humidity give the THI
-                              and the trained model's (heatstress_model_2.pkl) air rating
-                           3. hot air raises the level by one, cool air lowers it by one
-                              (see rate_combined); status follows from the severity.
+  Rating (both rows)    -> from the ducks' HIGHEST body-area temperature (thermal camera)
+                           only. Severity: 35.7 C or below LOW · 35.8-43.6 MODERATE ·
+                           43.7-44.9 HIGH · 45.0 or above CRITICAL. Status: LOW NORMAL ·
+                           MODERATE MILD · HIGH/CRITICAL HEAT STRESS. The DHT22 is
+                           recorded as supporting data.
                            No ducks / no valid thermal reading -> no row.
   Webcam + YOLO         -> live video (MJPEG) at http://localhost:8000/video, /thermal, /stats
   Cloudflare tunnel     -> public https address for the video, saved to devices.device_url
@@ -142,28 +140,28 @@ SMOOTHING = 0.5             # 0 = box jumps to new position, 0.9 = moves very sm
 # Heat-stress severity (sklearn model)
 SEVERITY_MODEL_PATH = "heatstress_model_2.pkl"
 # How Status and Severity are decided:
-#   "combined"     = the thermal camera AND the DHT22 decide together (default):
-#                    the thermal level (Status & Severity levels below) is raised or
-#                    lowered by one level by the DHT22's THI + the trained model
-#                    (see rate_combined)
-#   "spectrum"     = thermal camera only: exactly the Status & Severity levels below.
-#                    The DHT22 is still read and logged but does not change the rating.
+#   "spectrum"     = body-area temperature only (default): exactly the levels below.
+#                    The DHT22 is still read, saved and logged but does not change the rating.
+#   "combined"     = the levels below, raised or lowered by one level by the DHT22's
+#                    THI + the trained model (see rate_combined)
 #   "spectrum+dht" = the same, but a higher DHT22 environment rating (heatstress_model_2.pkl)
 #                    raises the result by one level
 #   "model"        = heatstress_model_2.pkl only (see SEVERITY_TEMPERATURE)
-SEVERITY_METHOD = os.environ.get("HEATTRACK_SEVERITY_METHOD", "combined").strip().lower()
+SEVERITY_METHOD = os.environ.get("HEATTRACK_SEVERITY_METHOD", "spectrum").strip().lower()
 SEVERITY_ORDER = ["LOW", "MODERATE", "HIGH", "CRITICAL"]
 # With "model": which temperature goes into the model's "temperature" input:
 #   "body" = highest duck body temperature (thermal camera), "air" = DHT22 air temperature
 SEVERITY_TEMPERATURE = os.environ.get("HEATTRACK_SEVERITY_TEMPERATURE", "body").strip().lower()
 
-# Status & Severity levels (same as the website's Status & Severity section):
-#   34 C or below          -> LOW       -> NORMAL       (keep routine monitoring)
-#   above 34 C, up to 37 C -> MODERATE  -> MILD         (take preventive steps)
-#   above 37 C, up to 40 C -> HIGH      -> HEAT STRESS  (start cooling now)
-#   above 40 C             -> CRITICAL  -> HEAT STRESS  (emergency action, call a vet)
-# Each edge belongs to the LOWER level: exactly 34.0 is LOW, 34.1 is MODERATE.
-SPECTRUM_BANDS = [(40.0, "CRITICAL"), (37.0, "HIGH"), (34.0, "MODERATE")]   # else LOW
+# Status & Severity levels (same as the website's Status & Severity section), from
+# the ducks' highest body-area temperature of the period:
+#   35.7 C or below        -> LOW       -> NORMAL       (keep routine monitoring)
+#   35.8 C to 43.6 C       -> MODERATE  -> MILD         (take preventive steps)
+#   43.7 C to 44.9 C       -> HIGH      -> HEAT STRESS  (start cooling now)
+#   45.0 C or above        -> CRITICAL  -> HEAT STRESS  (emergency action, call a vet)
+# Each edge belongs to the LOWER level: 35.7 is LOW, anything above it is MODERATE;
+# above 43.6 is HIGH; above 44.9 is CRITICAL.
+SPECTRUM_BANDS = [(44.9, "CRITICAL"), (43.6, "HIGH"), (35.7, "MODERATE")]   # else LOW
 
 
 def severity_from_spectrum(body_c):
@@ -199,7 +197,7 @@ def rate_combined(body_c, air_c, humidity, model=None):
     """The thermal camera and the DHT22 decide the severity together.
 
     1. Thermal camera: the ducks' highest body temperature -> starting level
-       (34 / 37 / 40 °C, the Status & Severity levels).
+       (35.7 / 43.6 / 44.9 °C, the heat-stress levels).
     2. DHT22: air temperature + humidity -> THI, and the trained model's rating
        of the air (heatstress_model_2.pkl).
     3. RAISE one level when the air is hot: THI 84 or above (emergency),
@@ -207,7 +205,7 @@ def rate_combined(body_c, air_c, humidity, model=None):
        LOWER one level when the air is cool: THI 74 or below (normal)
        AND the trained model rates the air lower than the ducks' level.
        Raising needs one warning; lowering needs both to agree (safety first).
-       Never more than one level; a duck above 40 °C always stays CRITICAL.
+       Never more than one level; a duck at 45 °C or above always stays CRITICAL.
     Without a DHT22 reading the thermal level is used as is.
     Returns (severity, explanation for the log)."""
     base = severity_from_spectrum(body_c)
@@ -233,7 +231,7 @@ def rate_combined(body_c, air_c, humidity, model=None):
         return base, how + " -> hot air (already CRITICAL)"
     if thi <= THI_COOL_MAX and (e is None or e < b):
         if base == "CRITICAL":
-            return base, how + " -> cool air, but above 40 °C stays CRITICAL"
+            return base, how + " -> cool air, but 45 °C or above stays CRITICAL"
         if b > 0:
             return SEVERITY_ORDER[b - 1], how + " -> cool air: lowered one level"
     return base, how + " -> no change"
@@ -307,8 +305,8 @@ def prepare_data_dir():
 # Run --inspect to see the model's classes and adjust if the order differs.
 NUMERIC_SEVERITY = {0: "LOW", 1: "MODERATE", 2: "HIGH", 3: "CRITICAL"}
 
-# If it outputs words, they are translated to what the dashboard expects
-# (CRITICAL / HIGH / MODERATE / LOW).
+# If it outputs words, they are translated to the 4-level scale the dashboard
+# expects (LOW / MODERATE / HIGH / CRITICAL).
 TEXT_SEVERITY = {
     "LOW": "LOW", "NORMAL": "LOW", "NONE": "LOW", "NO STRESS": "LOW", "SAFE": "LOW",
     "MODERATE": "MODERATE", "MILD": "MODERATE", "CAUTION": "MODERATE", "ALERT": "MODERATE",
@@ -316,12 +314,12 @@ TEXT_SEVERITY = {
     "CRITICAL": "CRITICAL", "EXTREME": "CRITICAL", "EMERGENCY": "CRITICAL", "VERY SEVERE": "CRITICAL",
 }
 
-# Severity -> the `status` column the dashboard reads (HEAT STRESS / MILD / NORMAL)
+# Severity -> the `status` column the dashboard reads (NORMAL / MILD / HEAT STRESS)
 STATUS_FROM_SEVERITY = {
-    "CRITICAL": "HEAT STRESS",
-    "HIGH": "HEAT STRESS",
-    "MODERATE": "MILD",
     "LOW": "NORMAL",
+    "MODERATE": "MILD",
+    "HIGH": "HEAT STRESS",
+    "CRITICAL": "HEAT STRESS",
 }
 
 HEADERS = {"apikey": SUPABASE_KEY}
@@ -756,10 +754,12 @@ class Detector:
 
     # Box colors (BGR) follow each duck's status, same thresholds as the Status &
     # Severity levels and the website (LIVE_TEMP_LEVELS in script.js):
-    # above 34 C = Mild, above 37 C = Heat Stress
-    STATUS_COLORS = {"normal": (128, 222, 74), "mild": (36, 191, 251), "stress": (113, 113, 248)}
+    # green Low (35.7 C or below), yellow Moderate (above 35.7), orange High
+    # (above 43.6), red Critical (above 44.9)
+    STATUS_COLORS = {"normal": (128, 222, 74), "mild": (36, 191, 251),
+                     "moderate": (22, 115, 249), "severe": (68, 68, 239)}
     NO_READING_COLOR = (160, 160, 160)   # grey: no body temperature for this duck
-    MILD_C, STRESS_C = 34.0, 37.0
+    MILD_C, MODERATE_C, SEVERE_C = 35.7, 43.6, 44.9
 
     def __init__(self, cam):
         from ultralytics import YOLO   # imported here so streaming works even if missing
@@ -858,7 +858,8 @@ class Detector:
             reading = collector.reading_for((x1, y1, x2, y2)) if collector else None
             if reading is not None and reading.valid:
                 t = reading.estimated_body_c
-                status = "stress" if t > self.STRESS_C else "mild" if t > self.MILD_C else "normal"
+                status = ("severe" if t > self.SEVERE_C else "moderate" if t > self.MODERATE_C
+                          else "mild" if t > self.MILD_C else "normal")
                 color = self.STATUS_COLORS[status]
             else:
                 color = self.NO_READING_COLOR
@@ -2207,34 +2208,3 @@ def main():
     sensor = FakeSensor() if args.simulate else BridgeSensor()
 
     server = tunnel = None
-    if not args.no_camera:
-        camera = Camera()
-        camera.detector = start_detector(camera)
-        server = ThreadingHTTPServer(("127.0.0.1", STREAM_PORT), StreamHandler)
-        server.daemon_threads = True
-        threading.Thread(target=server.serve_forever, daemon=True).start()
-        print(f"Local stream: http://localhost:{STREAM_PORT}/video   thermal view: http://localhost:{STREAM_PORT}/thermal")
-        tunnel = Tunnel()
-    network_reporter()
-
-    detector = camera.detector if camera else (FakeDetector() if args.simulate else None)
-    if detector is None:
-        log("No duck detector running: body temperature can't be measured, so no analytics rows")
-    collector = ThermalCollector(sensor, detector)
-
-    try:
-        analytics_loop(model, sensor, args.interval, once=args.once)
-    except KeyboardInterrupt:
-        print("\nStopping...")
-    finally:
-        if camera:
-            publish_stream_url(None)      # website shows "No camera connected"
-            camera.running = False
-        if tunnel:
-            tunnel.stop()
-        if server:
-            server.shutdown()
-
-
-if __name__ == "__main__":
-    main()
