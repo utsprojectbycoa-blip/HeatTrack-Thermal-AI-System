@@ -82,8 +82,8 @@
             <form class="ht-auth__form" data-auth-form="forgot">
                 <label data-auth-field="email" for="forgotEmail">Email<input id="forgotEmail" name="email" type="email" placeholder="example@gmail.com" aria-describedby="forgotEmailError" required></label>
                 <p id="forgotEmailError" class="ht-auth__field-error" role="alert" hidden></p>
-                <label data-auth-field="password" for="forgotPassword" class="u-hidden">New Password<span class="ht-auth__password"><input id="forgotPassword" name="password" type="password" placeholder="password" minlength="8" maxlength="16" aria-describedby="forgotPasswordHint forgotPasswordError" required><button type="button" class="ht-auth__eye" aria-label="Show password" data-password-toggle><i data-lucide="eye"></i></button></span></label>
-                <p id="forgotPasswordHint" class="ht-auth__hint u-hidden">8-16 characters, with 1 uppercase letter, 1 number, and 1 special character.</p>
+                <label data-auth-field="password" for="forgotPassword" class="u-hidden">New Password<span class="ht-auth__password" data-password-strength-wrapper><input id="forgotPassword" name="password" type="password" placeholder="password" minlength="8" maxlength="16" aria-describedby="forgotPasswordHint forgotPasswordError" required><button type="button" class="ht-auth__eye" aria-label="Show password" data-password-toggle><i data-lucide="eye"></i></button></span></label>
+                <p id="forgotPasswordHint" class="ht-auth__hint ht-auth__strength u-hidden" role="status" aria-live="polite">Password strength: <span>Not entered</span></p>
                 <p id="forgotPasswordError" class="ht-auth__field-error" role="alert" hidden></p>
                 <label data-auth-field="confirmPassword" for="forgotConfirmPassword" class="u-hidden">Confirm Password<span class="ht-auth__password"><input id="forgotConfirmPassword" name="confirmPassword" type="password" placeholder="confirm password" minlength="8" maxlength="16" aria-describedby="forgotConfirmError" required><button type="button" class="ht-auth__eye" aria-label="Show password" data-password-toggle><i data-lucide="eye"></i></button></span></label>
                 <p id="forgotConfirmError" class="ht-auth__field-error" role="alert" hidden></p>
@@ -449,12 +449,15 @@
 
                             <div class="ht-admin-device__field">
                                 <label for="adminDeviceKey">Device API Key<span class="ht-admin-device__required" aria-hidden="true">*</span></label>
-                                <span class="ht-auth__password">
-                                    <input id="adminDeviceKey" name="deviceKey" type="password" placeholder="Enter the device API key" minlength="8" maxlength="64"
-                                        pattern="[A-Za-z0-9_\-]{8,64}" title="8-64 characters: letters, numbers, - and _"
-                                        autocomplete="new-password" data-lpignore="true" data-1p-ignore readonly data-unlock-on-focus required>
-                                    <button type="button" class="ht-auth__eye" aria-label="Show API key" data-password-toggle><i data-lucide="eye"></i></button>
-                                </span>
+                                <div class="ht-admin-device__key-field">
+                                    <span class="ht-auth__password">
+                                        <input id="adminDeviceKey" name="deviceKey" type="password" placeholder="Enter the device API key" minlength="8" maxlength="64"
+                                            pattern="[A-Za-z0-9_\-]{8,64}" title="8-64 characters: letters, numbers, - and _"
+                                            autocomplete="new-password" data-lpignore="true" data-1p-ignore readonly data-unlock-on-focus required>
+                                        <button type="button" class="ht-auth__eye" aria-label="Show API key" data-password-toggle><i data-lucide="eye"></i></button>
+                                    </span>
+                                    <button type="button" class="ht-btn ht-btn--primary ht-admin-device__generate" data-generate-device-key><i data-lucide="key-round"></i>Generate</button>
+                                </div>
                             </div>
 
                             <div class="ht-admin-device__field">
