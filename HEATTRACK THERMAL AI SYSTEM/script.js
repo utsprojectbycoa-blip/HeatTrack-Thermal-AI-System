@@ -3588,10 +3588,15 @@ function updateEnvChart() {
 
 // Same 30-minute readings as the KPI cards
 function getDetectionDistributionValues() {
+    return getDetectionDistributionCounts().map((count, idx) => (detectionLegendState[STATUS_ORDER[idx]] ? 0 : count));
+}
+
+// Ducks per status (same order as STATUS_ORDER), hidden slices included
+function getDetectionDistributionCounts() {
     const readings = thirtyMinuteReadings();
-    return STATUS_ORDER.map((status) => (detectionLegendState[status] ? 0 : readings
+    return STATUS_ORDER.map((status) => readings
         .filter(d => d.status === status)
-        .reduce((total, d) => total + (d.count ?? 1), 0)));
+        .reduce((total, d) => total + (d.count ?? 1), 0));
 }
 
 function renderDetectionLegend() {
@@ -3600,7 +3605,8 @@ function renderDetectionLegend() {
     const colors = detectionChart.data.datasets[0].backgroundColor;
 
     legendDiv.innerHTML = STATUS_ORDER.map((status, idx) => `
-        <button type="button" class="ht-detection-legend-item${detectionLegendState[status] ? ' is-hidden' : ''}" data-detection-status="${status}">
+        <button type="button" class="ht-detection-legend-item${detectionLegendState[status] ? ' is-hidden' : ''}" data-detection-status="${status}"
+            aria-pressed="${!detectionLegendState[status]}">
             <span class="ht-detection-legend-swatch" style="background:${colors[idx]};"></span>
             <span>${detectionStatusLabels[idx]}</span>
         </button>
