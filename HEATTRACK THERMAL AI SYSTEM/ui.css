@@ -1971,9 +1971,10 @@ img { max-width: 100%; height: auto; display: block; }
     display: grid;
     gap: 1.5rem;
 }
-.ht-tier-card--normal { --st-solid: #22c55e; --st-text: #15803d; --st-tint: rgba(34, 197, 94, 0.12); }
+.ht-tier-card--comfort { --st-solid: #22c55e; --st-text: #15803d; --st-tint: rgba(34, 197, 94, 0.12); }
 .ht-tier-card--mild { --st-solid: #eab308; --st-text: #a16207; --st-tint: rgba(234, 179, 8, 0.15); }
-.ht-tier-card--stress { --st-solid: #ef4444; --st-text: #b91c1c; --st-tint: rgba(239, 68, 68, 0.12); }
+.ht-tier-card--moderate { --st-solid: #f97316; --st-text: #c2410c; --st-tint: rgba(249, 115, 22, 0.12); }
+.ht-tier-card--severe { --st-solid: #ef4444; --st-text: #b91c1c; --st-tint: rgba(239, 68, 68, 0.12); }
 
 /* Mapping diagram uses the Detection Log colors:
    severity = .ht-pill--*, status = .ht-log-status--* */
@@ -1981,9 +1982,10 @@ img { max-width: 100%; height: auto; display: block; }
 .ht-status-map__level--moderate { --st-text: #facc15; --st-tint: rgba(234, 179, 8, 0.1); }
 .ht-status-map__level--high { --st-text: #fb923c; --st-tint: rgba(249, 115, 22, 0.1); }
 .ht-status-map__level--critical { --st-text: #f87171; --st-tint: rgba(239, 68, 68, 0.1); }
-.ht-status-map__group--normal { --st-text: #4ade80; --st-solid: #4ade80; }
+.ht-status-map__group--comfort { --st-text: #4ade80; --st-solid: #4ade80; }
 .ht-status-map__group--mild { --st-text: #fbbf24; --st-solid: #fbbf24; }
-.ht-status-map__group--stress { --st-text: #f87171; --st-solid: #f87171; }
+.ht-status-map__group--moderate { --st-text: #fb923c; --st-solid: #fb923c; }
+.ht-status-map__group--severe { --st-text: #f87171; --st-solid: #f87171; }
 
 /* Mapping: severity segments on top, status brackets underneath */
 .ht-status-map {
@@ -2016,6 +2018,45 @@ img { max-width: 100%; height: auto; display: block; }
     font-weight: 700;
     text-align: center;
 }
+/* Temperature range line in the Thermal Color Spectrum colors, with each
+   range written on the line in the middle of its segment and a small gap in
+   the line at each status edge */
+.ht-status-map__bar {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    column-gap: 0.375rem;
+    padding: 0.25rem 0;
+}
+/* Temperatures only follow the Thermal Color Spectrum: the line uses the
+   spectrum bar's gradient (.ht-spectrum__bar) across the same four quarters,
+   and the text uses the spectrum label colors (.ht-spectrum__label--*) */
+.ht-status-map__temp:nth-child(1) { --from: #000004; --to: #57106e; color: #56106e; }
+.ht-status-map__temp:nth-child(2) { --from: #57106e; --to: #b83c51; color: #a3284b; }
+.ht-status-map__temp:nth-child(3) { --from: #b83c51; --to: #f4901a; color: #c2570c; }
+.ht-status-map__temp:nth-child(4) { --from: #f4901a; --to: #fcffa4; color: #a16207; }
+.ht-status-map__temp {
+    --mid: color-mix(in srgb, var(--from), var(--to));
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+}
+/* Line on each side of the range */
+.ht-status-map__temp::before,
+.ht-status-map__temp::after {
+    content: '';
+    flex: 1;
+    min-width: 0;
+    height: 3px;
+    border-radius: 2px;
+}
+.ht-status-map__temp::before { background: linear-gradient(90deg, var(--from), var(--mid)); }
+.ht-status-map__temp::after { background: linear-gradient(90deg, var(--mid), var(--to)); }
 .ht-status-map__group {
     position: relative;
     display: inline-flex;
@@ -2041,7 +2082,73 @@ img { max-width: 100%; height: auto; display: block; }
     border-radius: 0.375rem 0.375rem 0 0;
 }
 .ht-status-map__group svg { width: 1rem; height: 1rem; flex-shrink: 0; }
-.ht-status-map__group--stress { grid-column: span 2; }
+
+/* Urgency: its own part of the map, below the status */
+.ht-status-map__caption--urgency {
+    margin-top: 0.5rem;
+    padding-top: 0.875rem;
+    border-top: 1px dashed rgba(15, 23, 42, 0.1);
+}
+/* Each column: raised / usual / lowered, so the usual levels line up in one row */
+.ht-status-map__urgency {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.375rem;
+}
+.ht-status-map__options {
+    display: grid;
+    grid-template-rows: repeat(3, auto);
+    gap: 0.3125rem;
+}
+.ht-status-map__option {
+    min-width: 0;
+    padding: 0.3125rem 0.25rem;
+    border-radius: var(--ht-radius-md, 0.5rem);
+    border: 1px dashed color-mix(in srgb, var(--st-text) 55%, transparent);
+    color: var(--st-text);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-align: center;
+    white-space: nowrap;
+    opacity: 0.85;
+}
+.ht-status-map__option--usual {
+    padding-block: 0.5rem;
+    border-style: solid;
+    border-color: color-mix(in srgb, var(--st-text) 35%, transparent);
+    background: var(--st-tint);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    opacity: 1;
+}
+/* Empty slot: keeps the rows lined up */
+.ht-status-map__option--none { visibility: hidden; }
+.ht-status-map__option--none::before { content: '\00a0'; }
+
+.ht-status-map__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem 1.25rem;
+    margin-top: 0.125rem;
+    font-size: 0.75rem;
+    color: var(--ht-surface-400);
+}
+.ht-status-map__legend > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4375rem;
+}
+.ht-status-map__swatch {
+    width: 1.125rem;
+    height: 0.75rem;
+    border-radius: 0.25rem;
+    border: 1px dashed var(--ht-surface-500);
+}
+.ht-status-map__swatch--usual {
+    border-style: solid;
+    border-color: rgba(15, 23, 42, 0.15);
+    background: rgba(100, 116, 139, 0.15);
+}
 
 /* Status cards: same shape as the spectrum tier cards above */
 .ht-status-guide__cards {
@@ -2051,8 +2158,11 @@ img { max-width: 100%; height: auto; display: block; }
     display: grid;
     gap: 1rem;
 }
-@media (min-width: 900px) {
-    .ht-status-guide__cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (min-width: 640px) {
+    .ht-status-guide__cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1200px) {
+    .ht-status-guide__cards { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
 /* Card: header (icon, name, severity) → body (meaning) → action footer, plain white */
@@ -2075,9 +2185,10 @@ img { max-width: 100%; height: auto; display: block; }
     border-bottom: 1px solid rgba(15, 23, 42, 0.06);
 }
 /* Status colors match the Detection Log status badges (.ht-log-status--*) */
-.ht-tier-card--normal { --st-log: #4ade80; }
+.ht-tier-card--comfort { --st-log: #4ade80; }
 .ht-tier-card--mild { --st-log: #fbbf24; }
-.ht-tier-card--stress { --st-log: #f87171; }
+.ht-tier-card--moderate { --st-log: #fb923c; }
+.ht-tier-card--severe { --st-log: #f87171; }
 .ht-tier-card__icon {
     flex-shrink: 0;
     width: 1.25rem;
@@ -2097,12 +2208,14 @@ img { max-width: 100%; height: auto; display: block; }
     gap: 0.375rem;
     margin-left: auto;
 }
-/* Badges sized to match the status name beside them */
+/* Compact badges, so the longer status names keep room beside them */
 .ht-tier-card__pills .ht-pill {
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.375rem;
-    font-size: 0.875rem;
+    padding: 0.1875rem 0.4375rem;
+    border-radius: 0.3125rem;
+    font-size: 0.6875rem;
+    letter-spacing: 0.04em;
     line-height: 1.2;
+    white-space: nowrap;
 }
 
 .ht-tier-card__body {
@@ -2121,6 +2234,14 @@ img { max-width: 100%; height: auto; display: block; }
     color: var(--ht-surface-300);
 }
 .ht-tier-card__body p strong { color: var(--st-text); }
+/* Usual urgency and how the air can move it */
+.ht-tier-card__body .ht-tier-card__urgency {
+    margin-top: auto;
+    padding-top: 0.5rem;
+    border-top: 1px dashed rgba(15, 23, 42, 0.1);
+    font-size: 0.8125rem;
+    text-align: left;
+}
 
 .ht-tier-card__action {
     display: flex;
@@ -2139,14 +2260,36 @@ img { max-width: 100%; height: auto; display: block; }
     .ht-status-guide { margin-top: 1.25rem; gap: 1.25rem; }
     .ht-status-map { padding: 1rem 0.875rem; }
     .ht-status-map__levels,
-    .ht-status-map__groups { gap: 0.25rem; }
+    .ht-status-map__groups,
+    .ht-status-map__urgency { gap: 0.25rem; }
+    .ht-status-map__option {
+        padding-inline: 0;
+        font-size: clamp(0.5rem, 2.4vw, 0.6875rem);
+        letter-spacing: -0.02em;
+    }
+    .ht-status-map__option--usual { font-size: clamp(0.5625rem, 2.6vw, 0.75rem); }
+    /* Phone: shrink the ranges so each stays inside its segment */
+    /* Phone: smaller text so each range fits its segment */
+    .ht-status-map__bar { column-gap: 0.25rem; }
+    .ht-status-map__temp {
+        gap: 0.125rem;
+        font-size: clamp(0.5rem, 2.4vw, 0.6875rem);
+        letter-spacing: -0.02em;
+    }
     /* Scale with the screen so "Moderate" stays inside its block */
     .ht-status-map__level {
         min-width: 0;
         padding: 0.5rem 0;
         font-size: clamp(0.5625rem, 2.75vw, 0.6875rem);
     }
-    .ht-status-map__group { font-size: 0.75rem; flex-direction: column; gap: 0.25rem; }
+    /* Two-word status names wrap inside their narrow column */
+    .ht-status-map__group {
+        min-width: 0;
+        font-size: clamp(0.5625rem, 2.6vw, 0.75rem);
+        line-height: 1.2;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
     .ht-status-map__group::before { left: 0.25rem; right: 0.25rem; }
     .ht-tier-card__head { padding: 0.75rem 1rem; }
     .ht-tier-card__body { padding: 0.75rem 1rem; }
@@ -4080,14 +4223,22 @@ input[type="date"] {
     border-radius: 50%;
     background: var(--ht-kv-dot, #94a3b8);
 }
+/* Urgency Level: the level name (e.g. "Urgent") is the main text here, so it
+   takes the larger size and the change line below takes the smaller one */
+.ht-modal-kv-group--severity .ht-modal-kv__label {
+    color: var(--ht-surface-200);
+    font-size: var(--ht-text-sm);
+    font-weight: 700;
+}
+.ht-modal-kv-group--severity .ht-modal-kv__label::before { width: 0.625rem; height: 0.625rem; }
 
-/* Severity Level: change from the previous reading (up = worse, down = better) */
+/* Urgency Level: change from the previous reading (up = worse, down = better) */
 .ht-modal-kv-group--severity .ht-modal-kv__val { flex-direction: column; align-items: flex-start; gap: 0.125rem; }
 .ht-sev-change {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
-    font-size: var(--ht-text-sm);
+    font-size: var(--ht-text-xs);
     font-weight: 700;
 }
 .ht-sev-change svg { flex-shrink: 0; width: 1em; height: 1em; }
@@ -4108,7 +4259,7 @@ input[type="date"] {
    (it only wraps when even the smallest size doesn't fit) */
 @media (min-width: 761px) {
     .ht-modal-kv-group--severity .ht-modal-kv__val { flex-direction: row; align-items: center; gap: 0.125rem 0.375rem; }
-    .ht-sev-change { font-size: clamp(0.6875rem, 4.1cqi, var(--ht-text-sm)); white-space: nowrap; }
+    .ht-sev-change { font-size: clamp(0.625rem, 3.5cqi, var(--ht-text-xs)); white-space: nowrap; }
     .ht-sev-change__time { font-size: clamp(0.625rem, 3.5cqi, var(--ht-text-xs)); white-space: nowrap; }
     .ht-sev-change__dot { display: inline; margin-right: 0.375rem; font-weight: 700; }
 }
@@ -4237,6 +4388,7 @@ input[type="date"] {
 }
 .ht-log-status svg { width: 0.75rem; height: 0.75rem; }
 .ht-log-status--stress { color: #f87171; }
+.ht-log-status--moderate { color: #fb923c; }
 .ht-log-status--warn { color: #fbbf24; }
 .ht-log-status--ok { color: #4ade80; }
 
@@ -4269,6 +4421,10 @@ input[type="date"] {
     background: rgba(239, 68, 68, 0.05);
     border-color: rgba(239, 68, 68, 0.25);
 }
+.ht-live-item--moderate {
+    background: rgba(249, 115, 22, 0.05);
+    border-color: rgba(249, 115, 22, 0.25);
+}
 .ht-live-item--mild {
     background: rgba(245, 158, 11, 0.05);
     border-color: rgba(245, 158, 11, 0.25);
@@ -4289,6 +4445,7 @@ input[type="date"] {
 }
 .ht-live-item__ico svg { width: 0.875rem; height: 0.875rem; }
 .ht-live-item--stress .ht-live-item__ico { background: rgba(239, 68, 68, 0.1); color: #f87171; }
+.ht-live-item--moderate .ht-live-item__ico { background: rgba(249, 115, 22, 0.1); color: #fb923c; }
 .ht-live-item--mild .ht-live-item__ico { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
 .ht-live-item--ok .ht-live-item__ico { background: rgba(34, 197, 94, 0.1); color: #4ade80; }
 
@@ -4300,6 +4457,7 @@ input[type="date"] {
 }
 .ht-live-item__tag { font-size: 10px; font-weight: 600; }
 .ht-live-item--stress .ht-live-item__tag { color: #f87171; }
+.ht-live-item--moderate .ht-live-item__tag { color: #fb923c; }
 .ht-live-item--mild .ht-live-item__tag { color: #f59e0b; }
 .ht-live-item--ok .ht-live-item__tag { color: #4ade80; }
 .ht-live-item__meta {
@@ -4430,6 +4588,36 @@ input[type="date"] {
     background: rgba(239, 68, 68, 0.15);
     border-color: rgba(239, 68, 68, 0.4);
 }
+
+/* Urgent Level alerts: orange (Critical Level keeps the red above),
+   same colors as the HIGH / CRITICAL pop-up */
+.ht-alert-item--urgent {
+    border-color: rgba(249, 115, 22, 0.2);
+    background: rgba(249, 115, 22, 0.05);
+}
+.ht-alert-item--urgent:hover {
+    background: rgba(249, 115, 22, 0.12);
+    border-color: rgba(249, 115, 22, 0.35);
+}
+.ht-alert-item--urgent.ht-alert-item--unviewed {
+    background: rgba(249, 115, 22, 0.08);
+    border-color: rgba(249, 115, 22, 0.3);
+}
+.ht-alert-item--urgent.ht-alert-item--unviewed:hover {
+    background: rgba(249, 115, 22, 0.15);
+    border-color: rgba(249, 115, 22, 0.4);
+}
+.ht-alert-item--urgent.ht-alert-item--viewed {
+    background: rgba(148, 163, 184, 0.05);
+    border-color: rgba(148, 163, 184, 0.15);
+}
+.ht-alert-item--urgent.ht-alert-item--viewed:hover {
+    background: rgba(148, 163, 184, 0.1);
+    border-color: rgba(148, 163, 184, 0.25);
+}
+.ht-alert-item--urgent .ht-alert-item__row svg,
+.ht-alert-item--urgent .ht-alert-item__title { color: #fb923c; }
+.ht-alert-item--urgent.ht-alert-item--viewed .ht-alert-item__title { color: rgba(251, 146, 60, 0.6); }
 
 /* Show More button for pagination */
 /* Smaller Show More button for all screens */
