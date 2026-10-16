@@ -775,11 +775,12 @@ class Camera:
 class Detector:
     """Runs the YOLO model on the newest frame in the background."""
 
-    # Box colors (BGR) follow each duck's status, same thresholds as the Status &
-    # Severity levels and the website (LIVE_TEMP_LEVELS in script.js):
-    # green Low (35.7 C or below), yellow Moderate (above 35.7), orange High
-    # (above 43.6), red Critical (above 44.9)
-    STATUS_COLORS = {"normal": (128, 222, 74), "mild": (36, 191, 251),
+    # Box colors (BGR) follow each duck's status by surface temperature, same
+    # thresholds and colors as the website's Status & Urgency Levels
+    # (LIVE_TEMP_LEVELS / STATUS_INFO in script.js):
+    # green Thermal Comfort (35.7 C or below), amber Mild Heat Stress (35.8-43.6),
+    # orange Moderate Heat Stress (43.7-44.9), red Severe Heat Stress (45.0 or above)
+    STATUS_COLORS = {"comfort": (128, 222, 74), "mild": (36, 191, 251),
                      "moderate": (22, 115, 249), "severe": (68, 68, 239)}
     NO_READING_COLOR = (160, 160, 160)   # grey: no body temperature for this duck
     MILD_C, MODERATE_C, SEVERE_C = 35.7, 43.6, 44.9
@@ -882,7 +883,7 @@ class Detector:
             if reading is not None and reading.valid:
                 t = reading.estimated_body_c
                 status = ("severe" if t > self.SEVERE_C else "moderate" if t > self.MODERATE_C
-                          else "mild" if t > self.MILD_C else "normal")
+                          else "mild" if t > self.MILD_C else "comfort")
                 color = self.STATUS_COLORS[status]
             else:
                 color = self.NO_READING_COLOR
