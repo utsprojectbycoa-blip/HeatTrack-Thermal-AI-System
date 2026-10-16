@@ -3000,9 +3000,11 @@ function getRecommendationSummary(rec, currentTemp) {
 
 // Duck recommendations carry the detection status; check-ins derive it from the level
 function getRecStatus(rec) {
-    if (rec.severity === 'MODERATE') return 'MILD'; // Moderate is always Mild
-    return rec.status
-        || (rec.severity === 'CRITICAL' || rec.severity === 'HIGH' ? 'HEAT STRESS' : 'NORMAL');
+    // Saved results carry their own status (thermal camera); it can differ from what
+    // the severity alone suggests, because the DHT22's THI moves the severity only
+    if (rec.status) return rec.status;
+    return rec.severity === 'CRITICAL' || rec.severity === 'HIGH' ? 'HEAT STRESS'
+        : rec.severity === 'MODERATE' ? 'MILD' : 'NORMAL';
 }
 
 // Severity Level: this result's level compared with the 30-minute reading before it.
@@ -3068,9 +3070,8 @@ function getRecommendationResultSummary(rec, currentTemp) {
     // Normal -> Low, Mild -> Moderate, Heat Stress -> High or Critical (whichever it is)
     // The level comes from the air, so all ducks of a reading share it; instead of
     // repeating the duck count it shows how the level changed from the previous reading
-    const level = status === 'HEAT STRESS'
-        ? (rec.severity === 'CRITICAL' ? 'critical' : 'high')
-        : status === 'MILD' ? 'moderate' : 'low';
+    // (its own severity: thermal camera + DHT22, so it can differ from the status)
+    const level = { CRITICAL: 'critical', HIGH: 'high', MODERATE: 'moderate' }[rec.severity] || 'low';
     const levelLabel = level.charAt(0).toUpperCase() + level.slice(1);
     items.push({ group: 'severity', tone: level, label: levelLabel, value: severityChangeHtml(rec) });
 
@@ -3266,7 +3267,9 @@ function showToast(detection) {
     if (detection.count != null) stats.push(['Ducks', String(detection.count)]);
     renderToast({
         level: detection.severity,
-        title: 'Heat stress detected',
+        // Severity High/Critical; the thermal status may still be Mild when hot, humid
+        // air (THI) raised the severity
+        title: detection.status === 'HEAT STRESS' ? 'Heat stress detected' : 'High heat-stress risk',
         icon: 'alert-triangle',
         stats,
         action: action || `Severity: ${detection.severity}. Open the details for the recommended actions.`,
@@ -4670,12 +4673,17 @@ function normalizeSeverity(value) {
 }
 
 // analytics row -> the "detection" shape the UI already understands
-// Severity comes from the row's highest body-area temperature (same as the logger):
+// The database rates each row (body_temp_thi_levels.sql) from its highest
+// body-area temperature level:
 //   35.7 °C or below LOW · 35.8–43.6 MODERATE · 43.7–44.9 HIGH · 45.0 or above CRITICAL
-// and the status follows from it:
+// STATUS: thermal camera only, from that level:
 //   LOW = Normal · MODERATE = Mild · HIGH / CRITICAL = Heat Stress
-// Rating from the temperature puts rows saved under older rules on the same scale.
-// Rows without a temperature keep their saved severity.
+// SEVERITY: that level moved up or down ONE level by the DHT22's THI (84 or above
+// up, 74 or below down; 45 °C or above stays CRITICAL), so it can sit one level
+// above or below what the status suggests.
+// The saved severity is shown when it is within one level of the temperature
+// level; anything further off (a row saved under older rules) is shown at the
+// temperature level. Rows without a temperature keep their saved values.
 const STATUS_OF_SEVERITY = { LOW: 'NORMAL', MODERATE: 'MILD', HIGH: 'HEAT STRESS', CRITICAL: 'HEAT STRESS' };
 
 function severityFromBodyTemp(t) {
@@ -4685,16 +4693,25 @@ function severityFromBodyTemp(t) {
     return 'LOW';
 }
 
-function levelForRow(highTemp, savedSeverity) {
-    const severity = highTemp != null && !Number.isNaN(highTemp) ? severityFromBodyTemp(highTemp) : savedSeverity;
-    return { severity, status: STATUS_OF_SEVERITY[severity] || 'NORMAL' };
+function levelForRow(highTemp, savedSeverity, savedStatus) {
+    if (highTemp == null || Number.isNaN(highTemp)) {
+        return { severity: savedSeverity, status: savedStatus || STATUS_OF_SEVERITY[savedSeverity] || 'NORMAL' };
+    }
+    const order = ['LOW', 'MODERATE', 'HIGH', 'CRITICAL'];
+    const fromTemp = severityFromBodyTemp(highTemp);
+    const gap = Math.abs(order.indexOf(savedSeverity) - order.indexOf(fromTemp));
+    const severity = fromTemp !== 'CRITICAL' && order.includes(savedSeverity) && gap <= 1
+        ? savedSeverity : fromTemp;
+    // Status: thermal camera only
+    return { severity, status: STATUS_OF_SEVERITY[fromTemp] };
 }
 
 function mapAnalyticsRow(row) {
     const low = toNum(row[DB_COLS.lowTemp]);
     const high = toNum(row[DB_COLS.highTemp]);
     const avg = toNum(row[DB_COLS.avgTemp]);
-    const level = levelForRow(high, normalizeSeverity(row.severity));
+    const level = levelForRow(high, normalizeSeverity(row.severity),
+        row.status ? normalizeStatus(row.status) : null);
     const status = level.status;
     // 10 = 10-minute slot row, 30 = 30-minute window row; rows saved before
     // the interval column existed are 30-minute rows
