@@ -6147,16 +6147,30 @@ function adminWeatherLocation() {
     });
 }
 
+// Place name for the coordinates: BigDataCloud first, OpenStreetMap if that fails
 async function adminWeatherPlace(lat, lon) {
-    try {
-        const r = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
-        if (!r.ok) return null;
-        const j = await r.json();
-        const parts = [j.locality || j.city, j.principalSubdivision].filter(Boolean);
-        return parts.length ? [...new Set(parts)].join(', ') : null;
-    } catch {
-        return null;
+    const lookups = [
+        async () => {
+            const r = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
+            if (!r.ok) return null;
+            const j = await r.json();
+            const province = (j.localityInfo?.administrative || []).find((a) => a.adminLevel === 4)?.name;
+            return [j.locality || j.city, province || j.principalSubdivision];
+        },
+        async () => {
+            const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=14&accept-language=en`);
+            if (!r.ok) return null;
+            const a = (await r.json()).address || {};
+            return [a.town || a.city || a.municipality || a.village, a.state || a.region];
+        },
+    ];
+    for (const lookup of lookups) {
+        try {
+            const parts = ((await lookup()) || []).filter(Boolean);
+            if (parts.length) return [...new Set(parts)].join(', ');
+        } catch { /* try the next service */ }
     }
+    return null;
 }
 
 async function fetchAdminWeather() {
@@ -6169,6 +6183,9 @@ async function fetchAdminWeather() {
     const { current } = await res.json();
     return {
         at: Date.now(),
+        lat,
+        lon,
+        placeFound: !coords || !!place,   // false: only coordinates, look the name up again next time
         place: place || (coords ? `${lat.toFixed(2)}, ${lon.toFixed(2)}` : WEATHER_FALLBACK.place + ' (default)'),
         temp: current.temperature_2m,
         humidity: current.relative_humidity_2m,
@@ -6203,6 +6220,16 @@ async function loadAdminWeather() {
     try { cached = JSON.parse(localStorage.getItem(WEATHER_CACHE_KEY)); } catch { /* no storage */ }
     if (cached && Date.now() - cached.at < WEATHER_EVERY_MS) {
         renderAdminWeather(cached);
+        // The name lookup failed last time: try again instead of keeping the coordinates
+        if (cached.placeFound === false && cached.lat != null) {
+            const place = await adminWeatherPlace(cached.lat, cached.lon);
+            if (place) {
+                cached.place = place;
+                cached.placeFound = true;
+                renderAdminWeather(cached);
+                try { localStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify(cached)); } catch { /* no storage */ }
+            }
+        }
         return;
     }
     try {
