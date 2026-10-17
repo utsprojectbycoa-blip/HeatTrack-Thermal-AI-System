@@ -2655,6 +2655,26 @@ img { max-width: 100%; height: auto; display: block; }
     line-height: 1.25;
 }
 
+/* Phones: the monitor is only ~200px tall, so the HUD and the duck counts
+   shrink and stay out of most of the picture */
+@media (max-width: 640px) {
+    .ht-camera__hud { gap: 0.15rem; }
+    .ht-camera__hud--tl { top: 0.4rem; left: 0.4rem; }
+    .ht-camera__hud--bl { bottom: 0.4rem; left: 0.4rem; }
+    .ht-camera__hud--tr { display: none; }   /* "Click to expand": the tooltip already says it */
+    .ht-chip {
+        padding: 0.1rem 0.35rem;
+        font-size: 8px;
+        border-radius: 0.25rem;
+    }
+    .ht-chip--stack {
+        padding: 0.15rem 0.35rem;
+        font-size: 7.5px;
+        line-height: 1.15;
+    }
+    .ht-thermal-scale { bottom: 0.4rem; right: 0.4rem; }
+}
+
 .ht-thermal-scale {
     position: absolute;
     bottom: 0.75rem;
