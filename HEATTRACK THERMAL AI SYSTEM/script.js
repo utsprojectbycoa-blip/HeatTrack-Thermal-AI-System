@@ -692,9 +692,8 @@ function initAuth() {
         document.body.classList.remove('ht-auth-mode');
         document.querySelector('.ht-role-switcher')?.classList.add('u-hidden');
         authApp.classList.add('u-hidden');
-        loadDeviceSettings();
         updateSystemToggleStates();
-        drawAnnotations();
+        await loadAccountSettings();
         showView(route || getRouteFromHash());
         await loadCloudData();
         subscribeRealtime(currentUser.id);
@@ -1194,15 +1193,16 @@ const state = {
     // Detection Log filter: kind 'status' | 'urgency', level a STATUS_ORDER / severity code or 'ALL'
     logFilter: { kind: 'status', level: 'ALL' },
     // Detection Log period: 'all' | 'today' | 'last7' | 'last30' | 'custom' (see getLogDateBounds)
+    logPeriod: 'all',
     alertCount: 0,
     alerts: [],
     alertsDisplayed: 0,
     alertsPageSize: 10,
     recommendationsDisplayed: 0,
     recommendationsPageSize: 8,
-    cameraActive: true,     // this browser's Camera Streams choice (browser storage)
-    aiActive: true,         // this browser's AI Detection Model choice (browser storage)
-    alertsWanted: true,     // this browser's Alert Notifications choice (browser storage)
+    cameraActive: true,     // account-wide (user_settings), same on every device
+    aiActive: true,         // account-wide (user_settings), same on every device
+    alertsWanted: true,     // account-wide (user_settings), same on every device
     alertsEnabled: true,    // alertsWanted, and only while cameras and AI are on
     lastToastDetection: null,
     stats: {
@@ -1680,7 +1680,7 @@ function setCustomRangeMaxDate() {
     if (startInput) startInput.max = maxValue;
     if (endInput) endInput.max = maxValue;
 }
-    
+
 // Period of the Detection Log: 'all' | 'today' | 'last7' | 'last30' (quick ranges)
 // or 'custom' (the From / To dates in the period picker)
 function getLogDateBounds() {
@@ -2348,9 +2348,14 @@ function updateAnnotations() {
         <div>Ducks: ${live.ducks ?? '--'}</div>
         ${statusLinesHtml(liveStatus)}
     ` : statsHtml;
+    // AI Detection off in this browser: no duck counts, like the boxes on the feeds
+    const offHtml = `
+        <div>Ducks: --</div>
+        ${statusLinesHtml(null)}
+    `;
     // Only touch the page when the text changes (no needless redraws)
-    setHtmlIfChanged(normalStats, liveHtml);
-    setHtmlIfChanged(thermalStats, liveThermalHtml(window.liveThermal) ?? statsHtml);
+    setHtmlIfChanged(normalStats, state.aiActive ? liveHtml : offHtml);
+    setHtmlIfChanged(thermalStats, state.aiActive ? (liveThermalHtml(window.liveThermal) ?? statsHtml) : offHtml);
 }
 
 function setHtmlIfChanged(el, html) {
@@ -3246,36 +3251,59 @@ function loadSavedAlerts() {
 
 // ============================================
 // SETTINGS: Camera Streams, AI Detection Model and Alert Notifications are
-// saved in this browser only (per account), so each browser / device chooses
-// for itself and a change here never affects another device.
+// saved for the account (public.user_settings, see user_settings.sql), so a
+// change on one device applies on every device signed in to the same account.
 // ============================================
-const settingsKey = () => (currentUser?.id ? `heattrack-settings-${currentUser.id}` : null);
-// Alert choice saved before all three settings moved into settingsKey
-const oldAlertsPrefKey = () => (currentUser?.id ? `heattrack-alerts-on-${currentUser.id}` : null);
 
-function loadDeviceSettings() {
-    let saved = null;
-    let oldAlerts = null;
-    try {
-        saved = JSON.parse(localStorage.getItem(settingsKey()) || 'null');
-        oldAlerts = localStorage.getItem(oldAlertsPrefKey());
-    } catch (_) { /* no storage, or unreadable: use the defaults */ }
-    // Never saved = everything on
-    state.cameraActive = saved?.camera !== false;
-    state.aiActive = state.cameraActive && saved?.ai !== false;
-    state.alertsWanted = saved ? saved.alerts !== false : oldAlerts !== 'off';
+// A change saved on this device is not overwritten by an older copy read
+// back from the server while the save is still on its way
+let accountSettingsSaving = 0;
+
+// row: a user_settings row, or null for "never changed" (all on).
+// A setting can't be on while the one it needs is off (Camera -> AI -> Notifications)
+function applyAccountSettings(row) {
+    if (accountSettingsSaving) return;
+    const camera = row?.camera_streams !== false;
+    const ai = camera && row?.ai_detection !== false;
+    const alerts = ai && row?.alert_notifications !== false;
+    if (camera === state.cameraActive && ai === state.aiActive && alerts === state.alertsWanted) return;
+    state.cameraActive = camera;
+    state.aiActive = ai;
+    state.alertsWanted = alerts;
+    updateSystemToggleStates();
+    drawAnnotations();
 }
 
-function saveDeviceSettings() {
-    const key = settingsKey();
-    if (!key) return;
+async function loadAccountSettings() {
+    const uid = currentUser?.id;
+    if (!uid) return;
+    const { data, error } = await sb.from('user_settings')
+        .select('camera_streams, ai_detection, alert_notifications').eq('user_id', uid).maybeSingle();
+    if (error) {
+        console.warn('Could not load settings (run user_settings.sql in Supabase):', error);
+        return;
+    }
+    applyAccountSettings(data);
+}
+
+async function saveAccountSettings() {
+    const uid = currentUser?.id;
+    if (!uid) return;
+    accountSettingsSaving++;
     try {
-        localStorage.setItem(key, JSON.stringify({
-            camera: state.cameraActive,
-            ai: state.aiActive,
-            alerts: state.alertsWanted,
-        }));
-    } catch (_) { /* no storage */ }
+        const { error } = await sb.from('user_settings').upsert({
+            user_id: uid,
+            camera_streams: state.cameraActive,
+            ai_detection: state.aiActive,
+            alert_notifications: state.alertsWanted,
+            updated_at: new Date().toISOString(),
+        });
+        if (error) console.warn('Could not save settings for the account (run user_settings.sql in Supabase):', error);
+    } finally {
+        accountSettingsSaving--;
+    }
+    // Show what the account really has (the saved values, or the old ones if saving failed)
+    await loadAccountSettings();
 }
 
 // Heat-stress notifications: the 30-minute readings with Urgent or Critical
@@ -3343,7 +3371,7 @@ function renderAlerts() {
                     <div class="ht-alert-item__row">
                         <i data-lucide="${alertIcon(a.severity)}"></i>
                         <div class="ht-alert-item__body">
-                            <div class="ht-alert-item__title"><span class="ht-alert-item__title-text">${alertTitle(a.severity)}</span></div>
+                            <div class="ht-alert-item__title"><span class="ht-alert-item__title-text">${alertTitle(a)}</span></div>
                             <div class="ht-alert-item__meta">
                                 <span class="ht-alert-item__sub">${a.bodyTemp}°C • ${urgencyName(a.severity)}</span>
                                 <span class="ht-alert-item__time">${formatRelativeTime(a.timestamp)}</span>
@@ -3416,7 +3444,9 @@ const isToastLevel = (level) => TOAST_LEVELS.includes(String(level || '').toUppe
 const URGENCY_NAME = { LOW: 'Routine', MODERATE: 'Monitor', HIGH: 'Urgent', CRITICAL: 'Critical' };
 const urgencyName = (level) => URGENCY_NAME[String(level || '').toUpperCase()] || String(level || '');
 const isCriticalLevel = (level) => String(level || '').toUpperCase() === 'CRITICAL';
-const alertTitle = (level) => (isCriticalLevel(level) ? 'Critical Level' : 'Urgent Level');
+// Alert / pop-up title = the result's status (e.g. "Moderate Heat Stress"); the
+// urgency is already in the badge, so the title doesn't repeat it
+const alertTitle = (detection) => statusLabel(getRecStatus(detection || {}));
 // Same icons as the homepage cards: Urgent = alert-triangle, Critical = siren
 const alertIcon = (level) => (isCriticalLevel(level) ? 'siren' : 'alert-triangle');
 
@@ -3432,7 +3462,7 @@ function showToast(detection) {
     if (detection.count != null) stats.push(['Ducks', String(detection.count)]);
     renderToast({
         level: detection.severity,
-        title: alertTitle(detection.severity),
+        title: alertTitle(detection),
         icon: alertIcon(detection.severity),
         stats,
         action: action || `Urgency: ${urgencyName(detection.severity)}. Open the details for the recommended actions.`,
@@ -3482,7 +3512,7 @@ function updateSystemToggleStates() {
     const thermalCameraContainer = document.getElementById('thermalCameraContainer');
 
     if (!state.cameraActive) state.aiActive = false;
-    // Alerts need the cameras and the AI; this device's choice comes back with them
+    // Alerts need the cameras and the AI (switched off with them, see the toggle handlers)
     state.alertsEnabled = state.alertsWanted && state.cameraActive && state.aiActive;
 
     if (cameraToggle) {
@@ -3967,6 +3997,7 @@ function exportDetectionsToExcel() {
     // Which filters produced this report
     const { start, end } = getLogDateBounds();
     const fmtDay = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    // Custom periods already show their dates; quick ranges get them added
     let period = logPeriodLabel();
     if (state.logPeriod !== 'custom' && start && end && start.getTime() > 0) period += ' (' + fmtDay(start) + (fmtDay(start) === fmtDay(end) ? '' : ' to ' + fmtDay(end)) + ')';
     const generated = now.toLocaleString('en-US', {
@@ -4386,26 +4417,32 @@ function setupEventListeners() {
         syncCameraZoomCursor(thermalCameraContainer);
     });
 
-    // System toggles: all three apply to this browser only
+    // System toggles: saved for the account (every device follows). Turning a setting off also
+    // turns off the ones that depend on it (Camera -> AI -> Notifications); turning
+    // it back on leaves those off until the user switches them on again.
     document.getElementById('cameraToggle')?.addEventListener('change', (e) => {
         state.cameraActive = e.target.checked;
-        if (!state.cameraActive) state.aiActive = false;
+        if (!state.cameraActive) {
+            state.aiActive = false;
+            state.alertsWanted = false;
+        }
         updateSystemToggleStates();
         drawAnnotations();
-        saveDeviceSettings();
+        saveAccountSettings();
     });
 
     document.getElementById('aiToggle')?.addEventListener('change', (e) => {
         state.aiActive = e.target.checked;
+        if (!state.aiActive) state.alertsWanted = false;
         updateSystemToggleStates();
         drawAnnotations();
-        saveDeviceSettings();
+        saveAccountSettings();
     });
 
     document.getElementById('alertToggle')?.addEventListener('change', (e) => {
         state.alertsWanted = e.target.checked;
-        saveDeviceSettings();
         updateSystemToggleStates();
+        saveAccountSettings();
     });
 
     updateSystemToggleStates();
@@ -5263,6 +5300,9 @@ function subscribeRealtime(userId) {
         .on('postgres_changes',
             { event: 'INSERT', schema: 'public', table: 'analytics', filter: `userid=eq.${userId}` },
             (payload) => handleAnalyticsInsert(payload.new))
+        .on('postgres_changes',
+            { event: '*', schema: 'public', table: 'user_settings', filter: `user_id=eq.${userId}` },
+            (payload) => applyAccountSettings(payload.eventType === 'DELETE' ? null : payload.new))
         .subscribe((status) => {
             if (status === 'CHANNEL_ERROR') console.warn('Realtime channel error. Is Realtime enabled for these tables?');
         });
@@ -5289,6 +5329,7 @@ async function pollNewRows(userId) {
         ]);
         (envRes.data || []).forEach(handleEnvironmentInsert);
         (analyticsRes.data || []).forEach(handleAnalyticsInsert);   // oldest first, so newest ends on top
+        await loadAccountSettings();   // settings changed on another device
     } catch (err) {
         console.warn('HeatTrack: could not check for new rows', err);
     } finally {
