@@ -3423,6 +3423,13 @@ input[type="date"] {
     transition: border-color 0.15s, box-shadow 0.15s;
 }
 
+/* Detection Log status + urgency filters share one width */
+#logFilter,
+#logUrgencyFilter {
+    width: 12.5rem;
+    max-width: 100%;
+}
+
 .ht-select:hover { border-color: rgba(249, 115, 22, 0.25); }
 .ht-select:focus-visible {
     border-color: var(--ht-thermal-500);
