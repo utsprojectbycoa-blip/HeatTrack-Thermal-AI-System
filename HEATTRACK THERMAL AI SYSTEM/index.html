@@ -1614,29 +1614,6 @@
                                 <span>Detection Log History</span>
                             </div>
                             <div class="ht-toolbar ht-toolbar--wrap">
-                                <select id="logDateRange" class="ht-select">
-                                    <option value="all">All Times</option>
-                                    <option value="today">Today</option>
-                                    <option value="last7">Last 7 days</option>
-                                    <option value="last30">Last 30 days</option>
-                                    <option value="custom">Custom range</option>
-                                </select>
-                                <div id="logCustomRange" class="u-hidden ht-custom-range">
-                                    <div class="ht-custom-range__item">
-                                        <span class="ht-select-label">From</span>
-                                        <div class="ht-select ht-select--date">
-                                            <input type="date" id="logCustomStart" placeholder="mm/dd/yyyy" aria-label="Custom start date" data-has-value="false">
-                                            <span class="ht-custom-range__placeholder">mm/dd/yyyy</span>
-                                        </div>
-                                    </div>
-                                    <div class="ht-custom-range__item">
-                                        <span class="ht-select-label">To</span>
-                                        <div class="ht-select ht-select--date">
-                                            <input type="date" id="logCustomEnd" placeholder="mm/dd/yyyy" aria-label="Custom end date" data-has-value="false">
-                                            <span class="ht-custom-range__placeholder">mm/dd/yyyy</span>
-                                        </div>
-                                    </div>
-                                </div>
                                 <button type="button" id="exportLogs" class="ht-btn ht-btn--small ht-btn--ghost">
                                     <i data-lucide="download"></i> Generate Report
                                 </button>
@@ -1645,11 +1622,55 @@
                         <!-- Filter by status OR urgency level: the switch picks the set, a chip picks the level
                              (chips and their record counts are drawn by renderLogFilterChips in script.js) -->
                         <div class="ht-log-filters">
-                            <div class="ht-log-filters__switch" role="group" aria-label="Filter by">
-                                <button type="button" class="is-active" data-log-kind="status" aria-pressed="true">Status</button>
-                                <button type="button" data-log-kind="urgency" aria-pressed="false">Urgency Level</button>
+                            <div class="ht-log-filters__row">
+                                <div class="ht-log-filters__switch" role="group" aria-label="Filter by">
+                                    <button type="button" class="is-active" data-log-kind="status" aria-pressed="true">Status</button>
+                                    <button type="button" data-log-kind="urgency" aria-pressed="false">Urgency Level</button>
+                                </div>
+                                <!-- Period: one date-picker button beside the switch; its panel has the quick
+                                     ranges and a From / To calendar (see initLogPeriod in script.js) -->
+                                <div class="ht-log-period">
+                                    <!-- Icon only; the dot shows a period other than All time is on
+                                         (the period itself is the chip in the filter bar below) -->
+                                    <button type="button" id="logPeriodBtn" class="ht-log-period__btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="logPeriodPanel" aria-label="Choose a period (All time)" title="Period: All time">
+                                        <i data-lucide="calendar-days"></i>
+                                        <span class="ht-log-period__dot" aria-hidden="true"></span>
+                                    </button>
+                                    <div id="logPeriodPanel" class="ht-log-period__panel" role="dialog" aria-label="Choose a period">
+                                        <p class="ht-log-period__title">Quick ranges</p>
+                                        <div class="ht-log-period__presets" role="group" aria-label="Quick ranges">
+                                            <button type="button" data-log-period="all">All time</button>
+                                            <button type="button" data-log-period="today">Today</button>
+                                            <button type="button" data-log-period="last7">Last 7 days</button>
+                                            <button type="button" data-log-period="last30">Last 30 days</button>
+                                        </div>
+                                        <p class="ht-log-period__title">Pick dates</p>
+                                        <div class="ht-log-period__dates">
+                                            <div class="ht-custom-range__item">
+                                                <span class="ht-select-label">From</span>
+                                                <div class="ht-select ht-select--date">
+                                                    <input type="date" id="logCustomStart" placeholder="mm/dd/yyyy" aria-label="Start date" data-has-value="false">
+                                                    <span class="ht-custom-range__placeholder">mm/dd/yyyy</span>
+                                                </div>
+                                            </div>
+                                            <div class="ht-custom-range__item">
+                                                <span class="ht-select-label">To</span>
+                                                <div class="ht-select ht-select--date">
+                                                    <input type="date" id="logCustomEnd" placeholder="mm/dd/yyyy" aria-label="End date" data-has-value="false">
+                                                    <span class="ht-custom-range__placeholder">mm/dd/yyyy</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <div id="logFilterChips" class="ht-log-filters__chips" role="group" aria-label="Filter level"></div>
+                            <!-- The active period (hidden for All time); its x goes back to All time -->
+                            <div id="logPeriodChip" class="ht-log-period-chip" hidden>
+                                <i data-lucide="calendar-days"></i>
+                                <span id="logPeriodLabel">All time</span>
+                                <button type="button" class="ht-log-period-chip__clear" data-log-period-clear aria-label="Clear the period (show all time)"><i data-lucide="x"></i></button>
+                            </div>
                         </div>
                         <div class="ht-table-scroll">
                             <table class="ht-table">
