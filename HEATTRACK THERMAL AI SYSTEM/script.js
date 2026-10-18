@@ -693,7 +693,8 @@ function initAuth() {
         document.querySelector('.ht-role-switcher')?.classList.add('u-hidden');
         authApp.classList.add('u-hidden');
         loadAlertsPreference();
-        loadDeviceSettings();
+        updateSystemToggleStates();
+        await loadAccountSettings();
         showView(route || getRouteFromHash());
         await loadCloudData();
         subscribeRealtime(currentUser.id);
@@ -1196,8 +1197,8 @@ const state = {
     alertsPageSize: 10,
     recommendationsDisplayed: 0,
     recommendationsPageSize: 8,
-    cameraActive: true,     // this device's Camera Streams choice (browser storage)
-    aiActive: true,         // this device's AI Detection choice (browser storage)
+    cameraActive: true,     // account-wide (user_settings), same on every device
+    aiActive: true,         // account-wide (user_settings), same on every device
     alertsWanted: true,     // this device's Alert Notifications choice (browser storage)
     alertsEnabled: true,    // alertsWanted, and only while cameras and AI are on
     lastToastDetection: null,
@@ -3127,11 +3128,12 @@ function loadSavedAlerts() {
 }
 
 // ============================================
-// SETTINGS: Camera Streams, AI Detection Model and Alert Notifications are
-// saved in this browser per account, so each device chooses for itself.
+// SETTINGS: Camera Streams and AI Detection Model are saved for the account
+// (public.user_settings, see user_settings.sql), so turning them off on one
+// device turns them off on every device signed in to it. Alert Notifications
+// are saved in this browser only, so each device chooses for itself.
 // ============================================
 const alertsPrefKey = () => (currentUser?.id ? `heattrack-alerts-on-${currentUser.id}` : null);
-const deviceSettingsKey = () => (currentUser?.id ? `heattrack-settings-${currentUser.id}` : null);
 
 function loadAlertsPreference() {
     let saved = null;
@@ -3145,22 +3147,51 @@ function saveAlertsPreference() {
     try { localStorage.setItem(key, state.alertsWanted ? 'on' : 'off'); } catch (_) { /* no storage */ }
 }
 
-// Nothing saved yet = both on
-function loadDeviceSettings() {
-    let saved = null;
-    try { saved = JSON.parse(localStorage.getItem(deviceSettingsKey()) || 'null'); } catch (_) { /* no storage */ }
-    state.cameraActive = saved?.camera !== false;
-    state.aiActive = state.cameraActive && saved?.ai !== false;
+// A change saved on this device is not overwritten by an older copy read
+// back from the server while the save is still on its way
+let accountSettingsSaving = 0;
+
+// row: a user_settings row, or null for "never changed" (both on)
+function applyAccountSettings(row) {
+    if (accountSettingsSaving) return;
+    const camera = row?.camera_streams !== false;
+    const ai = camera && row?.ai_detection !== false;
+    if (camera === state.cameraActive && ai === state.aiActive) return;
+    state.cameraActive = camera;
+    state.aiActive = ai;
     updateSystemToggleStates();
     drawAnnotations();
 }
 
-function saveDeviceSettings() {
-    const key = deviceSettingsKey();
-    if (!key) return;
+async function loadAccountSettings() {
+    const uid = currentUser?.id;
+    if (!uid) return;
+    const { data, error } = await sb.from('user_settings')
+        .select('camera_streams, ai_detection').eq('user_id', uid).maybeSingle();
+    if (error) {
+        console.warn('Could not load settings (has user_settings.sql been run?):', error);
+        return;
+    }
+    applyAccountSettings(data);
+}
+
+async function saveAccountSettings() {
+    const uid = currentUser?.id;
+    if (!uid) return;
+    accountSettingsSaving++;
     try {
-        localStorage.setItem(key, JSON.stringify({ camera: state.cameraActive, ai: state.aiActive }));
-    } catch (_) { /* no storage: the choice lasts for this visit only */ }
+        const { error } = await sb.from('user_settings').upsert({
+            user_id: uid,
+            camera_streams: state.cameraActive,
+            ai_detection: state.aiActive,
+            updated_at: new Date().toISOString(),
+        });
+        if (error) console.warn('Could not save settings for the account:', error);
+    } finally {
+        accountSettingsSaving--;
+    }
+    // Show what the account really has (the saved values, or the old ones if saving failed)
+    await loadAccountSettings();
 }
 
 // Heat-stress notifications: the 30-minute readings with Urgent or Critical
@@ -3734,7 +3765,6 @@ function getFilteredLogDetections({ allRows = false } = {}) {
     return filtered;
 }
 
-
 function exportDetectionsToExcel() {
     // Every 10-minute reading, not only the Detection Log entries
     // Rows that fit no 10-minute mark (e.g. test rows seconds apart) are left out
@@ -3827,7 +3857,7 @@ function exportDetectionsToExcel() {
     tableXml += fullRow(26, 'sTitle', 'HeatTrack Analytics Report');
     tableXml += spacerRow;
     tableXml += fullRow(18, 'sGenerated', 'Generated: ' + generated);
-    tableXml += fullRow(18, 'sGenerated', 'Events: ' + (pick('logFilter') || 'All Events') + '   |   Urgency: ' + (pick('logUrgencyFilter') || 'All Urgency Levels') + '   |   Period: ' + period
+    tableXml += fullRow(18, 'sGenerated', 'Events: ' + (pick('logFilter') || 'All Events') + '   |   Period: ' + period
         // Total = the ducks of all four statuses, the same sum as the boxes below
         + '   |   Total Records: ' + totalDucks);
     tableXml += spacerRow;
@@ -4144,17 +4174,15 @@ function setupEventListeners() {
         }
     });
 
-    // Log filters (status + urgency)
-    ['logFilter', 'logUrgencyFilter'].forEach((id) => {
-        document.getElementById(id)?.addEventListener('change', () => {
-            const el = document.getElementById(id);
-            if (el) {
-                el.classList.remove('is-active');
-                el.blur();
-            }
-            state.currentPage = 1;
-            renderDetectionLogs();
-        });
+    // Log filter
+    document.getElementById('logFilter')?.addEventListener('change', () => {
+        const el = document.getElementById('logFilter');
+        if (el) {
+            el.classList.remove('is-active');
+            el.blur();
+        }
+        state.currentPage = 1;
+        renderDetectionLogs();
     });
 
     document.getElementById('logDateRange')?.addEventListener('change', () => {
@@ -4211,20 +4239,21 @@ function setupEventListeners() {
         syncCameraZoomCursor(thermalCameraContainer);
     });
 
-    // System toggles: each one applies to this device only
+    // System toggles: Camera Streams and AI Detection apply to the whole account,
+    // Alert Notifications only to this device
     document.getElementById('cameraToggle')?.addEventListener('change', (e) => {
         state.cameraActive = e.target.checked;
         if (!state.cameraActive) state.aiActive = false;
         updateSystemToggleStates();
         drawAnnotations();
-        saveDeviceSettings();
+        saveAccountSettings();
     });
 
     document.getElementById('aiToggle')?.addEventListener('change', (e) => {
         state.aiActive = e.target.checked;
         updateSystemToggleStates();
         drawAnnotations();
-        saveDeviceSettings();
+        saveAccountSettings();
     });
 
     document.getElementById('alertToggle')?.addEventListener('change', (e) => {
@@ -5080,6 +5109,9 @@ function subscribeRealtime(userId) {
         .on('postgres_changes',
             { event: 'INSERT', schema: 'public', table: 'analytics', filter: `userid=eq.${userId}` },
             (payload) => handleAnalyticsInsert(payload.new))
+        .on('postgres_changes',
+            { event: '*', schema: 'public', table: 'user_settings', filter: `user_id=eq.${userId}` },
+            (payload) => applyAccountSettings(payload.eventType === 'DELETE' ? null : payload.new))
         .subscribe((status) => {
             if (status === 'CHANNEL_ERROR') console.warn('Realtime channel error. Is Realtime enabled for these tables?');
         });
@@ -5106,6 +5138,7 @@ async function pollNewRows(userId) {
         ]);
         (envRes.data || []).forEach(handleEnvironmentInsert);
         (analyticsRes.data || []).forEach(handleAnalyticsInsert);   // oldest first, so newest ends on top
+        await loadAccountSettings();   // Settings changed on another device
     } catch (err) {
         console.warn('HeatTrack: could not check for new rows', err);
     } finally {
