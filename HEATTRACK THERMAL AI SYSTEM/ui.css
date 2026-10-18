@@ -3489,10 +3489,68 @@ input[type="date"] {
 .ht-log-filters__switch button:focus-visible,
 .ht-log-chip:focus-visible { outline: none; box-shadow: var(--ht-focus-ring); }
 
+/* Detection Log History on tablets / phones: the stacked header and filter bar
+   would eat most of the fixed 28rem panel, so the panel grows with its content
+   and the table keeps its own scroll area */
+@media (max-width: 900px) {
+    #view-analytics .ht-log-panel {
+        height: auto;
+        min-height: 0;
+        max-height: none;
+    }
+    #view-analytics .ht-log-panel .ht-table-scroll {
+        flex: none;
+        height: 22rem;
+        max-height: 60vh;
+    }
+}
+
 @media (max-width: 640px) {
-    .ht-log-filters { padding: 0 1rem 0.65rem; }
+    .ht-log-filters {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.55rem;
+        padding: 0 1rem 0.65rem;
+    }
     .ht-log-filters__switch { width: 100%; }
-    .ht-log-filters__switch button { flex: 1; }
+    .ht-log-filters__switch button { flex: 1; padding: 0.4rem 0.5rem; }
+
+    /* Chips stay on one line and swipe sideways instead of wrapping into rows */
+    .ht-log-filters__chips {
+        flex-wrap: nowrap;
+        /* Bounded to the panel width, so the row overflows and can scroll */
+        min-width: 0;
+        max-width: calc(100% + 2rem);
+        overflow-x: auto;
+        overflow-y: hidden;
+        margin: 0 -1rem;
+        padding: 0 1rem 0.1rem;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-x pan-y;
+        overscroll-behavior-x: contain;
+        cursor: grab;
+        /* Fade at the right edge hints that more chips are off-screen */
+        -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 1.5rem), transparent);
+        mask-image: linear-gradient(90deg, #000 calc(100% - 1.5rem), transparent);
+    }
+    .ht-log-filters__chips::-webkit-scrollbar { display: none; }
+    .ht-log-chip { flex-shrink: 0; padding: 0.35rem 0.45rem 0.35rem 0.7rem; }
+
+    /* Date range + Generate Report side by side, custom dates on their own row */
+    #view-analytics .ht-log-panel .ht-toolbar .ht-select,
+    #view-analytics .ht-log-panel .ht-toolbar > button {
+        flex: 1 1 0;
+    }
+    #view-analytics .ht-log-panel .ht-toolbar > button { justify-content: center; white-space: nowrap; }
+    #view-analytics .ht-log-panel .ht-toolbar .ht-custom-range { flex-basis: 100%; order: 3; }
+    #view-analytics .ht-log-panel .ht-toolbar .ht-custom-range input[type="date"] { min-width: 0; }
+
+    /* Footer: record count above the pager so neither gets squeezed */
+    #view-analytics .ht-log-panel .ht-panel__foot {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
 }
 
 .ht-select {
