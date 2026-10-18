@@ -3827,7 +3827,7 @@ function exportDetectionsToExcel() {
     tableXml += fullRow(26, 'sTitle', 'HeatTrack Analytics Report');
     tableXml += spacerRow;
     tableXml += fullRow(18, 'sGenerated', 'Generated: ' + generated);
-    tableXml += fullRow(18, 'sGenerated', 'Events: ' + (pick('logFilter') || 'All Events') + '   |   Period: ' + period
+    tableXml += fullRow(18, 'sGenerated', 'Events: ' + (pick('logFilter') || 'All Events') + '   |   Urgency: ' + (pick('logUrgencyFilter') || 'All Urgency Levels') + '   |   Period: ' + period
         // Total = the ducks of all four statuses, the same sum as the boxes below
         + '   |   Total Records: ' + totalDucks);
     tableXml += spacerRow;
@@ -4144,15 +4144,17 @@ function setupEventListeners() {
         }
     });
 
-    // Log filter
-    document.getElementById('logFilter')?.addEventListener('change', () => {
-        const el = document.getElementById('logFilter');
-        if (el) {
-            el.classList.remove('is-active');
-            el.blur();
-        }
-        state.currentPage = 1;
-        renderDetectionLogs();
+    // Log filters (status + urgency)
+    ['logFilter', 'logUrgencyFilter'].forEach((id) => {
+        document.getElementById(id)?.addEventListener('change', () => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.classList.remove('is-active');
+                el.blur();
+            }
+            state.currentPage = 1;
+            renderDetectionLogs();
+        });
     });
 
     document.getElementById('logDateRange')?.addEventListener('change', () => {
