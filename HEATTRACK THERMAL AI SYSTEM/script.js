@@ -1486,6 +1486,7 @@ function showView(route) {
     if (previousView === 'analytics' && currentView !== 'analytics') {
         resetLogChipsScroll();
         setLogPeriodPanel(false);
+    }
     // Leaving the FAQ: close every open question so it starts collapsed next time
     if (previousView === 'faq' && currentView !== 'faq') {
         document.querySelectorAll('#view-faq details[open]').forEach((item) => { item.open = false; });
