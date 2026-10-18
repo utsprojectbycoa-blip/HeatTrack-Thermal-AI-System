@@ -3407,6 +3407,94 @@ input[type="date"] {
     .ht-panel--chart .ht-chart-frame { width: 8.5rem !important; height: 8.5rem !important; }
 }
 
+/* Detection Log filter bar: Status / Urgency switch + coloured level chips with counts */
+.ht-log-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem 0.9rem;
+    padding: 0 1.1rem 0.75rem;
+    border-bottom: 1px solid var(--ht-border-subtle);
+    /* Continues the header's background, so header + filters read as one block */
+    background: rgba(241, 245, 249, 0.5);
+}
+/* No line between the "Detection Log History" header and its filter bar */
+.ht-panel__head:has(+ .ht-log-filters) {
+    border-bottom: 0;
+}
+.ht-log-filters__switch {
+    display: inline-flex;
+    padding: 0.2rem;
+    border-radius: 999px;
+    background: var(--ht-surface-700);
+}
+.ht-log-filters__switch button {
+    padding: 0.3rem 0.8rem;
+    border: 0;
+    border-radius: 999px;
+    color: var(--ht-surface-300);
+    background: transparent;
+    font: 600 0.75rem var(--ht-font);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.ht-log-filters__switch button.is-active {
+    color: var(--ht-surface-50);
+    background: #fff;
+    box-shadow: var(--ht-shadow-xs);
+}
+.ht-log-filters__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+.ht-log-chip {
+    --chip: var(--ht-thermal-600);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.45rem 0.3rem 0.7rem;
+    border: 1px solid var(--ht-border-subtle);
+    border-radius: 999px;
+    color: var(--ht-surface-200);
+    background: #fff;
+    font: 600 0.75rem var(--ht-font);
+    white-space: nowrap;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.ht-log-chip:hover { border-color: var(--chip); }
+.ht-log-chip__dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--chip);
+}
+.ht-log-chip b {
+    min-width: 1.4rem;
+    padding: 0.05rem 0.35rem;
+    border-radius: 999px;
+    color: var(--ht-surface-300);
+    background: var(--ht-surface-800);
+    font: 700 0.68rem var(--ht-mono);
+    text-align: center;
+}
+.ht-log-chip.is-active {
+    border-color: transparent;
+    color: #fff;
+    background: var(--chip);
+}
+.ht-log-chip.is-active .ht-log-chip__dot { background: #fff; }
+.ht-log-chip.is-active b { color: var(--chip); background: #fff; }
+.ht-log-filters__switch button:focus-visible,
+.ht-log-chip:focus-visible { outline: none; box-shadow: var(--ht-focus-ring); }
+
+@media (max-width: 640px) {
+    .ht-log-filters { padding: 0 1rem 0.65rem; }
+    .ht-log-filters__switch { width: 100%; }
+    .ht-log-filters__switch button { flex: 1; }
+}
+
 .ht-select {
     background: linear-gradient(180deg, #fff, var(--ht-surface-850));
     border: 1px solid var(--ht-border-subtle);
@@ -3421,13 +3509,6 @@ input[type="date"] {
     cursor: pointer;
     box-shadow: var(--ht-shadow-xs);
     transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-/* Detection Log status + urgency filters share one width */
-#logFilter,
-#logUrgencyFilter {
-    width: 12.5rem;
-    max-width: 100%;
 }
 
 .ht-select:hover { border-color: rgba(249, 115, 22, 0.25); }
