@@ -692,9 +692,9 @@ function initAuth() {
         document.body.classList.remove('ht-auth-mode');
         document.querySelector('.ht-role-switcher')?.classList.add('u-hidden');
         authApp.classList.add('u-hidden');
-        loadAlertsPreference();
+        loadDeviceSettings();
         updateSystemToggleStates();
-        await loadAccountSettings();
+        drawAnnotations();
         showView(route || getRouteFromHash());
         await loadCloudData();
         subscribeRealtime(currentUser.id);
@@ -1191,15 +1191,17 @@ const state = {
     },
     currentPage: 1,
     pageSize: 10,
+    // Detection Log filter: kind 'status' | 'urgency', level a STATUS_ORDER / severity code or 'ALL'
+    logFilter: { kind: 'status', level: 'ALL' },
     alertCount: 0,
     alerts: [],
     alertsDisplayed: 0,
     alertsPageSize: 10,
     recommendationsDisplayed: 0,
     recommendationsPageSize: 8,
-    cameraActive: true,     // account-wide (user_settings), same on every device
-    aiActive: true,         // account-wide (user_settings), same on every device
-    alertsWanted: true,     // this device's Alert Notifications choice (browser storage)
+    cameraActive: true,     // this browser's Camera Streams choice (browser storage)
+    aiActive: true,         // this browser's AI Detection Model choice (browser storage)
+    alertsWanted: true,     // this browser's Alert Notifications choice (browser storage)
     alertsEnabled: true,    // alertsWanted, and only while cameras and AI are on
     lastToastDetection: null,
     stats: {
@@ -2316,6 +2318,7 @@ function liveThermalHtml(thermal) {
 // ============================================
 function renderDetectionLogs() {
     const tbody = document.getElementById('detectionLogBody');
+    renderLogFilterChips();
     const filtered = getFilteredLogDetections();
 
     const totalPages = Math.ceil(filtered.length / state.pageSize) || 1;
@@ -3128,70 +3131,37 @@ function loadSavedAlerts() {
 }
 
 // ============================================
-// SETTINGS: Camera Streams and AI Detection Model are saved for the account
-// (public.user_settings, see user_settings.sql), so turning them off on one
-// device turns them off on every device signed in to it. Alert Notifications
-// are saved in this browser only, so each device chooses for itself.
+// SETTINGS: Camera Streams, AI Detection Model and Alert Notifications are
+// saved in this browser only (per account), so each browser / device chooses
+// for itself and a change here never affects another device.
 // ============================================
-const alertsPrefKey = () => (currentUser?.id ? `heattrack-alerts-on-${currentUser.id}` : null);
+const settingsKey = () => (currentUser?.id ? `heattrack-settings-${currentUser.id}` : null);
+// Alert choice saved before all three settings moved into settingsKey
+const oldAlertsPrefKey = () => (currentUser?.id ? `heattrack-alerts-on-${currentUser.id}` : null);
 
-function loadAlertsPreference() {
+function loadDeviceSettings() {
     let saved = null;
-    try { saved = localStorage.getItem(alertsPrefKey()); } catch (_) { /* no storage */ }
-    state.alertsWanted = saved !== 'off';
-}
-
-function saveAlertsPreference() {
-    const key = alertsPrefKey();
-    if (!key) return;
-    try { localStorage.setItem(key, state.alertsWanted ? 'on' : 'off'); } catch (_) { /* no storage */ }
-}
-
-// A change saved on this device is not overwritten by an older copy read
-// back from the server while the save is still on its way
-let accountSettingsSaving = 0;
-
-// row: a user_settings row, or null for "never changed" (both on)
-function applyAccountSettings(row) {
-    if (accountSettingsSaving) return;
-    const camera = row?.camera_streams !== false;
-    const ai = camera && row?.ai_detection !== false;
-    if (camera === state.cameraActive && ai === state.aiActive) return;
-    state.cameraActive = camera;
-    state.aiActive = ai;
-    updateSystemToggleStates();
-    drawAnnotations();
-}
-
-async function loadAccountSettings() {
-    const uid = currentUser?.id;
-    if (!uid) return;
-    const { data, error } = await sb.from('user_settings')
-        .select('camera_streams, ai_detection').eq('user_id', uid).maybeSingle();
-    if (error) {
-        console.warn('Could not load settings (has user_settings.sql been run?):', error);
-        return;
-    }
-    applyAccountSettings(data);
-}
-
-async function saveAccountSettings() {
-    const uid = currentUser?.id;
-    if (!uid) return;
-    accountSettingsSaving++;
+    let oldAlerts = null;
     try {
-        const { error } = await sb.from('user_settings').upsert({
-            user_id: uid,
-            camera_streams: state.cameraActive,
-            ai_detection: state.aiActive,
-            updated_at: new Date().toISOString(),
-        });
-        if (error) console.warn('Could not save settings for the account:', error);
-    } finally {
-        accountSettingsSaving--;
-    }
-    // Show what the account really has (the saved values, or the old ones if saving failed)
-    await loadAccountSettings();
+        saved = JSON.parse(localStorage.getItem(settingsKey()) || 'null');
+        oldAlerts = localStorage.getItem(oldAlertsPrefKey());
+    } catch (_) { /* no storage, or unreadable: use the defaults */ }
+    // Never saved = everything on
+    state.cameraActive = saved?.camera !== false;
+    state.aiActive = state.cameraActive && saved?.ai !== false;
+    state.alertsWanted = saved ? saved.alerts !== false : oldAlerts !== 'off';
+}
+
+function saveDeviceSettings() {
+    const key = settingsKey();
+    if (!key) return;
+    try {
+        localStorage.setItem(key, JSON.stringify({
+            camera: state.cameraActive,
+            ai: state.aiActive,
+            alerts: state.alertsWanted,
+        }));
+    } catch (_) { /* no storage */ }
 }
 
 // Heat-stress notifications: the 30-minute readings with Urgent or Critical
@@ -3744,25 +3714,65 @@ function xlsStyle(id, o = {}) {
 // (the KPI cards count the '30 min' ones only).
 // allRows: also the 10-minute readings between the 30-minute steps (Excel only)
 function getFilteredLogDetections({ allRows = false } = {}) {
-    const statusFilter = document.getElementById('logFilter')?.value || 'all';
+    // Strictly match the row's own Status or Urgency column (not its 30-minute peak)
+    const { kind, level } = state.logFilter;
+    const rows = logRowsInPeriod({ allRows });
+    if (level === 'ALL') return rows;
+    return rows.filter((d) => (kind === 'status' ? d.status : d.severity) === level);
+}
+
+// The log rows inside the chosen period, before the status / urgency filter
+function logRowsInPeriod({ allRows = false } = {}) {
     const { start, end } = getLogDateBounds();
-
     // One entry per moment: the 30-minute peak rides along on its entry
-    let filtered = attachThirtyMinutePeaks(allRows ? summaryDetections() : logEntryDetections());
-    // Filter values: comfort / mild / moderate / severe
-    // Strictly match the status shown in the row's Status column (not its 30-minute peak or urgency)
-    const wanted = statusFilter.toUpperCase();
-    if (STATUS_INFO[wanted]) filtered = filtered.filter(d => d.status === wanted);
+    const rows = attachThirtyMinutePeaks(allRows ? summaryDetections() : logEntryDetections());
+    if (!start && !end) return rows;
+    return rows.filter(d => {
+        const ts = d.timestamp instanceof Date ? d.timestamp : new Date(d.timestamp);
+        if (start && ts < start) return false;
+        if (end && ts > end) return false;
+        return true;
+    });
+}
 
-    if (start || end) {
-        filtered = filtered.filter(d => {
-            const ts = d.timestamp instanceof Date ? d.timestamp : new Date(d.timestamp);
-            if (start && ts < start) return false;
-            if (end && ts > end) return false;
-            return true;
-        });
-    }
-    return filtered;
+// Filter chips: one set per kind, in severity order, each with its own colour
+const LOG_FILTER_CHIPS = {
+    status: STATUS_ORDER.map((s) => ({ level: s, label: STATUS_INFO[s].label, color: STATUS_INFO[s].color })),
+    urgency: [
+        { level: 'LOW', color: '#22c55e' },
+        { level: 'MODERATE', color: '#f59e0b' },
+        { level: 'HIGH', color: '#f97316' },
+        { level: 'CRITICAL', color: '#ef4444' },
+    ],
+};
+
+// Text for the Excel header, e.g. 'Urgency Level – Urgent'
+function logFilterLabel() {
+    const { kind, level } = state.logFilter;
+    if (level === 'ALL') return 'All Records';
+    return kind === 'status' ? `Status – ${STATUS_INFO[level].label}` : `Urgency Level – ${URGENCY_NAME[level]}`;
+}
+
+// Redraws the Status / Urgency switch and the chips with their record counts (for the chosen period)
+function renderLogFilterChips() {
+    const box = document.getElementById('logFilterChips');
+    if (!box) return;
+    const { kind, level } = state.logFilter;
+    const rows = logRowsInPeriod();
+    const count = (lvl) => rows.filter((d) => (kind === 'status' ? d.status : d.severity) === lvl).length;
+    const chip = (lvl, label, color) => `
+        <button type="button" class="ht-log-chip${level === lvl ? ' is-active' : ''}" data-log-level="${lvl}"
+            aria-pressed="${level === lvl}"${color ? ` style="--chip:${color}"` : ''}>
+            ${color ? '<span class="ht-log-chip__dot" aria-hidden="true"></span>' : ''}${label}<b>${lvl === 'ALL' ? rows.length : count(lvl)}</b>
+        </button>`;
+
+    document.querySelectorAll('[data-log-kind]').forEach((btn) => {
+        const active = btn.dataset.logKind === kind;
+        btn.classList.toggle('is-active', active);
+        btn.setAttribute('aria-pressed', String(active));
+    });
+    box.innerHTML = chip('ALL', 'All Records')
+        + LOG_FILTER_CHIPS[kind].map((c) => chip(c.level, c.label || URGENCY_NAME[c.level], c.color)).join('');
 }
 
 function exportDetectionsToExcel() {
@@ -3857,7 +3867,7 @@ function exportDetectionsToExcel() {
     tableXml += fullRow(26, 'sTitle', 'HeatTrack Analytics Report');
     tableXml += spacerRow;
     tableXml += fullRow(18, 'sGenerated', 'Generated: ' + generated);
-    tableXml += fullRow(18, 'sGenerated', 'Events: ' + (pick('logFilter') || 'All Events') + '   |   Period: ' + period
+    tableXml += fullRow(18, 'sGenerated', 'Filter: ' + logFilterLabel() + '   |   Period: ' + period
         // Total = the ducks of all four statuses, the same sum as the boxes below
         + '   |   Total Records: ' + totalDucks);
     tableXml += spacerRow;
@@ -4174,16 +4184,48 @@ function setupEventListeners() {
         }
     });
 
-    // Log filter
-    document.getElementById('logFilter')?.addEventListener('change', () => {
-        const el = document.getElementById('logFilter');
-        if (el) {
-            el.classList.remove('is-active');
-            el.blur();
-        }
+    // Log filter: the Status / Urgency switch picks the chip set (and clears the choice),
+    // a chip filters by that one level
+    document.querySelectorAll('[data-log-kind]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            if (state.logFilter.kind === btn.dataset.logKind) return;
+            state.logFilter = { kind: btn.dataset.logKind, level: 'ALL' };
+            state.currentPage = 1;
+            renderDetectionLogs();
+        });
+    });
+    const logChips = document.getElementById('logFilterChips');
+    let chipDrag = null;      // mouse drag in progress: { x, left, moved }
+    let chipDragged = false;  // the last drag moved, so its click is not a chip pick
+    logChips?.addEventListener('click', (e) => {
+        if (chipDragged) { chipDragged = false; return; }
+        const chip = e.target.closest('[data-log-level]');
+        if (!chip) return;
+        state.logFilter.level = chip.dataset.logLevel;
         state.currentPage = 1;
         renderDetectionLogs();
     });
+    // On narrow screens the chips sit on one line that scrolls sideways. Touch swipes
+    // scroll natively; a mouse can drag the row or use the wheel, since the scrollbar is hidden
+    logChips?.addEventListener('pointerdown', (e) => {
+        if (e.pointerType !== 'mouse' || logChips.scrollWidth <= logChips.clientWidth) return;
+        chipDrag = { x: e.clientX, left: logChips.scrollLeft, moved: false };
+    });
+    window.addEventListener('pointermove', (e) => {
+        if (!chipDrag) return;
+        const dx = e.clientX - chipDrag.x;
+        if (Math.abs(dx) > 5) chipDrag.moved = true;
+        if (chipDrag.moved) logChips.scrollLeft = chipDrag.left - dx;
+    });
+    window.addEventListener('pointerup', () => {
+        if (chipDrag?.moved) chipDragged = true;
+        chipDrag = null;
+    });
+    logChips?.addEventListener('wheel', (e) => {
+        if (logChips.scrollWidth <= logChips.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+        e.preventDefault();
+        logChips.scrollLeft += e.deltaY;
+    }, { passive: false });
 
     document.getElementById('logDateRange')?.addEventListener('change', () => {
         const el = document.getElementById('logDateRange');
@@ -4239,26 +4281,25 @@ function setupEventListeners() {
         syncCameraZoomCursor(thermalCameraContainer);
     });
 
-    // System toggles: Camera Streams and AI Detection apply to the whole account,
-    // Alert Notifications only to this device
+    // System toggles: all three apply to this browser only
     document.getElementById('cameraToggle')?.addEventListener('change', (e) => {
         state.cameraActive = e.target.checked;
         if (!state.cameraActive) state.aiActive = false;
         updateSystemToggleStates();
         drawAnnotations();
-        saveAccountSettings();
+        saveDeviceSettings();
     });
 
     document.getElementById('aiToggle')?.addEventListener('change', (e) => {
         state.aiActive = e.target.checked;
         updateSystemToggleStates();
         drawAnnotations();
-        saveAccountSettings();
+        saveDeviceSettings();
     });
 
     document.getElementById('alertToggle')?.addEventListener('change', (e) => {
         state.alertsWanted = e.target.checked;
-        saveAlertsPreference();
+        saveDeviceSettings();
         updateSystemToggleStates();
     });
 
@@ -5109,9 +5150,6 @@ function subscribeRealtime(userId) {
         .on('postgres_changes',
             { event: 'INSERT', schema: 'public', table: 'analytics', filter: `userid=eq.${userId}` },
             (payload) => handleAnalyticsInsert(payload.new))
-        .on('postgres_changes',
-            { event: '*', schema: 'public', table: 'user_settings', filter: `user_id=eq.${userId}` },
-            (payload) => applyAccountSettings(payload.eventType === 'DELETE' ? null : payload.new))
         .subscribe((status) => {
             if (status === 'CHANNEL_ERROR') console.warn('Realtime channel error. Is Realtime enabled for these tables?');
         });
@@ -5138,7 +5176,6 @@ async function pollNewRows(userId) {
         ]);
         (envRes.data || []).forEach(handleEnvironmentInsert);
         (analyticsRes.data || []).forEach(handleAnalyticsInsert);   // oldest first, so newest ends on top
-        await loadAccountSettings();   // Settings changed on another device
     } catch (err) {
         console.warn('HeatTrack: could not check for new rows', err);
     } finally {
