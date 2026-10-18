@@ -707,8 +707,8 @@
                     <div class="ht-switch-row__text">
                         <div class="ht-switch-row__icon ht-switch-row__icon--thermal"><i data-lucide="brain"></i></div>
                         <div>
-                            <div class="ht-switch-row__title">AI Detection</div>
-                            <div class="ht-switch-row__sub">Analysis + Recommendations</div>
+                            <div class="ht-switch-row__title">AI Detection Model</div>
+                            <div class="ht-switch-row__sub">MLX90 + Thermal Analysis</div>
                         </div>
                     </div>
                     <label class="ht-switch ht-switch--thermal">
@@ -1396,7 +1396,7 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>Yes. Open the <strong>Settings</strong> panel from the top bar and switch <strong>Alert Notifications</strong> on or off. The same panel turns <strong>Camera Streams</strong> and the <strong>AI Detection Model</strong> on or off. Alerts work only while both of those are on. Keep alerts on during the hottest hours so you can respond quickly when conditions change.</p>
+                                        <p>Yes. Open the <strong>Settings</strong> panel from the top bar and switch <strong>Alert Notifications</strong> on or off. The same panel turns <strong>Camera Streams</strong> and the <strong>AI Detection Model</strong> on or off. Alerts work only while both of those are on. Camera Streams and AI Detection apply to every device signed in to your account, while Alert Notifications are set separately on each device. Keep alerts on during the hottest hours so you can respond quickly when conditions change.</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
@@ -1620,6 +1620,13 @@
                                     <option value="moderate">Moderate Heat Stress Only</option>
                                     <option value="mild">Mild Heat Stress Only</option>
                                     <option value="comfort">Thermal Comfort Only</option>
+                                </select>
+                                <select id="logUrgencyFilter" class="ht-select" aria-label="Filter by urgency level">
+                                    <option value="all">All Urgency Levels</option>
+                                    <option value="critical">Critical Level Only</option>
+                                    <option value="high">Urgent Level Only</option>
+                                    <option value="moderate">Monitor Level Only</option>
+                                    <option value="low">Routine Level Only</option>
                                 </select>
                                 <select id="logDateRange" class="ht-select">
                                     <option value="all">All Times</option>
