@@ -3407,6 +3407,171 @@ input[type="date"] {
     .ht-panel--chart .ht-chart-frame { width: 8.5rem !important; height: 8.5rem !important; }
 }
 
+/* Detection Log period: date-picker button + panel (quick ranges, From / To dates) */
+.ht-log-period { position: relative; }
+/* Status / Urgency switch with the calendar beside it, same height */
+.ht-log-filters__row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* The button: a round calendar icon, as tall as the Status / Urgency switch */
+.ht-log-period__btn {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    /* Always orange so the calendar stands out */
+    border: 1px solid rgba(249, 115, 22, 0.35);
+    border-radius: 999px;
+    color: var(--ht-thermal-600);
+    background: #fff1e6;
+    box-shadow: var(--ht-shadow-xs);
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s, color 0.15s, background 0.15s;
+}
+.ht-log-period__btn svg { width: 1rem; height: 1rem; }
+.ht-log-period__btn:hover { border-color: var(--ht-thermal-500); background: #ffe4cc; }
+.ht-log-period__btn:focus-visible,
+.ht-log-period__btn[aria-expanded="true"] {
+    outline: none;
+    border-color: var(--ht-thermal-500);
+    box-shadow: var(--ht-focus-ring);
+}
+/* A period other than All time is on: the dot shows it (the button keeps its colors) */
+.ht-log-period__dot {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    display: none;
+    width: 0.55rem;
+    height: 0.55rem;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    background: var(--ht-thermal-600);
+}
+.ht-log-period__btn.has-period .ht-log-period__dot { display: block; }
+
+/* The active period in the filter bar: calendar + text + x */
+.ht-log-period-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    max-width: 100%;
+    padding: 0.2rem 0.25rem 0.2rem 0.6rem;
+    border: 1px solid rgba(249, 115, 22, 0.3);
+    border-radius: 999px;
+    color: var(--ht-thermal-700);
+    background: #fff7ed;
+    font: 600 0.75rem var(--ht-font);
+    white-space: nowrap;
+}
+.ht-log-period-chip[hidden] { display: none; }
+.ht-log-period-chip > svg { flex-shrink: 0; width: 0.8rem; height: 0.8rem; }
+.ht-log-period-chip span { overflow: hidden; text-overflow: ellipsis; }
+.ht-log-period-chip__clear {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 1.25rem;
+    height: 1.25rem;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    color: var(--ht-thermal-700);
+    background: transparent;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.ht-log-period-chip__clear svg { width: 0.75rem; height: 0.75rem; }
+.ht-log-period-chip__clear:hover { background: rgba(249, 115, 22, 0.15); }
+.ht-log-period-chip__clear:focus-visible { outline: none; box-shadow: var(--ht-focus-ring); }
+.ht-log-period__panel {
+    position: absolute;
+    top: calc(100% + 0.4rem);
+    left: 0;   /* opens to the right, toward the chips */
+    z-index: 30;
+    width: 17.5rem;
+    padding: 0.8rem;
+    border: 1px solid var(--ht-border-subtle);
+    border-radius: 0.75rem;
+    background: #fff;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
+    /* Closed: invisible and out of the tab order; fades/slides in when opened */
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-6px) scale(0.98);
+    transform-origin: top left;
+    transition: opacity 0.16s ease, transform 0.16s ease, visibility 0s linear 0.16s;
+}
+.ht-log-period__panel.is-open {
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    transition: opacity 0.16s ease, transform 0.16s ease, visibility 0s;
+}
+
+.ht-log-period__title {
+    margin: 0 0 0.45rem;
+    color: var(--ht-surface-400);
+    font: 600 0.65rem var(--ht-font);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+.ht-log-period__presets {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.35rem;
+    margin-bottom: 0.8rem;
+}
+.ht-log-period__presets button {
+    padding: 0.4rem 0.5rem;
+    border: 1px solid var(--ht-border-subtle);
+    border-radius: 0.5rem;
+    color: var(--ht-surface-200);
+    background: #fff;
+    font: 600 0.72rem var(--ht-font);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.ht-log-period__presets button:hover { border-color: rgba(249, 115, 22, 0.35); }
+.ht-log-period__presets button.is-active {
+    border-color: transparent;
+    color: #fff;
+    background: var(--ht-thermal-600);
+}
+.ht-log-period__presets button:focus-visible { outline: none; box-shadow: var(--ht-focus-ring); }
+.ht-log-period__dates { display: grid; gap: 0.45rem; }
+/* Each From / To row is full width: label, then the date box filling the rest */
+.ht-log-period__dates .ht-custom-range__item {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+    height: 2rem;
+}
+.ht-log-period__dates .ht-select-label { flex: 0 0 2rem; }
+.ht-log-period__dates .ht-select { flex: 1 1 auto; height: 2rem; min-height: 2rem; box-sizing: border-box; }
+/* Touch screens: show the picked date as mm/dd/yyyy over the native box */
+@media (max-width: 900px) and (hover: none) and (pointer: coarse) {
+    .ht-log-period__dates .ht-custom-range__placeholder { display: block; }
+}
+
+.ht-log-period { flex: none; }
+
+@media (max-width: 640px) {
+    .ht-log-period-chip { align-self: flex-start; }
+    /* Phones: the switch takes the row, the calendar sits at its end;
+       the panel opens under the calendar toward the left, fitting the screen */
+    .ht-log-filters__row { width: 100%; }
+    .ht-log-filters__row .ht-log-filters__switch { flex: 1; width: auto; }
+    /* The phone switch has taller buttons; the calendar matches it */
+    .ht-log-period__btn { width: 2.35rem; height: 2.35rem; }
+    .ht-log-period__panel { left: auto; right: 0; width: min(17.5rem, calc(100vw - 3rem)); transform-origin: top right; }
+}
+
 /* Detection Log filter bar: Status / Urgency switch + coloured level chips with counts */
 .ht-log-filters {
     display: flex;
@@ -3435,6 +3600,7 @@ input[type="date"] {
     color: var(--ht-surface-300);
     background: transparent;
     font: 600 0.75rem var(--ht-font);
+    white-space: nowrap;   /* "Urgency Level" always stays on one line */
     cursor: pointer;
     transition: background 0.15s, color 0.15s;
 }
@@ -3513,7 +3679,13 @@ input[type="date"] {
         padding: 0 1rem 0.65rem;
     }
     .ht-log-filters__switch { width: 100%; }
-    .ht-log-filters__switch button { flex: 1; padding: 0.4rem 0.5rem; }
+    .ht-log-filters__switch button {
+        flex: 1;
+        min-width: 0;
+        padding: 0.4rem 0.35rem;
+        /* Shrinks with the screen so both labels fit on one line (11px at 320px wide) */
+        font-size: clamp(0.66rem, 3.4vw, 0.75rem);
+    }
 
     /* Chips stay on one line and swipe sideways instead of wrapping into rows */
     .ht-log-filters__chips {
