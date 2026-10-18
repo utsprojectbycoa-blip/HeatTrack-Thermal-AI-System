@@ -7637,6 +7637,27 @@ button.ht-cap-card__link {
     }
 }
 
+/* Detection Log History on tablets / phones: larger, easier-to-read text.
+   The table scrolls sideways (.ht-table-scroll), so columns are not squeezed;
+   the hidden sizer row uses the same classes, so column widths follow along. */
+@media (max-width: 767px) {
+    .ht-log-panel .ht-table th {
+        font-size: 0.75rem; /* 12px */
+        padding: 0.6rem 0.8rem;
+    }
+    .ht-log-panel .ht-table td {
+        font-size: 0.8125rem; /* 13px */
+        padding: 0.6rem 0.8rem;
+    }
+    .ht-log-panel .ht-log-cell--mono { font-size: 0.8125rem; }
+    .ht-log-panel .ht-log-status { font-size: 0.75rem; }
+    .ht-log-panel .ht-log-status svg { width: 0.9rem; height: 0.9rem; }
+    .ht-log-panel .ht-pill {
+        font-size: 0.75rem;
+        padding: 0.15rem 0.55rem;
+    }
+}
+
 /* ---- Authentication ---------------------------------------------------------- */
 .ht-body.ht-auth-mode {
     background: #f56a18;
