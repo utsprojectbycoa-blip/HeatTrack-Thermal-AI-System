@@ -1614,13 +1614,6 @@
                                 <span>Detection Log History</span>
                             </div>
                             <div class="ht-toolbar ht-toolbar--wrap">
-                                <select id="logFilter" class="ht-select">
-                                    <option value="all">All Events</option>
-                                    <option value="severe">Severe Heat Stress Only</option>
-                                    <option value="moderate">Moderate Heat Stress Only</option>
-                                    <option value="mild">Mild Heat Stress Only</option>
-                                    <option value="comfort">Thermal Comfort Only</option>
-                                </select>
                                 <select id="logDateRange" class="ht-select">
                                     <option value="all">All Times</option>
                                     <option value="today">Today</option>
@@ -1648,6 +1641,15 @@
                                     <i data-lucide="download"></i> Generate Report
                                 </button>
                             </div>
+                        </div>
+                        <!-- Filter by status OR urgency level: the switch picks the set, a chip picks the level
+                             (chips and their record counts are drawn by renderLogFilterChips in script.js) -->
+                        <div class="ht-log-filters">
+                            <div class="ht-log-filters__switch" role="group" aria-label="Filter by">
+                                <button type="button" class="is-active" data-log-kind="status" aria-pressed="true">Status</button>
+                                <button type="button" data-log-kind="urgency" aria-pressed="false">Urgency Level</button>
+                            </div>
+                            <div id="logFilterChips" class="ht-log-filters__chips" role="group" aria-label="Filter level"></div>
                         </div>
                         <div class="ht-table-scroll">
                             <table class="ht-table">
