@@ -1193,6 +1193,7 @@ const state = {
     pageSize: 10,
     // Detection Log filter: kind 'status' | 'urgency', level a STATUS_ORDER / severity code or 'ALL'
     logFilter: { kind: 'status', level: 'ALL' },
+    // Detection Log period: 'all' | 'today' | 'last7' | 'last30' | 'custom' (see getLogDateBounds)
     alertCount: 0,
     alerts: [],
     alertsDisplayed: 0,
@@ -1481,6 +1482,10 @@ function showView(route) {
         if (normalCameraContainer?.resetZoom) normalCameraContainer.resetZoom();
         if (thermalCameraContainer?.resetZoom) thermalCameraContainer.resetZoom();
     }
+    // Leaving Analytics: the chip row starts at its first chip and the period panel is closed next time
+    if (previousView === 'analytics' && currentView !== 'analytics') {
+        resetLogChipsScroll();
+        setLogPeriodPanel(false);
     // Leaving the FAQ: close every open question so it starts collapsed next time
     if (previousView === 'faq' && currentView !== 'faq') {
         document.querySelectorAll('#view-faq details[open]').forEach((item) => { item.open = false; });
@@ -1674,11 +1679,11 @@ function setCustomRangeMaxDate() {
     if (startInput) startInput.max = maxValue;
     if (endInput) endInput.max = maxValue;
 }
-
+    
+// Period of the Detection Log: 'all' | 'today' | 'last7' | 'last30' (quick ranges)
+// or 'custom' (the From / To dates in the period picker)
 function getLogDateBounds() {
-    const rangeEl = document.getElementById('logDateRange');
-    if (!rangeEl) return { start: null, end: null };
-    const range = rangeEl.value;
+    const range = state.logPeriod;
     const now = new Date();
     const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
     let start = null;
@@ -1703,11 +1708,14 @@ function getLogDateBounds() {
     } else if (range === 'custom') {
         const startVal = document.getElementById('logCustomStart')?.value;
         const endVal = document.getElementById('logCustomEnd')?.value;
-        const parsedStart = parseDateInput(startVal);
-        const parsedEnd = parseDateInput(endVal, true);
+        let parsedStart = parseDateInput(startVal);
+        let parsedEnd = parseDateInput(endVal, true);
         if (parsedStart && parsedEnd) {
-            start = parsedStart;
-            return { start, end: parsedEnd };
+            // Dates picked the wrong way round: use them as earliest -> latest
+            if (parsedStart > parsedEnd) {
+                [parsedStart, parsedEnd] = [parseDateInput(endVal), parseDateInput(startVal, true)];
+            }
+            return { start: parsedStart, end: parsedEnd };
         }
         if (parsedStart) {
             start = parsedStart;
@@ -1721,12 +1729,117 @@ function getLogDateBounds() {
     return { start, end };
 }
 
-function toggleCustomLogRangeInputs() {
-    const showCustom = document.getElementById('logDateRange')?.value === 'custom';
-    const customRange = document.getElementById('logCustomRange');
-    if (customRange) {
-        customRange.classList.toggle('u-hidden', !showCustom);
+const LOG_PERIOD_NAMES = { all: 'All time', today: 'Today', last7: 'Last 7 days', last30: 'Last 30 days' };
+
+// Text on the period button (and in the Excel header), e.g. 'Last 7 days' or 'Oct 1 – Oct 18, 2026'
+function logPeriodLabel() {
+    if (state.logPeriod !== 'custom') return LOG_PERIOD_NAMES[state.logPeriod] || LOG_PERIOD_NAMES.all;
+    const { start, end } = getLogDateBounds();
+    const day = (d, year = true) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(year ? { year: 'numeric' } : {}) });
+    const hasStart = start && start.getTime() > 0;
+    const startPicked = !!document.getElementById('logCustomStart')?.value;
+    const endPicked = !!document.getElementById('logCustomEnd')?.value;
+    if (hasStart && startPicked && endPicked) {
+        if (day(start) === day(end)) return day(start);
+        return start.getFullYear() === end.getFullYear() ? `${day(start, false)} – ${day(end)}` : `${day(start)} – ${day(end)}`;
     }
+    if (hasStart && startPicked) return `From ${day(start)}`;
+    if (endPicked) return `Until ${day(end)}`;
+    return LOG_PERIOD_NAMES.all;
+}
+
+// Button text + which quick range is highlighted
+function renderLogPeriod() {
+    const text = logPeriodLabel();
+    const filtered = text !== LOG_PERIOD_NAMES.all;
+    const label = document.getElementById('logPeriodLabel');
+    if (label) label.textContent = text;
+    // Chip in the filter bar only while a period is on
+    const chip = document.getElementById('logPeriodChip');
+    if (chip) chip.hidden = !filtered;
+    // Calendar icon: dot while a period is on, the period in its tooltip and label
+    const btn = document.getElementById('logPeriodBtn');
+    if (btn) {
+        btn.classList.toggle('has-period', filtered);
+        btn.title = `Period: ${text}`;
+        btn.setAttribute('aria-label', `Choose a period (${text})`);
+    }
+    document.querySelectorAll('[data-log-period]').forEach((btn) => {
+        const active = btn.dataset.logPeriod === state.logPeriod;
+        btn.classList.toggle('is-active', active);
+        btn.setAttribute('aria-pressed', String(active));
+    });
+}
+
+function setLogPeriodPanel(open) {
+    const panel = document.getElementById('logPeriodPanel');
+    const btn = document.getElementById('logPeriodBtn');
+    if (!panel || !btn) return;
+    // A class (not [hidden]) so the panel can fade in and out
+    panel.classList.toggle('is-open', open);
+    btn.setAttribute('aria-expanded', String(open));
+    btn.classList.toggle('is-active', open);
+}
+
+const logPeriodPanelOpen = () => !!document.getElementById('logPeriodPanel')?.classList.contains('is-open');
+
+// Sets a quick range (clears any picked dates) and redraws the log
+function applyLogPeriod(period) {
+    state.logPeriod = period;
+    clearLogDateInput(document.getElementById('logCustomStart'));
+    clearLogDateInput(document.getElementById('logCustomEnd'));
+    state.currentPage = 1;
+    renderLogPeriod();
+    renderDetectionLogs();
+}
+
+// Chip row back to its first chip (it scrolls sideways on narrow screens)
+function resetLogChipsScroll(smooth = false) {
+    const chips = document.getElementById('logFilterChips');
+    if (!chips) return;
+    if (smooth && typeof chips.scrollTo === 'function') chips.scrollTo({ left: 0, behavior: 'smooth' });
+    else chips.scrollLeft = 0;
+}
+
+// Empties a From / To box and its mm/dd/yyyy text
+function clearLogDateInput(input) {
+    if (!input) return;
+    input.value = '';
+    input.setAttribute('data-has-value', 'false');
+    input.setAttribute('data-display-date', '');
+    const placeholder = input.nextElementSibling;
+    if (placeholder?.classList.contains('ht-custom-range__placeholder')) placeholder.textContent = 'mm/dd/yyyy';
+}
+
+function initLogPeriod() {
+    const btn = document.getElementById('logPeriodBtn');
+    const panel = document.getElementById('logPeriodPanel');
+    if (!btn || !panel) return;
+
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setLogPeriodPanel(!logPeriodPanelOpen());
+    });
+    // Clicks inside the panel (dates, quick ranges) don't count as "outside"
+    panel.addEventListener('click', (e) => e.stopPropagation());
+    document.addEventListener('click', () => setLogPeriodPanel(false));
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && logPeriodPanelOpen()) {
+            setLogPeriodPanel(false);
+            btn.focus();
+        }
+    });
+
+    // Quick range: replaces any picked dates and closes the panel
+    panel.querySelectorAll('[data-log-period]').forEach((preset) => {
+        preset.addEventListener('click', () => {
+            applyLogPeriod(preset.dataset.logPeriod);
+            setLogPeriodPanel(false);
+        });
+    });
+    // x on the period chip: back to All time
+    document.querySelector('[data-log-period-clear]')?.addEventListener('click', () => applyLogPeriod('all'));
+    renderLogPeriod();
 }
 
 async function toggleFullscreen(element) {
@@ -3851,14 +3964,10 @@ function exportDetectionsToExcel() {
     const spacerRow = fullRow(15, 'sSpacer', '');
 
     // Which filters produced this report
-    const pick = (id) => {
-        const el = document.getElementById(id);
-        return el && el.selectedIndex >= 0 ? el.options[el.selectedIndex].text.trim() : '';
-    };
     const { start, end } = getLogDateBounds();
     const fmtDay = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    let period = pick('logDateRange') || 'All time';
-    if (start && end && start.getTime() > 0) period += ' (' + fmtDay(start) + (fmtDay(start) === fmtDay(end) ? '' : ' to ' + fmtDay(end)) + ')';
+    let period = logPeriodLabel();
+    if (state.logPeriod !== 'custom' && start && end && start.getTime() > 0) period += ' (' + fmtDay(start) + (fmtDay(start) === fmtDay(end) ? '' : ' to ' + fmtDay(end)) + ')';
     const generated = now.toLocaleString('en-US', {
         month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
     });
@@ -4009,6 +4118,10 @@ function setupCustomDateInput(inputId) {
         // Remove active state after selection
         wrapper?.classList.remove('is-active');
         input.blur();
+        // A picked date makes it a custom period; clearing both goes back to All time
+        const anyDate = document.getElementById('logCustomStart')?.value || document.getElementById('logCustomEnd')?.value;
+        state.logPeriod = anyDate ? 'custom' : 'all';
+        renderLogPeriod();
         state.currentPage = 1;
         renderDetectionLogs();
     });
@@ -4192,6 +4305,7 @@ function setupEventListeners() {
             state.logFilter = { kind: btn.dataset.logKind, level: 'ALL' };
             state.currentPage = 1;
             renderDetectionLogs();
+            resetLogChipsScroll(true);   // the new set starts at its first chip
         });
     });
     const logChips = document.getElementById('logFilterChips');
@@ -4227,17 +4341,7 @@ function setupEventListeners() {
         logChips.scrollLeft += e.deltaY;
     }, { passive: false });
 
-    document.getElementById('logDateRange')?.addEventListener('change', () => {
-        const el = document.getElementById('logDateRange');
-        if (el) {
-            el.classList.remove('is-active');
-            el.blur();
-        }
-        state.currentPage = 1;
-        toggleCustomLogRangeInputs();
-        renderDetectionLogs();
-    });
-
+    initLogPeriod();
     setupCustomDateInput('logCustomStart');
     setupCustomDateInput('logCustomEnd');
 
@@ -5067,6 +5171,14 @@ function resetDashboardData() {
     state.alertsDisplayed = 0;
     state.recommendationsDisplayed = 0;
     state.currentPage = 1;
+    // The next account starts with the whole log, unfiltered
+    state.logFilter = { kind: 'status', level: 'ALL' };
+    state.logPeriod = 'all';
+    clearLogDateInput(document.getElementById('logCustomStart'));
+    clearLogDateInput(document.getElementById('logCustomEnd'));
+    setLogPeriodPanel(false);
+    renderLogPeriod();
+    resetLogChipsScroll();
     state.lastToastDetection = null;
     state.lastSensorAt = null;
     state.lastDhtAt = null;
