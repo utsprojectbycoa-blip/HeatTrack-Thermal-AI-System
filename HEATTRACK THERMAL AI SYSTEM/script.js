@@ -3718,11 +3718,10 @@ function getFilteredLogDetections({ allRows = false } = {}) {
 
     // One entry per moment: the 30-minute peak rides along on its entry
     let filtered = attachThirtyMinutePeaks(allRows ? summaryDetections() : logEntryDetections());
-    // An entry matches the filter if either its own or its 30-minute peak status does
-    const hasStatus = (d, s) => d.status === s || d.peak30?.status === s;
     // Filter values: comfort / mild / moderate / severe
+    // Strictly match the status shown in the row's Status column (not its 30-minute peak or urgency)
     const wanted = statusFilter.toUpperCase();
-    if (STATUS_INFO[wanted]) filtered = filtered.filter(d => hasStatus(d, wanted));
+    if (STATUS_INFO[wanted]) filtered = filtered.filter(d => d.status === wanted);
 
     if (start || end) {
         filtered = filtered.filter(d => {
@@ -3734,6 +3733,7 @@ function getFilteredLogDetections({ allRows = false } = {}) {
     }
     return filtered;
 }
+
 
 function exportDetectionsToExcel() {
     // Every 10-minute reading, not only the Detection Log entries
