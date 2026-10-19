@@ -3490,11 +3490,17 @@ input[type="date"] {
 .ht-log-period-chip__clear svg { width: 0.75rem; height: 0.75rem; }
 .ht-log-period-chip__clear:hover { background: rgba(249, 115, 22, 0.15); }
 .ht-log-period-chip__clear:focus-visible { outline: none; box-shadow: var(--ht-focus-ring); }
+/* Fixed to the screen (placed under the calendar button by positionLogPeriodPanel
+   in script.js), so the Detection Log card's rounded, clipped edges can't cut it
+   off; scrolls inside when the screen is shorter than the panel */
 .ht-log-period__panel {
-    position: absolute;
-    top: calc(100% + 0.4rem);
-    left: 0;   /* opens to the right, toward the chips */
-    z-index: 30;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 58;   /* under the top navigation (60) when the page scrolls */
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
     width: 17.5rem;
     padding: 0.8rem;
     border: 1px solid var(--ht-border-subtle);
@@ -3545,19 +3551,149 @@ input[type="date"] {
     background: var(--ht-thermal-600);
 }
 .ht-log-period__presets button:focus-visible { outline: none; box-shadow: var(--ht-focus-ring); }
-.ht-log-period__dates { display: grid; gap: 0.45rem; }
-/* Each From / To row is full width: label, then the date box filling the rest */
-.ht-log-period__dates .ht-custom-range__item {
-    flex: none;
-    width: 100%;
-    min-width: 0;
-    height: 2rem;
+/* Range calendar (Pick dates): month header, 7-day grid, hint + Clear.
+   Start / end days are solid orange; the days between share a light band. */
+.ht-cal {
+    padding: 0.6rem;
+    border: 1px solid var(--ht-border-subtle);
+    border-radius: 0.6rem;
+    background: var(--ht-surface-850);
 }
-.ht-log-period__dates .ht-select-label { flex: 0 0 2rem; }
-.ht-log-period__dates .ht-select { flex: 1 1 auto; height: 2rem; min-height: 2rem; box-sizing: border-box; }
-/* Touch screens: show the picked date as mm/dd/yyyy over the native box */
-@media (max-width: 900px) and (hover: none) and (pointer: coarse) {
-    .ht-log-period__dates .ht-custom-range__placeholder { display: block; }
+.ht-cal__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.4rem;
+}
+.ht-cal__title {
+    color: var(--ht-surface-100);
+    font: 700 0.8rem var(--ht-font);
+}
+/* Month / year title as a button: opens the month or year picker */
+.ht-cal__title--btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.3rem 0.55rem;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.ht-cal__title--btn svg { width: 0.8rem; height: 0.8rem; color: var(--ht-thermal-600); }
+.ht-cal__title--btn:hover { color: var(--ht-thermal-700); background: rgba(249, 115, 22, 0.12); }
+.ht-cal__title--btn:focus-visible { outline: none; box-shadow: var(--ht-focus-ring); }
+
+/* Month and year pickers: 3 x 4 buttons */
+.ht-cal__picks {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.35rem;
+    padding: 0.15rem 0;
+}
+.ht-cal__pick {
+    height: 2.4rem;
+    padding: 0;
+    border: 1px solid var(--ht-border-subtle);
+    border-radius: 0.5rem;
+    color: var(--ht-surface-200);
+    background: #fff;
+    font: 600 0.75rem var(--ht-font);
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.ht-cal__pick:hover:not(:disabled):not(.is-selected) { border-color: rgba(249, 115, 22, 0.4); background: rgba(249, 115, 22, 0.08); }
+.ht-cal__pick.is-today { border-color: var(--ht-thermal-500); color: var(--ht-thermal-700); }
+.ht-cal__pick.is-selected { border-color: transparent; color: #fff; background: var(--ht-thermal-600); }
+.ht-cal__pick:disabled { color: var(--ht-surface-600); background: transparent; cursor: not-allowed; }
+.ht-cal__pick:focus-visible { outline: none; box-shadow: var(--ht-focus-ring); }
+.ht-cal__nav {
+    display: grid;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    border: 1px solid var(--ht-border-subtle);
+    border-radius: 999px;
+    color: var(--ht-surface-300);
+    background: #fff;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+}
+.ht-cal__nav svg { width: 0.9rem; height: 0.9rem; }
+.ht-cal__nav:hover:not(:disabled) { border-color: rgba(249, 115, 22, 0.4); color: var(--ht-thermal-600); }
+.ht-cal__nav:disabled { opacity: 0.35; cursor: default; }
+.ht-cal__nav:focus-visible { outline: none; box-shadow: var(--ht-focus-ring); }
+
+.ht-cal__grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    row-gap: 2px;
+}
+.ht-cal__weekday {
+    padding: 0.2rem 0 0.3rem;
+    color: var(--ht-surface-400);
+    font: 600 0.62rem var(--ht-font);
+    letter-spacing: 0.04em;
+    text-align: center;
+    text-transform: uppercase;
+}
+.ht-cal__day {
+    height: 2rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0.5rem;
+    color: var(--ht-surface-200);
+    background: transparent;
+    font: 600 0.75rem var(--ht-font);
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+}
+.ht-cal__day:hover:not(:disabled):not(.is-start):not(.is-end) { background: rgba(249, 115, 22, 0.12); }
+.ht-cal__day.is-today { box-shadow: inset 0 0 0 1px var(--ht-thermal-500); color: var(--ht-thermal-700); }
+.ht-cal__day.is-in-range {
+    border-radius: 0;
+    color: var(--ht-thermal-700);
+    background: rgba(249, 115, 22, 0.14);
+}
+.ht-cal__day.is-start,
+.ht-cal__day.is-end {
+    color: #fff;
+    background: var(--ht-thermal-600);
+    box-shadow: none;
+}
+.ht-cal__day.is-start:not(.is-end) { border-radius: 0.5rem 0 0 0.5rem; }
+.ht-cal__day.is-end:not(.is-start) { border-radius: 0 0.5rem 0.5rem 0; }
+.ht-cal__day:disabled { color: var(--ht-surface-600); cursor: not-allowed; }
+.ht-cal__day:focus-visible { outline: none; box-shadow: var(--ht-focus-ring); position: relative; z-index: 1; }
+
+.ht-cal__foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    min-height: 1.6rem;
+    margin-top: 0.45rem;
+    padding-top: 0.45rem;
+    border-top: 1px solid var(--ht-border-subtle);
+}
+.ht-cal__hint {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--ht-surface-400);
+    font: 600 0.72rem var(--ht-font);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ht-cal__hint.is-pending { color: var(--ht-thermal-600); }
+
+/* Touch screens: bigger day targets */
+@media (hover: none) and (pointer: coarse) {
+    .ht-cal__day { height: 2.35rem; font-size: 0.8rem; }
+    .ht-cal__nav { width: 2.1rem; height: 2.1rem; }
 }
 
 .ht-log-period { flex: none; }
@@ -3570,7 +3706,7 @@ input[type="date"] {
     .ht-log-filters__row .ht-log-filters__switch { flex: 1; width: auto; }
     /* The phone switch has taller buttons; the calendar matches it */
     .ht-log-period__btn { width: 2.35rem; height: 2.35rem; }
-    .ht-log-period__panel { left: auto; right: 0; width: min(17.5rem, calc(100vw - 3rem)); transform-origin: top right; }
+    .ht-log-period__panel { width: min(17.5rem, calc(100vw - 1rem)); transform-origin: top right; }
 }
 
 /* Detection Log filter bar: Status / Urgency switch + coloured level chips with counts */
