@@ -981,7 +981,7 @@ class StreamHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?")[0]
         if path == "/video":
-            self._stream()
+            self._stream(self.path)
         elif path == "/stats":
             self._stats()
         elif path == "/thermal":
@@ -1046,7 +1046,8 @@ class StreamHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _stream(self):
+    def _stream(self, full_path="/video"):
+        """/video           webcam picture with the duck boxes"""
         self.send_response(200)
         self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
         self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
@@ -1056,9 +1057,11 @@ class StreamHandler(BaseHTTPRequestHandler):
         try:
             while True:
                 jpeg, fid = camera.wait_frame(last)
-                if jpeg is None or fid == last:
+                if fid == last:
                     continue
                 last = fid
+                if jpeg is None:
+                    continue   # no frame yet
                 self.wfile.write(
                     b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: "
                     + str(len(jpeg)).encode() + b"\r\n\r\n" + jpeg + b"\r\n"
