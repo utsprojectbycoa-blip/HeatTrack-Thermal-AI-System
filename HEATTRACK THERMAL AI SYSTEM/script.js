@@ -1122,13 +1122,6 @@ function initMobileNavMenu() {
             closeHeaderPanels();
             suppressHoverTemporarily();
         }
-        // Re-apply date picker max attribute on resize for mobile responsiveness
-        setCustomRangeMaxDate();
-    });
-
-    // Re-apply date picker max attribute on device orientation change (mobile)
-    window.addEventListener('orientationchange', () => {
-        setCustomRangeMaxDate();
     });
 }
 
@@ -1284,7 +1277,6 @@ function getRecTip(rec) {
 function initSystem() {
     updateTime();
     intervals.clock = setInterval(updateTime, 1000);
-    setCustomRangeMaxDate();
 
     // Update stats
     updateStats();
@@ -1643,9 +1635,11 @@ function formatTimestamp(date) {
     });
 }
 
+// 'yyyy-mm-dd' -> that day in local time (new Date('yyyy-mm-dd') would read it as UTC)
 function parseDateInput(value, endOfDay = false) {
-    if (!value) return null;
-    const parsed = new Date(value);
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '');
+    if (!m) return null;
+    const parsed = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
     if (Number.isNaN(parsed.getTime())) return null;
 
     const today = new Date();
@@ -1660,27 +1654,11 @@ function parseDateInput(value, endOfDay = false) {
     return parsed;
 }
 
-function getTodayInputValue() {
-    const today = new Date();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    return `${today.getFullYear()}-${month}-${day}`;
+// Date -> 'yyyy-mm-dd' in local time
+function dateInputValue(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function formatDateToDisplay(isoDateString) {
-    if (!isoDateString) return '';
-    const [year, month, day] = isoDateString.split('-');
-    return `${month}/${day}/${year}`;
-}
-
-function setCustomRangeMaxDate() {
-    const maxValue = getTodayInputValue();
-    const startInput = document.getElementById('logCustomStart');
-    const endInput = document.getElementById('logCustomEnd');
-    if (startInput) startInput.max = maxValue;
-    if (endInput) endInput.max = maxValue;
-}
-    
 // Period of the Detection Log: 'all' | 'today' | 'last7' | 'last30' (quick ranges)
 // or 'custom' (the From / To dates in the period picker)
 function getLogDateBounds() {
@@ -1776,10 +1754,51 @@ function setLogPeriodPanel(open) {
     const panel = document.getElementById('logPeriodPanel');
     const btn = document.getElementById('logPeriodBtn');
     if (!panel || !btn) return;
+    // Opening shows the month of the picked range (or this month); a start date
+    // picked without an end date is dropped when the panel closes
+    if (open !== panel.classList.contains('is-open')) {
+        logCal.pendingStart = null;
+        logCal.hover = null;
+        if (open) {
+            logCal.month = null;
+            logCal.view = 'days';
+        }
+        renderLogCalendar();
+    }
+    if (open) positionLogPeriodPanel();
     // A class (not [hidden]) so the panel can fade in and out
     panel.classList.toggle('is-open', open);
     btn.setAttribute('aria-expanded', String(open));
     btn.classList.toggle('is-active', open);
+}
+
+// Places the (fixed) panel under the calendar button: lined up with its left edge,
+// or its right edge on phones, always inside the screen. If there isn't room below
+// but there is more above, it opens upward. It scrolls inside when it still doesn't fit.
+function positionLogPeriodPanel() {
+    const panel = document.getElementById('logPeriodPanel');
+    const btn = document.getElementById('logPeriodBtn');
+    if (!panel || !btn) return;
+    const gap = 6;
+    const margin = 8;
+    const r = btn.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth;
+    const vh = window.innerHeight;
+    const width = panel.offsetWidth;
+    let left = vw <= 640 ? r.right - width : r.left;
+    left = Math.max(margin, Math.min(left, vw - width - margin));
+
+    panel.style.maxHeight = '';
+    const needed = panel.scrollHeight;
+    const below = vh - r.bottom - gap - margin;
+    const above = r.top - gap - margin;
+    const upward = needed > below && above > below;
+    const room = Math.max(upward ? above : below, 160);
+    const height = Math.min(needed, room);
+    panel.style.left = `${Math.round(left)}px`;
+    panel.style.top = `${Math.round(upward ? r.top - gap - height : r.bottom + gap)}px`;
+    panel.style.maxHeight = `${Math.floor(room)}px`;
+    panel.style.transformOrigin = `${upward ? 'bottom' : 'top'} ${vw <= 640 ? 'right' : 'left'}`;
 }
 
 const logPeriodPanelOpen = () => !!document.getElementById('logPeriodPanel')?.classList.contains('is-open');
@@ -1789,8 +1808,10 @@ function applyLogPeriod(period) {
     state.logPeriod = period;
     clearLogDateInput(document.getElementById('logCustomStart'));
     clearLogDateInput(document.getElementById('logCustomEnd'));
+    logCal.pendingStart = null;
     state.currentPage = 1;
     renderLogPeriod();
+    renderLogCalendar();
     renderDetectionLogs();
 }
 
@@ -1802,14 +1823,257 @@ function resetLogChipsScroll(smooth = false) {
     else chips.scrollLeft = 0;
 }
 
-// Empties a From / To box and its mm/dd/yyyy text
+// Empties the picked start or end date
 function clearLogDateInput(input) {
-    if (!input) return;
-    input.value = '';
-    input.setAttribute('data-has-value', 'false');
-    input.setAttribute('data-display-date', '');
-    const placeholder = input.nextElementSibling;
-    if (placeholder?.classList.contains('ht-custom-range__placeholder')) placeholder.textContent = 'mm/dd/yyyy';
+    if (input) input.value = '';
+}
+
+// ---- Range calendar (Pick dates) ----
+// First click picks the start day, the second the end day (either order; the same
+// day twice = that one day). The log updates once both are picked and the panel
+// closes. Days after today can't be picked. Arrow keys move between days.
+// The month title opens a month picker; its year title opens a year picker
+// (12 years at a time), so far-off dates are a few clicks away.
+// view: 'days' | 'months' | 'years'; yearEnd: last year shown in the year picker
+const logCal = { month: null, pendingStart: null, hover: null, view: 'days', yearEnd: null };
+const CAL_WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+const CAL_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// First day of that month, but never past this month
+function calClampMonth(year, month) {
+    const today = calToday();
+    const first = new Date(year, month, 1);
+    return first > today ? new Date(today.getFullYear(), today.getMonth(), 1) : first;
+}
+
+const calToday = () => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; };
+// A day button's 'yyyy-mm-dd' -> local midnight (future days too, unlike parseDateInput)
+const calDate = (iso) => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d); };
+const calDayLabel = (d) => d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+// The range to highlight: start picked and waiting for the end (follows the
+// pointer), otherwise the range in use
+function calRange() {
+    if (logCal.pendingStart) {
+        const other = logCal.hover || logCal.pendingStart;
+        return other < logCal.pendingStart ? [other, logCal.pendingStart] : [logCal.pendingStart, other];
+    }
+    if (state.logPeriod !== 'custom') return [null, null];
+    const from = parseDateInput(document.getElementById('logCustomStart')?.value);
+    const to = parseDateInput(document.getElementById('logCustomEnd')?.value);
+    return [from || to, to || from];
+}
+
+function renderLogCalendar(focusDay) {
+    const box = document.getElementById('logCalendar');
+    if (!box) return;
+    const today = calToday();
+    if (!logCal.month) {
+        const [from] = calRange();
+        const shown = from || today;
+        logCal.month = new Date(shown.getFullYear(), shown.getMonth(), 1);
+    }
+    const year = logCal.month.getFullYear();
+    const month = logCal.month.getMonth();
+    const thisYear = today.getFullYear();
+    const thisMonth = today.getMonth();
+    const view = logCal.view;
+
+    // Header (arrows step by a month, a year or 12 years) and body for the view
+    let title, body, nextDisabled, prevLabel, nextLabel;
+    if (view === 'years') {
+        const end = logCal.yearEnd;
+        const years = Array.from({ length: 12 }, (_, i) => end - 11 + i);
+        title = `<span class="ht-cal__title" aria-live="polite">${end - 11} – ${end}</span>`;
+        body = `<div class="ht-cal__picks" role="group" aria-label="Years">${years.map((y) => `
+            <button type="button" class="ht-cal__pick${y === year ? ' is-selected' : ''}${y === thisYear ? ' is-today' : ''}"
+                data-cal-year="${y}" aria-pressed="${y === year}"${y > thisYear ? ' disabled' : ''}>${y}</button>`).join('')}</div>`;
+        nextDisabled = end >= thisYear;
+        [prevLabel, nextLabel] = ['Earlier years', 'Later years'];
+    } else if (view === 'months') {
+        title = `<button type="button" class="ht-cal__title ht-cal__title--btn" data-cal-view="years" aria-live="polite"
+            aria-label="${year}, choose a year">${year}<i data-lucide="chevron-down"></i></button>`;
+        body = `<div class="ht-cal__picks" role="group" aria-label="Months of ${year}">${CAL_MONTHS.map((name, m) => {
+            const future = year > thisYear || (year === thisYear && m > thisMonth);
+            return `<button type="button" class="ht-cal__pick${m === month ? ' is-selected' : ''}${year === thisYear && m === thisMonth ? ' is-today' : ''}"
+                data-cal-month="${m}" aria-pressed="${m === month}"${future ? ' disabled' : ''}>${name}</button>`;
+        }).join('')}</div>`;
+        nextDisabled = year >= thisYear;
+        [prevLabel, nextLabel] = ['Previous year', 'Next year'];
+    } else {
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const lead = new Date(year, month, 1).getDay();
+        let days = '';
+        for (let i = 0; i < lead; i++) days += '<span class="ht-cal__blank" aria-hidden="true"></span>';
+        for (let d = 1; d <= daysInMonth; d++) {
+            const date = new Date(year, month, d);
+            const future = date > today;
+            days += `<button type="button" class="ht-cal__day${date.getTime() === today.getTime() ? ' is-today' : ''}"
+                data-cal-day="${dateInputValue(date)}" aria-label="${calDayLabel(date)}"${future ? ' disabled' : ''}>${d}</button>`;
+        }
+        const monthName = logCal.month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        title = `<button type="button" class="ht-cal__title ht-cal__title--btn" data-cal-view="months" aria-live="polite"
+            aria-label="${monthName}, choose a month or year">${monthName}<i data-lucide="chevron-down"></i></button>`;
+        body = `<div class="ht-cal__grid" role="group" aria-label="Days">
+            ${CAL_WEEKDAYS.map((w) => `<span class="ht-cal__weekday" aria-hidden="true">${w}</span>`).join('')}
+            ${days}
+        </div>`;
+        nextDisabled = year === thisYear && month === thisMonth;
+        [prevLabel, nextLabel] = ['Previous month', 'Next month'];
+    }
+
+    const pending = !!logCal.pendingStart;
+    const [from] = calRange();
+    const hint = pending ? 'Now pick the end date'
+        : from ? logPeriodLabel()
+        : 'Pick a start date';
+    box.innerHTML = `
+        <div class="ht-cal__head">
+            <button type="button" class="ht-cal__nav" data-cal-nav="-1" aria-label="${prevLabel}"><i data-lucide="chevron-left"></i></button>
+            ${title}
+            <button type="button" class="ht-cal__nav" data-cal-nav="1" aria-label="${nextLabel}"${nextDisabled ? ' disabled' : ''}><i data-lucide="chevron-right"></i></button>
+        </div>
+        ${body}
+        <div class="ht-cal__foot">
+            <span class="ht-cal__hint${pending ? ' is-pending' : ''}">${hint}</span>
+            ${pending || from ? '<button type="button" class="ht-linkbtn" data-cal-clear>Clear</button>' : ''}
+        </div>`;
+    paintLogCalendarRange();
+    if (window.lucide) lucide.createIcons();
+    // A month with 6 week rows is taller: re-fit the open panel
+    if (logPeriodPanelOpen()) positionLogPeriodPanel();
+    if (focusDay) box.querySelector(`[data-cal-day="${dateInputValue(focusDay)}"]`)?.focus();
+}
+
+// Range colours only (no redraw), so hovering while picking the end stays smooth
+function paintLogCalendarRange() {
+    const [from, to] = calRange();
+    document.querySelectorAll('#logCalendar [data-cal-day]').forEach((btn) => {
+        const t = calDate(btn.dataset.calDay).getTime();
+        const isStart = !!from && t === from.getTime();
+        const isEnd = !!to && t === to.getTime();
+        btn.classList.toggle('is-start', isStart);
+        btn.classList.toggle('is-end', isEnd);
+        btn.classList.toggle('is-in-range', !!from && !!to && t > from.getTime() && t < to.getTime());
+        btn.setAttribute('aria-pressed', String(isStart || isEnd));
+    });
+}
+
+function pickLogCalendarDay(date) {
+    if (!logCal.pendingStart) {
+        logCal.pendingStart = date;
+        logCal.hover = null;
+        renderLogCalendar(date);
+        return;
+    }
+    let [from, to] = [logCal.pendingStart, date];
+    if (to < from) [from, to] = [to, from];
+    document.getElementById('logCustomStart').value = dateInputValue(from);
+    document.getElementById('logCustomEnd').value = dateInputValue(to);
+    logCal.pendingStart = null;
+    logCal.hover = null;
+    state.logPeriod = 'custom';
+    state.currentPage = 1;
+    renderLogPeriod();
+    renderDetectionLogs();
+    setLogPeriodPanel(false);
+}
+
+function initLogCalendar() {
+    const box = document.getElementById('logCalendar');
+    if (!box) return;
+    // Redraws in another view and keeps keyboard focus in the calendar
+    const showView = (view) => {
+        logCal.view = view;
+        renderLogCalendar();
+        (box.querySelector('.ht-cal__pick.is-selected:not(:disabled)')
+            || box.querySelector('.ht-cal__title--btn')
+            || box.querySelector('.ht-cal__day:not(:disabled)'))?.focus();
+    };
+    box.addEventListener('click', (e) => {
+        const nav = e.target.closest('[data-cal-nav]');
+        if (nav && !nav.disabled) {
+            const step = Number(nav.dataset.calNav);
+            if (logCal.view === 'years') {
+                logCal.yearEnd = Math.min(logCal.yearEnd + step * 12, calToday().getFullYear());
+            } else if (logCal.view === 'months') {
+                logCal.month = calClampMonth(logCal.month.getFullYear() + step, logCal.month.getMonth());
+            } else {
+                logCal.month = new Date(logCal.month.getFullYear(), logCal.month.getMonth() + step, 1);
+            }
+            renderLogCalendar();
+            box.querySelector(`[data-cal-nav="${nav.dataset.calNav}"]:not(:disabled)`)?.focus();
+            return;
+        }
+        // Month title -> month picker; year title -> year picker (12 years, ending
+        // at this year or the block that holds the shown year)
+        const viewBtn = e.target.closest('[data-cal-view]');
+        if (viewBtn) {
+            if (viewBtn.dataset.calView === 'years') {
+                const thisYear = calToday().getFullYear();
+                logCal.yearEnd = thisYear - Math.floor((thisYear - logCal.month.getFullYear()) / 12) * 12;
+            }
+            showView(viewBtn.dataset.calView);
+            return;
+        }
+        const yearBtn = e.target.closest('[data-cal-year]');
+        if (yearBtn && !yearBtn.disabled) {
+            logCal.month = calClampMonth(Number(yearBtn.dataset.calYear), logCal.month.getMonth());
+            showView('months');
+            return;
+        }
+        const monthBtn = e.target.closest('[data-cal-month]');
+        if (monthBtn && !monthBtn.disabled) {
+            logCal.month = new Date(logCal.month.getFullYear(), Number(monthBtn.dataset.calMonth), 1);
+            showView('days');
+            return;
+        }
+        if (e.target.closest('[data-cal-clear]')) {
+            if (logCal.pendingStart) {
+                logCal.pendingStart = null;   // drops only the half-picked range; the period in use stays
+                renderLogCalendar();
+            } else {
+                applyLogPeriod('all');
+            }
+            return;
+        }
+        const day = e.target.closest('[data-cal-day]');
+        if (day && !day.disabled) pickLogCalendarDay(calDate(day.dataset.calDay));
+    });
+    // While picking the end date, the range follows the pointer / keyboard focus
+    const follow = (e) => {
+        const day = e.target.closest?.('[data-cal-day]');
+        if (!logCal.pendingStart || !day || day.disabled) return;
+        const date = calDate(day.dataset.calDay);
+        if (logCal.hover && logCal.hover.getTime() === date.getTime()) return;
+        logCal.hover = date;
+        paintLogCalendarRange();
+    };
+    box.addEventListener('mouseover', follow);
+    box.addEventListener('focusin', follow);
+    box.addEventListener('keydown', (e) => {
+        // Escape in the month / year picker steps back toward the days (instead of closing the panel)
+        if (e.key === 'Escape' && logCal.view !== 'days') {
+            e.preventDefault();
+            e.stopPropagation();
+            showView(logCal.view === 'years' ? 'months' : 'days');
+            return;
+        }
+        const day = e.target.closest('[data-cal-day]');
+        const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[e.key];
+        if (!day || !step) return;
+        e.preventDefault();
+        const next = calDate(day.dataset.calDay);
+        next.setDate(next.getDate() + step);
+        if (next > calToday()) return;
+        if (next.getMonth() !== logCal.month.getMonth() || next.getFullYear() !== logCal.month.getFullYear()) {
+            logCal.month = new Date(next.getFullYear(), next.getMonth(), 1);
+            renderLogCalendar(next);
+        } else {
+            box.querySelector(`[data-cal-day="${dateInputValue(next)}"]`)?.focus();
+        }
+    });
+    renderLogCalendar();
 }
 
 function initLogPeriod() {
@@ -1824,6 +2088,14 @@ function initLogPeriod() {
     // Clicks inside the panel (dates, quick ranges) don't count as "outside"
     panel.addEventListener('click', (e) => e.stopPropagation());
     document.addEventListener('click', () => setLogPeriodPanel(false));
+    // The panel is fixed to the screen: keep it under the button while the page
+    // scrolls or resizes (scroll inside the panel itself doesn't move it)
+    const follow = (e) => {
+        if (!logPeriodPanelOpen() || panel.contains(e.target)) return;
+        positionLogPeriodPanel();
+    };
+    window.addEventListener('scroll', follow, { capture: true, passive: true });
+    window.addEventListener('resize', follow);
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && logPeriodPanelOpen()) {
             setLogPeriodPanel(false);
@@ -1840,6 +2112,7 @@ function initLogPeriod() {
     });
     // x on the period chip: back to All time
     document.querySelector('[data-log-period-clear]')?.addEventListener('click', () => applyLogPeriod('all'));
+    initLogCalendar();
     renderLogPeriod();
 }
 
@@ -4205,79 +4478,6 @@ function exportDetectionsToExcel() {
 // ============================================
 // EVENT LISTENERS
 // ============================================
-function setupCustomDateInput(inputId) {
-    const input = document.getElementById(inputId);
-    if (!input) return;
-    const wrapper = input.closest('.ht-select');
-
-    input.addEventListener('focus', () => wrapper?.classList.add('is-active'));
-    input.addEventListener('blur', () => wrapper?.classList.remove('is-active'));
-
-    input.addEventListener('change', () => {
-        // Validate and prevent future dates in mobile mode
-        if (input.value) {
-            const selectedDate = new Date(input.value);
-            const today = new Date();
-            today.setHours(23, 59, 59, 999);
-            if (selectedDate > today) {
-                input.value = getTodayInputValue();
-            }
-        }
-        // Format and display the selected date in mm/dd/yyyy format
-        const formattedDate = formatDateToDisplay(input.value);
-        input.setAttribute('data-has-value', input.value ? 'true' : 'false');
-        input.setAttribute('data-display-date', formattedDate);
-        const placeholder = input.nextElementSibling;
-        if (placeholder && placeholder.classList.contains('ht-custom-range__placeholder')) {
-            placeholder.textContent = formattedDate || 'mm/dd/yyyy';
-        }
-        // Remove active state after selection
-        wrapper?.classList.remove('is-active');
-        input.blur();
-        // A picked date makes it a custom period; clearing both goes back to All time
-        const anyDate = document.getElementById('logCustomStart')?.value || document.getElementById('logCustomEnd')?.value;
-        state.logPeriod = anyDate ? 'custom' : 'all';
-        renderLogPeriod();
-        state.currentPage = 1;
-        renderDetectionLogs();
-    });
-
-    // Make the date picker container clickable to open the picker without immediately closing it on mobile.
-    const container = input.parentElement;
-    if (container) {
-        let pickerTouchTime = 0;
-        const openPicker = (e) => {
-            if (e.target === input) return;
-            const isTouchOpen = e.type === 'pointerdown' ? e.pointerType === 'touch' : e.type === 'touchstart';
-            if (isTouchOpen) {
-                e.preventDefault();
-                e.stopPropagation();
-                pickerTouchTime = Date.now();
-                if (typeof input.showPicker === 'function') {
-                    window.setTimeout(() => input.showPicker(), 0);
-                } else {
-                    window.setTimeout(() => input.focus(), 0);
-                }
-                return;
-            }
-            if (e.type === 'click' && Date.now() - pickerTouchTime < 700) {
-                pickerTouchTime = 0;
-                return;
-            }
-            if (typeof input.showPicker === 'function') {
-                input.showPicker();
-            } else {
-                input.focus();
-            }
-        };
-
-        container.addEventListener('click', openPicker);
-        container.addEventListener('pointerdown', openPicker, { passive: false });
-        input.addEventListener('pointerdown', (e) => e.stopPropagation());
-        input.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: false });
-    }
-}
-
 function setupEventListeners() {
     const alertBtn = document.getElementById('alertBtn');
     const settingsBtn = document.getElementById('settingsBtn');
@@ -4458,8 +4658,6 @@ function setupEventListeners() {
     }, { passive: false });
 
     initLogPeriod();
-    setupCustomDateInput('logCustomStart');
-    setupCustomDateInput('logCustomEnd');
 
     // Pagination
     document.getElementById('prevPage')?.addEventListener('click', () => {
