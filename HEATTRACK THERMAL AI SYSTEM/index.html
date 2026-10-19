@@ -705,19 +705,6 @@
                 </div>
                 <div class="ht-switch-row">
                     <div class="ht-switch-row__text">
-                        <div class="ht-switch-row__icon ht-switch-row__icon--thermal"><i data-lucide="brain"></i></div>
-                        <div>
-                            <div class="ht-switch-row__title">AI Detection</div>
-                            <div class="ht-switch-row__sub">Analysis + Recommendations</div>
-                        </div>
-                    </div>
-                    <label class="ht-switch ht-switch--thermal">
-                        <input type="checkbox" id="aiToggle" checked>
-                        <span class="ht-switch__track" aria-hidden="true"></span>
-                    </label>
-                </div>
-                <div class="ht-switch-row">
-                    <div class="ht-switch-row__text">
                         <div class="ht-switch-row__icon ht-switch-row__icon--blue"><i data-lucide="bell-ring"></i></div>
                         <div>
                             <div class="ht-switch-row__title">Alert Notifications</div>
@@ -1113,7 +1100,7 @@
                                     <span class="ht-howto-step__num">Alerts</span>
                                 </div>
                                 <h3 class="ht-howto-step__title">Manage Alerts &amp; Settings</h3>
-                                <p class="ht-howto-step__text">The bell icon lists your Urgent and Critical alerts. The gear icon opens Settings, where you can turn the cameras, AI detection, and alert notifications on or off.</p>
+                                <p class="ht-howto-step__text">The bell icon lists your Urgent and Critical alerts. The gear icon opens Settings, where you can turn the cameras and alert notifications on or off.</p>
                             </li>
                         </ol>
                         </div>
@@ -1385,7 +1372,7 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>HeatTrack alerts you when a 30-minute reading has an <strong>Urgent</strong> or <strong>Critical</strong> urgency level, whatever its status. The first detection itself does not raise an alert. The alert is added to the <strong>Alerts &amp; Notifications</strong> panel under the bell icon (orange for Urgent Level, red for Critical Level), and a pop-up appears on screen for about 5 seconds. Each alert shows the surface temperature, urgency level, and time so you can handle the most urgent cases first. Routine and Monitor readings do not trigger alerts.</p>
+                                        <p>HeatTrack alerts you when a 30-minute reading has an <strong>Urgent</strong> or <strong>Critical</strong> urgency level, whatever its status. The first detection itself does not raise an alert. The alert is added to the <strong>Alerts &amp; Notifications</strong> panel under the bell icon (orange for Urgent, red for Critical), and a pop-up appears on screen for about 5 seconds. Each alert shows the status, surface temperature, urgency level, and time so you can handle the most urgent cases first. Routine and Monitor readings do not trigger alerts.</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
@@ -1396,7 +1383,7 @@
                                         <span class="ht-faq__chev" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                                     </summary>
                                     <div class="ht-faq__panel">
-                                        <p>Yes. Open the <strong>Settings</strong> panel from the top bar and switch <strong>Alert Notifications</strong> on or off. The same panel turns <strong>Camera Streams</strong> and the <strong>AI Detection Model</strong> on or off. Alerts work only while both of those are on. Camera Streams and AI Detection apply to every device signed in to your account, while Alert Notifications are set separately on each device. Keep alerts on during the hottest hours so you can respond quickly when conditions change.</p>
+                                        <p>Yes. Open the <strong>Settings</strong> panel from the top bar and switch <strong>Alert Notifications</strong> on or off. The same panel turns <strong>Camera Streams</strong> on or off. Alerts work only while Camera Streams is on. Turning Camera Streams off also turns off Alert Notifications. When you turn it back on, Alert Notifications stays off until you switch it on yourself. The settings are saved for your account, so a change on one phone or computer applies on every device signed in to it. Keep alerts on during the hottest hours so you can respond quickly when conditions change.</p>
                                     </div>
                                 </details>
                                 <details class="ht-faq__item">
@@ -1934,7 +1921,7 @@
         <section id="alertToast" class="ht-toast" role="status" aria-live="polite" aria-label="Notification">
             <div class="ht-toast__body">
                 <div class="ht-toast__head">
-                    <span class="ht-toast__title"><span class="ht-toast__icon"><i data-lucide="alert-triangle"></i></span><span id="toastTitle">Heat Stress</span></span>
+                    <span class="ht-toast__title"><span class="ht-toast__icon"><i data-lucide="alert-triangle"></i></span><span id="toastTitle">Moderate Heat Stress</span></span>
                     <span id="toastLevel" class="ht-toast__level"></span>
                 </div>
                 <p id="toastStats" class="ht-toast__stats"></p>
