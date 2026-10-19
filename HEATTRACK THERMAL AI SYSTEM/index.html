@@ -1632,22 +1632,11 @@
                                             <button type="button" data-log-period="last30">Last 30 days</button>
                                         </div>
                                         <p class="ht-log-period__title">Pick dates</p>
-                                        <div class="ht-log-period__dates">
-                                            <div class="ht-custom-range__item">
-                                                <span class="ht-select-label">From</span>
-                                                <div class="ht-select ht-select--date">
-                                                    <input type="date" id="logCustomStart" placeholder="mm/dd/yyyy" aria-label="Start date" data-has-value="false">
-                                                    <span class="ht-custom-range__placeholder">mm/dd/yyyy</span>
-                                                </div>
-                                            </div>
-                                            <div class="ht-custom-range__item">
-                                                <span class="ht-select-label">To</span>
-                                                <div class="ht-select ht-select--date">
-                                                    <input type="date" id="logCustomEnd" placeholder="mm/dd/yyyy" aria-label="End date" data-has-value="false">
-                                                    <span class="ht-custom-range__placeholder">mm/dd/yyyy</span>
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <!-- The picked range (yyyy-mm-dd); the calendar below fills them in -->
+                                        <input type="hidden" id="logCustomStart">
+                                        <input type="hidden" id="logCustomEnd">
+                                        <!-- Range calendar, drawn by renderLogCalendar in script.js -->
+                                        <div id="logCalendar" class="ht-cal"></div>
                                     </div>
                                 </div>
                             </div>
