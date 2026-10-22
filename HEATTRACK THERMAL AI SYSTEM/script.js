@@ -6014,7 +6014,11 @@ function adminDashItem(profile, actions, unread = false) {
     const right = actions && pending
         ? `<div class="ht-adash__recent-actions"><button type="button" class="ht-adash__mini ht-adash__mini--ok" data-admin-accept="${profile.id}" aria-label="Accept ${escapeHtml(profile.username)}"><i data-lucide="check"></i></button><button type="button" class="ht-adash__mini ht-adash__mini--no" data-admin-reject="${profile.id}" aria-label="Reject ${escapeHtml(profile.username)}"><i data-lucide="x"></i></button></div>`
         : `<span class="ht-adash__chip ht-adash__chip--${pending ? 'pending' : 'approved'}">${pending ? 'Pending' : 'Approved'}</span>`;
-    return `<li class="ht-adash__recent-item${unread ? ' ht-adash__recent-item--unread' : ''}"><span class="ht-adash__avatar">${escapeHtml(adminInitials(profile))}</span><div class="ht-adash__recent-info"><strong>${escapeHtml(adminFullName(profile))}</strong><span>@${escapeHtml(profile.username)} · ${escapeHtml(profile.email)}</span></div><span class="ht-adash__recent-date">${adminFormatDate(profile.createdAt)}</span>${right}</li>`;
+    // Pending items (dashboard card + bell panel) open the Pending page when clicked
+    const link = actions && pending
+        ? ` ht-adash__recent-item--link" data-admin-pending-item="${profile.id}" role="link" tabindex="0" aria-label="Review ${escapeHtml(adminFullName(profile))} on the Pending page`
+        : '';
+    return `<li class="ht-adash__recent-item${unread ? ' ht-adash__recent-item--unread' : ''}${link}"><span class="ht-adash__avatar">${escapeHtml(adminInitials(profile))}</span><div class="ht-adash__recent-info"><strong>${escapeHtml(adminFullName(profile))}</strong><span>@${escapeHtml(profile.username)} · ${escapeHtml(profile.email)}</span></div><span class="ht-adash__recent-date">${adminFormatDate(profile.createdAt)}</span>${right}</li>`;
 }
 
 function renderAdminSummary() {
@@ -6860,15 +6864,7 @@ async function initAdminUi() {
     clearInterval(adminDeviceCheckTimer);
     adminDeviceCheckTimer = setInterval(() => { if (adminDevices.length) checkAdminDeviceReach(); }, ADMIN_DEVICE_CHECK_MS);
 
-    document.querySelectorAll('[data-admin-route]').forEach((link) => {
-        link.addEventListener('click', () => adminSetView(link.dataset.adminRoute));
-        // Non-button routes (e.g. the Pending Requests stat card) open with Enter / Space too
-        if (link.tagName !== 'BUTTON') link.addEventListener('keydown', (event) => {
-            if (event.key !== 'Enter' && event.key !== ' ') return;
-            event.preventDefault();
-            adminSetView(link.dataset.adminRoute);
-        });
-    });
+    document.querySelectorAll('[data-admin-route]').forEach((link) => link.addEventListener('click', () => adminSetView(link.dataset.adminRoute)));
     document.getElementById('adminUserSearch')?.addEventListener('input', () => { adminPage.users = 1; renderAdminUsers(); });
     document.getElementById('adminPendingSearch')?.addEventListener('input', () => { adminPage.pending = 1; renderAdminPending(); });
     document.querySelectorAll('[data-admin-page]').forEach((button) => button.addEventListener('click', () => {
@@ -6910,6 +6906,27 @@ async function initAdminUi() {
         alertPanel.classList.remove('is-open');
         alertPanel.inert = true;
         alertBtn?.setAttribute('aria-expanded', 'false');
+    });
+    // A pending request (bell panel or the dashboard's Pending Requests card) opens the
+    // Pending page; its Accept / Reject buttons keep doing their own job
+    const openPendingItem = (item) => {
+        adminSaveReadIds(new Set([item.dataset.adminPendingItem]));   // opened = seen
+        renderAdminSummary();                                          // bell count drops by one
+        alertPanel?.classList.remove('is-open');
+        if (alertPanel) alertPanel.inert = true;
+        alertBtn?.setAttribute('aria-expanded', 'false');
+        adminSetView('pending');
+    };
+    document.addEventListener('click', (event) => {
+        const item = event.target.closest('[data-admin-pending-item]');
+        if (item && !event.target.closest('button')) openPendingItem(item);
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        const item = event.target.closest?.('[data-admin-pending-item]');
+        if (!item || event.target !== item) return;
+        event.preventDefault();
+        openPendingItem(item);
     });
     // Sorting: "Sort by" dropdown, Ascending/Descending button, and clickable column titles
     document.querySelectorAll('[data-admin-sort-select]').forEach((select) => select.addEventListener('change', () => {
