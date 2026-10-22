@@ -6307,8 +6307,10 @@ function initAdminDevices() {
     [form, editForm].forEach((f) => f?.querySelectorAll('[data-password-toggle]').forEach((toggle) => toggle.addEventListener('click', () => togglePasswordGroup(toggle))));
 
     // Generate a random 32-character key (letters and numbers) and show it so it can be noted down
-    form?.querySelector('[data-generate-device-key]')?.addEventListener('click', () => {
-        const input = form.elements.deviceKey;
+    // (Register Device and Edit Device both have the button)
+    [form, editForm].forEach((f) => f?.querySelector('[data-generate-device-key]')?.addEventListener('click', (event) => {
+        event.preventDefault();   // the Edit Device button sits inside a <label>
+        const input = f.elements.deviceKey;
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
         let key = '';
         while (key.length < 32) {
@@ -6321,8 +6323,9 @@ function initAdminDevices() {
         input.value = key;
         input.setCustomValidity('');
         if (input.type === 'password') togglePasswordGroup(input.parentElement.querySelector('[data-password-toggle]'));
+        if (f === editForm) adminSetText('adminDeviceKeyHint', 'New key generated. Note it down: it replaces the current key when you save.');
         input.focus();
-    });
+    }));
 
     document.getElementById('adminDeviceSearch')?.addEventListener('input', renderAdminDevices);
     document.querySelectorAll('[data-device-filter]').forEach((button) => button.addEventListener('click', () => {
