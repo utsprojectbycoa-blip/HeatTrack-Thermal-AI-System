@@ -6166,6 +6166,14 @@ function adminTrashErrorText(error, fallback) {
     return error?.message ? `${fallback} ${error.message}` : fallback;
 }
 
+// Edit Device: the Device ID / API key functions come from device_api_key.sql
+function adminDeviceSqlErrorText(error, fallback) {
+    if (error?.code === 'PGRST202' || error?.code === '42883' || error?.status === 404) {
+        return 'Editing the Device ID / API key is not set up. Run device_api_key.sql in the Supabase SQL Editor.';
+    }
+    return `${fallback} ${error?.message || ''}`.trim();
+}
+
 async function loadAdminDevices() {
     // devices is protected by row-level security (an admin's own query sees no rows),
     // so the list comes from admin_list_devices() in admin_devices.sql
@@ -6416,12 +6424,12 @@ function initAdminDevices() {
         let code = oldCode;
         if (newCode !== oldCode) {
             const { data, error } = await sb.rpc('admin_update_device_code', { p_device_code: oldCode, p_new_code: newCode });
-            if (error || data !== 'ok') return fail(error ? 'Could not change the Device ID: ' + error.message : (DEVICE_RESULT_MSG[data] || 'Could not change the Device ID.'));
+            if (error || data !== 'ok') return fail(error ? adminDeviceSqlErrorText(error, 'Could not change the Device ID:') : (DEVICE_RESULT_MSG[data] || 'Could not change the Device ID.'));
             code = newCode;
         }
         if (key) {
             const { data, error } = await sb.rpc('admin_update_device_key', { p_device_code: code, p_api_key: key });
-            if (error || data !== 'ok') return fail(error ? 'Could not change the API key: ' + error.message : (DEVICE_RESULT_MSG[data] || 'Could not change the API key.'));
+            if (error || data !== 'ok') return fail(error ? adminDeviceSqlErrorText(error, 'Could not change the API key:') : (DEVICE_RESULT_MSG[data] || 'Could not change the API key.'));
         }
         if (url !== (device.device_url || '')) {
             const { data, error } = await sb.rpc('admin_update_device_url', { p_device_code: code, p_url: url || null });
