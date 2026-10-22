@@ -8358,6 +8358,10 @@ button.ht-cap-card__link {
 /* KPI stats */
 .ht-adash__stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; }
 .ht-adash__stat { display: flex; align-items: center; gap: 1rem; padding: 1.25rem; border: 1px solid rgba(15, 23, 42, .07); border-radius: var(--ht-radius-xl); background: #fff; box-shadow: var(--ht-shadow-xs); }
+/* Pending Requests stat card opens the Pending page */
+.ht-adash__stat--link { cursor: pointer; transition: border-color .2s var(--ht-ease-out), box-shadow .2s var(--ht-ease-out), transform .2s var(--ht-ease-out); }
+.ht-adash__stat--link:hover { border-color: rgba(245, 158, 11, .45); box-shadow: var(--ht-shadow-sm); transform: translateY(-2px); }
+.ht-adash__stat--link:focus-visible { outline: none; box-shadow: var(--ht-focus-ring); }
 .ht-adash__stat-icon { display: grid; place-items: center; flex-shrink: 0; width: 3.25rem; height: 3.25rem; border-radius: 1rem; }
 .ht-adash__stat-icon svg { width: 1.4rem; height: 1.4rem; }
 .ht-adash__stat-icon--total { color: var(--ht-thermal-600); background: rgba(249, 115, 22, .12); }
