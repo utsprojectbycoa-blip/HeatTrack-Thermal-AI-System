@@ -5916,6 +5916,25 @@ function adminSetView(view) {
         setAdminProfileEditing(false);   // leaving or opening My Profile discards unsaved edits
         if (view === 'profile') renderAdminSelf();
     }
+    adminResetScroll(document.querySelector(`[data-admin-view="${view}"]`));
+}
+
+// Scrollable parts of an admin page (tables and lists) that start at the top
+const ADMIN_SCROLL_AREAS = '.ht-table-scroll, .ht-adash__recent, .ht-admin-device__list';
+
+// Every newly opened admin page starts at the top: the window and each table/list in it
+function adminResetScroll(view) {
+    const reset = () => {
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+        view?.querySelectorAll(ADMIN_SCROLL_AREAS).forEach((el) => {
+            el.scrollTop = 0;
+            el.scrollLeft = 0;
+        });
+    };
+    reset();
+    requestAnimationFrame(reset);   // again once the view has laid out
 }
 
 function adminSetText(id, value) {
@@ -6839,6 +6858,9 @@ async function initAdminUi() {
         const table = button.dataset.adminPage;
         adminPage[table] += Number(button.dataset.adminPageStep);
         if (table === 'users') renderAdminUsers(); else renderAdminPending();
+        // A new page of the table starts at its first row
+        const scroller = button.closest('.ht-panel')?.querySelector('.ht-table-scroll');
+        if (scroller) { scroller.scrollTop = 0; scroller.scrollLeft = 0; }
     }));
     // Bell: opens the Pending Requests panel
     const alertBtn = document.getElementById('adminAlertBtn');
