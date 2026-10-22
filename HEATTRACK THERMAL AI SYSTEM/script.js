@@ -887,7 +887,6 @@ function initAuth() {
             return;
         }
 
-        const needsConfirm = !data.session;
         if (data.session) await sb.auth.signOut(); // keep the original flow: sign up, then sign in
 
         form.reset();
@@ -895,9 +894,8 @@ function initAuth() {
         showAuthView('login');
         showAuthMessage(
             loginForm,
-            needsConfirm
-                ? 'Account created! Check your email to confirm your address, then sign in.'
-                : 'Account created! You can now sign in.',
+            // New accounts start as 'pending' until an admin approves them
+            'Account created! Please wait for an admin to approve your account before signing in.',
             'success'
         );
     }
