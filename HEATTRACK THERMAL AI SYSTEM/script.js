@@ -6018,7 +6018,7 @@ function adminDashItem(profile, actions, unread = false) {
     const link = actions && pending
         ? ` ht-adash__recent-item--link" data-admin-pending-item="${profile.id}" role="link" tabindex="0" aria-label="Review ${escapeHtml(adminFullName(profile))} on the Pending page`
         : '';
-    return `<li class="ht-adash__recent-item${unread ? ' ht-adash__recent-item--unread' : ''}${link}"><span class="ht-adash__avatar">${escapeHtml(adminInitials(profile))}</span><div class="ht-adash__recent-info"><strong>${escapeHtml(adminFullName(profile))}</strong><span>@${escapeHtml(profile.username)} · ${escapeHtml(profile.email)}</span></div><span class="ht-adash__recent-date">${adminFormatDate(profile.createdAt)}</span>${right}</li>`;
+    return `<li class="ht-adash__recent-item${unread ? ' ht-adash__recent-item--unread' : ''}${link}"><span class="ht-adash__avatar">${escapeHtml(adminInitials(profile))}</span><div class="ht-adash__recent-info"><strong>${escapeHtml(adminFullName(profile))}</strong><span class="ht-adash__recent-meta"><span class="ht-adash__recent-user">@${escapeHtml(profile.username)}</span><span class="ht-adash__recent-email" title="${escapeHtml(profile.email)}">· ${escapeHtml(profile.email)}</span></span></div><span class="ht-adash__recent-date">${adminFormatDate(profile.createdAt)}</span>${right}</li>`;
 }
 
 function renderAdminSummary() {
