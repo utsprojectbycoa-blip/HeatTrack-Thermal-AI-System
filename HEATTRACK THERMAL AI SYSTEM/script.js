@@ -6860,7 +6860,15 @@ async function initAdminUi() {
     clearInterval(adminDeviceCheckTimer);
     adminDeviceCheckTimer = setInterval(() => { if (adminDevices.length) checkAdminDeviceReach(); }, ADMIN_DEVICE_CHECK_MS);
 
-    document.querySelectorAll('[data-admin-route]').forEach((link) => link.addEventListener('click', () => adminSetView(link.dataset.adminRoute)));
+    document.querySelectorAll('[data-admin-route]').forEach((link) => {
+        link.addEventListener('click', () => adminSetView(link.dataset.adminRoute));
+        // Non-button routes (e.g. the Pending Requests stat card) open with Enter / Space too
+        if (link.tagName !== 'BUTTON') link.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            adminSetView(link.dataset.adminRoute);
+        });
+    });
     document.getElementById('adminUserSearch')?.addEventListener('input', () => { adminPage.users = 1; renderAdminUsers(); });
     document.getElementById('adminPendingSearch')?.addEventListener('input', () => { adminPage.pending = 1; renderAdminPending(); });
     document.querySelectorAll('[data-admin-page]').forEach((button) => button.addEventListener('click', () => {
