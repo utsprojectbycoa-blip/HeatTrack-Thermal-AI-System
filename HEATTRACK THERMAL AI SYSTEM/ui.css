@@ -8358,10 +8358,6 @@ button.ht-cap-card__link {
 /* KPI stats */
 .ht-adash__stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; }
 .ht-adash__stat { display: flex; align-items: center; gap: 1rem; padding: 1.25rem; border: 1px solid rgba(15, 23, 42, .07); border-radius: var(--ht-radius-xl); background: #fff; box-shadow: var(--ht-shadow-xs); }
-/* Pending Requests stat card opens the Pending page */
-.ht-adash__stat--link { cursor: pointer; transition: border-color .2s var(--ht-ease-out), box-shadow .2s var(--ht-ease-out), transform .2s var(--ht-ease-out); }
-.ht-adash__stat--link:hover { border-color: rgba(245, 158, 11, .45); box-shadow: var(--ht-shadow-sm); transform: translateY(-2px); }
-.ht-adash__stat--link:focus-visible { outline: none; box-shadow: var(--ht-focus-ring); }
 .ht-adash__stat-icon { display: grid; place-items: center; flex-shrink: 0; width: 3.25rem; height: 3.25rem; border-radius: 1rem; }
 .ht-adash__stat-icon svg { width: 1.4rem; height: 1.4rem; }
 .ht-adash__stat-icon--total { color: var(--ht-thermal-600); background: rgba(249, 115, 22, .12); }
@@ -8413,11 +8409,39 @@ button.ht-cap-card__link {
 .ht-adash__recent-item + .ht-adash__recent-item { border-top: 1px solid rgba(15, 23, 42, .05); }
 .ht-adash__recent-item--unread { background: rgba(249, 115, 22, .07); }
 .ht-adash__recent-item:hover { background: rgba(249, 115, 22, .03); }
+/* Pending request rows open the Pending page */
+.ht-adash__recent-item--link { cursor: pointer; transition: background .15s; }
+.ht-adash__recent-item--link:hover { background: rgba(249, 115, 22, .08); }
+.ht-adash__recent-item--link:focus-visible { outline: none; box-shadow: inset var(--ht-focus-ring); }
+/* Bell dropdown: the date sits under the name and email (not beside them), so the
+   full name, username and email show, wrapping when long instead of being cut */
+.ht-admin-notif .ht-adash__recent-item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "avatar info actions" "avatar date actions";
+    column-gap: .75rem;
+    row-gap: .15rem;
+    align-items: center;
+    transition: background .15s;
+}
+.ht-admin-notif .ht-adash__avatar { grid-area: avatar; }
+.ht-admin-notif .ht-adash__recent-info { grid-area: info; }
+.ht-admin-notif .ht-adash__recent-date { grid-area: date; display: block; }
+.ht-admin-notif .ht-adash__recent-actions,
+.ht-admin-notif .ht-adash__chip { grid-area: actions; }
+.ht-admin-notif .ht-adash__recent-info strong { overflow: visible; white-space: normal; overflow-wrap: anywhere; }
+/* Simple hover: a slightly darker background (unread rows are already tinted) */
+.ht-admin-notif .ht-adash__recent-item:hover { background: rgba(249, 115, 22, .1); }
+.ht-admin-notif .ht-adash__recent-item--unread:hover { background: rgba(249, 115, 22, .14); }
 /* User avatars in the dashboard lists: orange, same as the user Profile avatar */
 .ht-adash__avatar { display: grid; place-items: center; flex-shrink: 0; width: 2.35rem; height: 2.35rem; border-radius: 50%; color: #fff; background: linear-gradient(145deg, #fb923c, var(--ht-thermal-600)); font-weight: 700; font-size: .85rem; }
 .ht-adash__recent-info { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .ht-adash__recent-info strong { overflow: hidden; color: var(--ht-surface-100); font-size: .85rem; text-overflow: ellipsis; white-space: nowrap; }
 .ht-adash__recent-info span { overflow: hidden; color: var(--ht-surface-400); font-size: .75rem; text-overflow: ellipsis; white-space: nowrap; }
+/* "@username · email": the username always shows in full; only the email is cut with "…" */
+.ht-adash__recent-info .ht-adash__recent-meta { display: flex; gap: .3rem; min-width: 0; }
+.ht-adash__recent-info .ht-adash__recent-user { flex-shrink: 0; overflow: visible; }
+.ht-adash__recent-info .ht-adash__recent-email { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ht-adash__recent-date { flex-shrink: 0; color: var(--ht-surface-400); font: .72rem var(--ht-mono); white-space: nowrap; }
 .ht-adash__chip { flex-shrink: 0; padding: .2rem .55rem; border-radius: var(--ht-radius-full); font-size: .68rem; font-weight: 700; }
 .ht-adash__chip--pending { color: #b45309; background: #fef3c7; }
