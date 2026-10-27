@@ -4372,8 +4372,10 @@ function exportDetectionsToExcel() {
         '<Cell ss:Index="' + cardStart[i] + '" ss:MergeAcross="2" ss:StyleID="' + c[1] + '"><Data ss:Type="String">' + c[3] + '</Data></Cell>').join('') + '</Row>';
     tableXml += spacerRow;
 
-    // ---- Average body temperature: mean of the Average Surface Temp column below ----
-    const avgTemps = rows.map((d) => d.avgTemp).filter((t) => t != null && !Number.isNaN(Number(t))).map(Number);
+    // ---- Average body temperature: mean of the Average Surface Temp column below,
+    // '30 min' rows only (the 10/20-minute rows repeat readings already in them) ----
+    const avgTemps = rows.filter((d) => minutesIn.get(d.id) === '30 min')
+        .map((d) => d.avgTemp).filter((t) => t != null && !Number.isNaN(Number(t))).map(Number);
     const avgBodyTemp = avgTemps.length ? avgTemps.reduce((sum, t) => sum + t, 0) / avgTemps.length : null;
     tableXml += '<Row ss:Height="22"><Cell/>'
         + textCell('sAvgTempLbl', 'Average Body Temperature (' + avgTemps.length + ' reading' + (avgTemps.length === 1 ? '' : 's') + ')', 8)
