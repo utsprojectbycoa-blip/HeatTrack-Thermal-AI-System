@@ -3498,6 +3498,16 @@ function saveAlerts() {
     } catch (_) { /* storage full or blocked: the list still works for this visit */ }
 }
 
+// Days whose notifications and pop-ups are removed (Philippine date, YYYY-MM-DD).
+// Their readings were deleted from the database (delete_oct27_readings.sql).
+const REMOVED_ALERT_DAYS = new Set(['2026-10-27']);
+function isRemovedAlertDay(timestamp) {
+    const t = new Date(timestamp);
+    if (Number.isNaN(t.getTime())) return false;
+    const day = t.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });   // YYYY-MM-DD
+    return REMOVED_ALERT_DAYS.has(day);
+}
+
 function loadSavedAlerts() {
     const key = alertsStorageKey();
     let saved = [];
@@ -3509,7 +3519,8 @@ function loadSavedAlerts() {
         ...a,
         timestamp: a.timestamp ? new Date(a.timestamp) : new Date(),
         viewedAt: a.viewedAt ? new Date(a.viewedAt) : null,
-    }));
+    })).filter((a) => !isRemovedAlertDay(a.timestamp));
+    if (Array.isArray(saved) && saved.length !== state.alerts.length) saveAlerts();
     state.alertsDisplayed = 0;
     updateAlertBadge();
     renderAlerts();
@@ -3662,13 +3673,22 @@ function syncResultAlerts() {
     // Drop entries that no longer raise an alert: old check-ins, repeated
     // 30-minute rows and extra results inside a block (results no longer loaded stay)
     const loaded = new Set(state.detections.map((d) => d.id));
+    // Results deleted from the database: inside the loaded time span but no longer
+    // loaded (older results simply aren't loaded, so those stay)
+    const loadedTimes = state.detections
+        .map((d) => (d.timestamp instanceof Date ? d.timestamp.getTime() : NaN))
+        .filter((t) => !Number.isNaN(t));
+    const oldestLoaded = loadedTimes.length ? Math.min(...loadedTimes) : Infinity;
+    const deleted = (a) => !loaded.has(a.id) && new Date(a.timestamp).getTime() >= oldestLoaded;
     const before = state.alerts.length;
-    state.alerts = state.alerts.filter((a) => a.kind !== 'checkin' && (!loaded.has(a.id) || alertIds.has(a.id)));
+    state.alerts = state.alerts.filter((a) => a.kind !== 'checkin' && !deleted(a)
+        && !isRemovedAlertDay(a.timestamp)
+        && (!loaded.has(a.id) || alertIds.has(a.id)));
     if (state.alerts.length !== before) saveAlerts();
 
     const known = new Set(state.alerts.map((a) => a.id));
     const added = summaryDetections()
-        .filter((d) => alertIds.has(d.id) && !known.has(d.id))
+        .filter((d) => alertIds.has(d.id) && !known.has(d.id) && !isRemovedAlertDay(d.timestamp))
         .map((d) => {
             // Already read on another browser of this account
             const read = alertReadIds.has(alertItemId(d.id));
@@ -3803,6 +3823,7 @@ const fmtTemp = (t) => (t != null && t !== '--' && !Number.isNaN(Number(t)) ? `$
 
 function showToast(detection) {
     if (!state.alertsEnabled || !isToastLevel(detection?.severity)) return;
+    if (isRemovedAlertDay(detection?.timestamp)) return;   // removed day: no pop-up
     state.lastToastDetection = detection;
     let action = '';
     try { action = buildRecommendationFromDetection(detection).action || ''; } catch { /* no recommendation text */ }
@@ -6402,6 +6423,79 @@ const DEVICE_RESULT_MSG = {
     has_readings: 'This device has saved readings, so it cannot be deleted.',
 };
 
+// ---- Device API key generator (admin) ----
+// A random 32-character key from the browser's secure random generator. Letters
+// and digits only, without look-alikes (0/O, 1/l/I), so it is easy to copy and
+// type. The database stores only its hash, so the key can be seen ONLY right after
+// it is generated: the admin copies it into the mini PC's .env
+// (HEATTRACK_DEVICE_API_KEY) and gives it to the user for signup.
+const DEVICE_KEY_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';   // 56 characters
+function generateDeviceKey(length = 32) {
+    const out = [];
+    const limit = 256 - (256 % DEVICE_KEY_CHARS.length);   // no bias toward some characters
+    while (out.length < length) {
+        const bytes = crypto.getRandomValues(new Uint8Array(length * 2));
+        for (const b of bytes) {
+            if (b < limit && out.length < length) out.push(DEVICE_KEY_CHARS[b % DEVICE_KEY_CHARS.length]);
+        }
+    }
+    return out.join('');
+}
+
+async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); return true; } catch (_) { return false; }
+}
+
+// Adds "Generate key" under an API key field, and a box that shows the new key
+// with a Copy button (the only time the key can be seen)
+function addDeviceKeyGenerator(input) {
+    if (!input || input.dataset.keygen) return;
+    input.dataset.keygen = '1';
+    const form = input.form;
+    const anchor = input.parentElement && input.parentElement !== form ? input.parentElement : input;
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'margin-top:.4rem;display:flex;flex-direction:column;gap:.4rem;';
+    wrap.innerHTML = `
+        <button type="button" data-keygen-btn
+            style="align-self:flex-start;display:inline-flex;align-items:center;gap:.35rem;padding:.4rem .75rem;border-radius:999px;border:1px solid #fdba74;background:#fff7ed;color:#c2410c;font:600 .8rem 'DM Sans',system-ui,sans-serif;cursor:pointer">
+            <i data-lucide="key-round" style="width:14px;height:14px"></i><span>Generate key</span>
+        </button>
+        <div data-keygen-box hidden
+            style="padding:.6rem .75rem;border-radius:.6rem;border:1px solid #fed7aa;background:#fffbf5;font:.8rem 'DM Sans',system-ui,sans-serif;color:#7c2d12">
+            <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+                <code data-keygen-value style="font:600 .85rem ui-monospace,Menlo,Consolas,monospace;word-break:break-all;color:#111827"></code>
+                <button type="button" data-keygen-copy
+                    style="padding:.2rem .6rem;border-radius:999px;border:1px solid #fdba74;background:#fff;color:#c2410c;font:600 .75rem 'DM Sans',system-ui,sans-serif;cursor:pointer">Copy</button>
+            </div>
+            <div data-keygen-note style="margin-top:.35rem;line-height:1.4">
+                Copy this key now: it is saved hashed and cannot be shown again. Put it in the
+                mini PC's .env (HEATTRACK_DEVICE_API_KEY) and give it to the user for signup.
+            </div>
+        </div>`;
+    anchor.insertAdjacentElement('afterend', wrap);
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+
+    const box = wrap.querySelector('[data-keygen-box]');
+    const value = wrap.querySelector('[data-keygen-value]');
+    wrap.querySelector('[data-keygen-btn]').addEventListener('click', async () => {
+        const key = generateDeviceKey();
+        input.value = key;
+        input.type = 'text';                      // show it in the field too
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        value.textContent = key;
+        box.hidden = false;
+        const copied = await copyText(key);
+        showAdminToast(copied ? 'New API key generated and copied.' : 'New API key generated. Copy it now.');
+    });
+    wrap.querySelector('[data-keygen-copy]').addEventListener('click', async () => {
+        showAdminToast(await copyText(value.textContent) ? 'API key copied.' : 'Could not copy. Select the key and copy it.', 'success');
+    });
+    // Typing your own key hides the generated one (it would no longer be the saved key)
+    input.addEventListener('input', () => { if (input.value !== value.textContent) box.hidden = true; });
+    return { hide: () => { box.hidden = true; value.textContent = ''; } };
+}
+
 function initAdminDevices() {
     const form = document.getElementById('adminDeviceForm');
     const editForm = document.getElementById('adminDeviceEditForm');
@@ -6409,6 +6503,8 @@ function initAdminDevices() {
     bindDeviceNumberInput(form?.elements.deviceNumber);
     bindDeviceNumberInput(editForm?.elements.deviceNumber);
     [form?.elements.deviceKey, editForm?.elements.deviceKey].forEach((input) => input && blockSpaces(input));
+    const newKeyGen = addDeviceKeyGenerator(form?.elements.deviceKey);
+    const editKeyGen = addDeviceKeyGenerator(editForm?.elements.deviceKey);
     [form, editForm].forEach((f) => f?.querySelectorAll('[data-password-toggle]').forEach((toggle) => toggle.addEventListener('click', () => togglePasswordGroup(toggle))));
 
     // Generate a random 32-character key (letters and numbers) and show it so it can be noted down
@@ -6450,13 +6546,26 @@ function initAdminDevices() {
         const { data, error } = await sb.rpc('admin_register_device', { p_device_code: code, p_api_key: key, p_device_url: url || null });
         if (error) { console.error('Register device failed:', error); showAdminDeviceStatus('Could not register the device: ' + error.message, 'error'); return; }
         if (data && data !== 'ok') { showAdminDeviceStatus(DEVICE_RESULT_MSG[data] || `Could not register the device (${data}).`, 'error'); return; }
+        // The generated key stays on screen (with Copy) after the form clears
+        const keyBox = form.querySelector('[data-keygen-box]');
+        const keepKeyBox = keyBox && !keyBox.hidden;
         form.reset();
+        if (keepKeyBox) {
+            keyBox.hidden = false;
+            const note = keyBox.querySelector('[data-keygen-note]');
+            if (note) note.textContent = `${code} registered with this key. Copy it now: it is saved hashed and cannot be shown again. Put it in the mini PC's .env (HEATTRACK_DEVICE_API_KEY) and give it to the user for signup.`;
+        }
         await loadAdminDevices();
         renderAdminAll();
         showAdminDeviceStatus(`${code} registered.`);
         showAdminToast(`${code} registered.`);
     });
     form?.addEventListener('reset', () => document.getElementById('adminDeviceStatus')?.classList.add('u-hidden'));
+    // Generating a key for the next device: the old key box message goes back to normal
+    form?.querySelector('[data-keygen-btn]')?.addEventListener('click', () => {
+        const note = form.querySelector('[data-keygen-note]');
+        if (note) note.textContent = "Copy this key now: it is saved hashed and cannot be shown again. Put it in the mini PC's .env (HEATTRACK_DEVICE_API_KEY) and give it to the user for signup.";
+    });
 
     document.getElementById('adminDeviceList')?.addEventListener('click', async (event) => {
         const button = event.target.closest('button');
@@ -6475,7 +6584,8 @@ function initAdminDevices() {
             editForm.elements.deviceNumber.readOnly = !!device.owner_id;
             editForm.elements.deviceUrl.value = device.device_url || '';
             adminSetText('adminDeviceCodeHint', device.owner_id ? 'Linked to an account, so the Device ID cannot be changed.' : '');
-            adminSetText('adminDeviceKeyHint', 'The current key is stored hashed and cannot be shown.');
+            adminSetText('adminDeviceKeyHint', 'The current key is stored hashed and cannot be shown. Generate a new key to replace it.');
+            editKeyGen?.hide();
             document.getElementById('adminDeviceEditError')?.classList.add('u-hidden');
             editModal?.classList.remove('u-hidden');
         } else if (deviceDelete) {
@@ -6535,7 +6645,7 @@ function initAdminDevices() {
         editModal.classList.add('u-hidden');
         await loadAdminDevices();
         renderAdminAll();
-        showAdminToast(`${code} updated.`);
+        showAdminToast(key ? `${code} updated with the new API key. Update the mini PC's .env too.` : `${code} updated.`);
     });
 }
 
