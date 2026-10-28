@@ -4184,15 +4184,62 @@ function updateSeverityChart() {
 // ============================================
 // EXCEL EXPORT
 // ============================================
-function xlsStyle(id, o = {}) {
-    const font = '<Font' + (o.bold ? ' ss:Bold="1"' : '') + ' ss:Size="' + (o.size || 11) + '" ss:FontName="Calibri"' + (o.color ? ' ss:Color="' + o.color + '"' : '') + '/>';
-    const fill = o.fill ? '<Interior ss:Color="' + o.fill + '" ss:Pattern="Solid"/>' : '';
-    const align = o.h ? '<Alignment ss:Horizontal="' + o.h + '" ss:Vertical="Center"' + (o.wrap ? ' ss:WrapText="1"' : '') + '/>' : '';
-    const borders = o.borders
-        ? '<Borders>' + o.borders.map(([pos, w, c]) => '<Border ss:LineStyle="Continuous" ss:Weight="' + w + '" ss:Color="' + c + '" ss:Position="' + pos + '"/>').join('') + '</Borders>'
-        : '';
-    const numFmt = o.numFmt ? '<NumberFormat ss:Format="' + o.numFmt + '"/>' : '';
-    return '<Style ss:ID="' + id + '">' + font + fill + align + borders + numFmt + '</Style>';
+// The report is a real .xlsx built with ExcelJS (loaded the first time a report
+// is generated), so it can carry the HeatTrack logo
+const EXCELJS_URL = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+const REPORT_LOGO_URL = 'email_logo.png';
+let excelJsLoading = null;
+
+function loadExcelJs() {
+    if (window.ExcelJS) return Promise.resolve(window.ExcelJS);
+    if (!excelJsLoading) {
+        excelJsLoading = new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = EXCELJS_URL;
+            script.onload = () => (window.ExcelJS ? resolve(window.ExcelJS) : reject(new Error('ExcelJS did not load')));
+            script.onerror = () => reject(new Error('Could not load ExcelJS'));
+            document.head.appendChild(script);
+        }).catch((err) => {
+            excelJsLoading = null;   // try again on the next click
+            throw err;
+        });
+    }
+    return excelJsLoading;
+}
+
+// The logo as a data URL, or null (file missing, or the page opened as file://)
+async function loadReportLogo() {
+    try {
+        const res = await fetch(REPORT_LOGO_URL, { cache: 'force-cache' });
+        if (!res.ok) return null;
+        const blob = await res.blob();
+        return await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    } catch (_) {
+        return null;
+    }
+}
+
+// ExcelJS cell style. Colours are '#RRGGBB'; borders are [side, weight, colour]
+// (weight above 2 = medium line, otherwise thin)
+function xlsStyle(o = {}) {
+    const argb = (hex) => 'FF' + hex.slice(1).toUpperCase();
+    const style = { font: { name: 'Calibri', size: o.size || 11, bold: !!o.bold } };
+    if (o.color) style.font.color = { argb: argb(o.color) };
+    if (o.fill) style.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(o.fill) } };
+    if (o.h) style.alignment = { horizontal: o.h.toLowerCase(), vertical: 'middle', wrapText: !!o.wrap };
+    if (o.borders) {
+        style.border = {};
+        o.borders.forEach(([side, weight, color]) => {
+            style.border[side.toLowerCase()] = { style: weight > 2 ? 'medium' : 'thin', color: { argb: argb(color) } };
+        });
+    }
+    if (o.numFmt) style.numFmt = o.numFmt;
+    return style;
 }
 
 // The rows the Detection Log shows for the chosen filters (status + period).
@@ -4262,7 +4309,9 @@ function renderLogFilterChips() {
         + LOG_FILTER_CHIPS[kind].map((c) => chip(c.level, c.label || URGENCY_NAME[c.level], c.color)).join('');
 }
 
-function exportDetectionsToExcel() {
+async function exportDetectionsToExcel() {
+    const [ExcelJS, logo] = await Promise.all([loadExcelJs(), loadReportLogo()]);
+
     // Every 10-minute reading, not only the Detection Log entries
     // Rows that fit no 10-minute mark (e.g. test rows seconds apart) are left out
     const minutesIn = countDurations();   // Duration column: 10 / 20 / 30 min
@@ -4275,71 +4324,86 @@ function exportDetectionsToExcel() {
     const totalDucks = counts.total || 0;
     const now = new Date();
     const pad = (n) => String(n).padStart(2, '0');
-    // Local date/time as Excel's DateTime value (no time zone shift)
-    const xlsDate = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
-        + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + '.000';
-
-    const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    // An empty "Number" cell makes Excel refuse the file, so empty values are text
-    const numCell = (style, value, digits) => (value == null || Number.isNaN(Number(value)))
-        ? '<Cell ss:StyleID="' + style + '"><Data ss:Type="String">--</Data></Cell>'
-        : '<Cell ss:StyleID="' + style + '"><Data ss:Type="Number">' + Number(value).toFixed(digits) + '</Data></Cell>';
-    const textCell = (style, text, merge = 0) =>
-        '<Cell' + (merge ? ' ss:MergeAcross="' + merge + '"' : '') + ' ss:StyleID="' + style + '"><Data ss:Type="String">' + esc(text) + '</Data></Cell>';
+    // ExcelJS saves dates as UTC: shift them so Excel shows the local time
+    const xlsDate = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+    // Empty values are shown as '--'
+    const num = (value, digits) => (value == null || Number.isNaN(Number(value)) ? '--' : Number(Number(value).toFixed(digits)));
 
     const allSides = (color) => ['Top', 'Bottom', 'Left', 'Right'].map((p) => [p, 1, color]);
     const white = allSides('#FFFFFF');
 
     // ---- Styles (same colours as before) ----
-    let styleXml = '<Styles>';
-    styleXml += xlsStyle('sTitle', { bold: true, size: 20, color: '#FFFFFF', fill: '#F4A15D', h: 'Center', borders: [['Bottom', 2.4, '#FB923C']] });
-    styleXml += xlsStyle('sSpacer', { size: 11 });
-    styleXml += xlsStyle('sGenerated', { bold: true, size: 10, color: '#F3F3F3', fill: '#FFA75F', h: 'Left', borders: allSides('#FB923C') });
-    styleXml += xlsStyle('sCardNormalVal', { bold: true, size: 11, color: '#274E13', fill: '#70F09F', h: 'Center' });
-    styleXml += xlsStyle('sCardMildVal', { bold: true, size: 11, color: '#783F04', fill: '#F7BC5B', h: 'Center' });
-    styleXml += xlsStyle('sCardModerateVal', { bold: true, size: 11, color: '#9A3412', fill: '#FDBA74', h: 'Center' });
-    styleXml += xlsStyle('sCardHeatstressVal', { bold: true, size: 11, color: '#CE2B1D', fill: '#FF9494', h: 'Center' });
-    styleXml += xlsStyle('sCardNormalLbl', { bold: true, size: 11, color: '#FFFFFF', fill: '#4ADE80', h: 'Center' });
-    styleXml += xlsStyle('sCardMildLbl', { bold: true, size: 11, color: '#FFFFFF', fill: '#F59E0B', h: 'Center' });
-    styleXml += xlsStyle('sCardModerateLbl', { bold: true, size: 11, color: '#FFFFFF', fill: '#FB923C', h: 'Center' });
-    styleXml += xlsStyle('sCardHeatstressLbl', { bold: true, size: 11, color: '#FFFFFF', fill: '#F87171', h: 'Center' });
-    styleXml += xlsStyle('sAvgTempLbl', { bold: true, size: 11, color: '#FFFFFF', fill: '#FB923C', h: 'Left', borders: allSides('#FB923C') });
-    styleXml += xlsStyle('sAvgTempNote', { size: 9, color: '#9A3412', fill: '#FFEDD5', h: 'Left', wrap: true, borders: allSides('#FB923C') });
-    styleXml += xlsStyle('sDisclaimer', { size: 10, color: '#9A3412', fill: '#FFF7ED', h: 'Left', wrap: true, borders: allSides('#FB923C') });
-    styleXml += xlsStyle('sAvgTempVal',{ bold: true, size: 11, color: '#9A3412', fill: '#FDBA74', h: 'Center', borders: allSides('#FB923C'), numFmt: '0.0&quot; °C&quot;' });
-    styleXml += xlsStyle('sHeader', { bold: true, size: 11, color: '#FFFFFF', fill: '#FB923C', h: 'Center', wrap: true, borders: white });
+    const S = {};
+    const def = (id, o) => { S[id] = xlsStyle(o); };
+    def('sTitle', { bold: true, size: 20, color: '#FFFFFF', fill: '#F4A15D', h: 'Center', borders: [['Bottom', 2.4, '#FB923C']] });
+    // Footer, same look as the website footer (grey text, thin top line, no fill)
+    def('sFooterBrand', { size: 9, color: '#64748B', h: 'Left', borders: [['Top', 1, '#E2E8F0']] });
+    def('sFooterCopy', { size: 8, color: '#94A3B8', h: 'Right', borders: [['Top', 1, '#E2E8F0']] });
+    // Padding: the brand text starts just after the logo, and the copyright stops
+    // ~18 px short of the right edge, matching the logo's left padding
+    // (one indent level is roughly 9-10 px)
+    S.sFooterBrand.alignment.indent = 5;
+    S.sFooterCopy.alignment.indent = 2;
+    def('sGenerated', { bold: true, size: 10, color: '#FFFFFF', fill: '#FFA75F', h: 'Left', borders: allSides('#FB923C') });
+    def('sCardNormalVal', { bold: true, size: 11, color: '#274E13', fill: '#70F09F', h: 'Center' });
+    def('sCardMildVal', { bold: true, size: 11, color: '#783F04', fill: '#F7BC5B', h: 'Center' });
+    def('sCardModerateVal', { bold: true, size: 11, color: '#9A3412', fill: '#FDBA74', h: 'Center' });
+    def('sCardHeatstressVal', { bold: true, size: 11, color: '#CE2B1D', fill: '#FF9494', h: 'Center' });
+    def('sCardNormalLbl', { bold: true, size: 11, color: '#FFFFFF', fill: '#4ADE80', h: 'Center' });
+    def('sCardMildLbl', { bold: true, size: 11, color: '#FFFFFF', fill: '#F59E0B', h: 'Center' });
+    def('sCardModerateLbl', { bold: true, size: 11, color: '#FFFFFF', fill: '#FB923C', h: 'Center' });
+    def('sCardHeatstressLbl', { bold: true, size: 11, color: '#FFFFFF', fill: '#F87171', h: 'Center' });
+    def('sAvgTempLbl', { bold: true, size: 11, color: '#FFFFFF', fill: '#FB923C', h: 'Left', borders: allSides('#FB923C') });
+    def('sAvgTempNote', { size: 9, color: '#9A3412', fill: '#FFEDD5', h: 'Left', wrap: true, borders: allSides('#FB923C') });
+    def('sDisclaimer', { size: 10, color: '#9A3412', fill: '#FFF7ED', h: 'Left', wrap: true, borders: allSides('#FB923C') });
+    def('sAvgTempVal', { bold: true, size: 11, color: '#9A3412', fill: '#FDBA74', h: 'Center', borders: allSides('#FB923C'), numFmt: '0.0" °C"' });
+    def('sHeader', { bold: true, size: 11, color: '#FFFFFF', fill: '#FB923C', h: 'Center', wrap: true, borders: white });
     // Timestamps are real Excel dates, so the column sorts and filters by time
     const tsFmt = 'mmmm d, yyyy, h:mm:ss AM/PM';
-    styleXml += xlsStyle('sDataRow1Timestamp', { size: 10, fill: '#FFCBA2', h: 'Center', borders: white, numFmt: tsFmt });
-    styleXml += xlsStyle('sDataRow2Timestamp', { size: 10, fill: '#FFDDC2', h: 'Center', borders: white, numFmt: tsFmt });
+    def('sDataRow1Timestamp', { size: 10, fill: '#FFCBA2', h: 'Center', borders: white, numFmt: tsFmt });
+    def('sDataRow2Timestamp', { size: 10, fill: '#FFDDC2', h: 'Center', borders: white, numFmt: tsFmt });
     // Surface temps always show one decimal
-    styleXml += xlsStyle('sTempRow1', { size: 10, fill: '#FFCBA2', h: 'Center', borders: white, numFmt: '0.0' });
-    styleXml += xlsStyle('sTempRow2', { size: 10, fill: '#FFDDC2', h: 'Center', borders: white, numFmt: '0.0' });
-    styleXml += xlsStyle('sNote', { size: 9, color: '#6B7280', h: 'Left', wrap: true });
-    styleXml += xlsStyle('sStatusNormal', { size: 10, color: '#FFFFFF', fill: '#4ADE80', h: 'Center', borders: white });
-    styleXml += xlsStyle('sStatusMild', { size: 10, color: '#FFFFFF', fill: '#F59E0B', h: 'Center', borders: white });
-    styleXml += xlsStyle('sStatusModerate', { size: 10, color: '#FFFFFF', fill: '#FB923C', h: 'Center', borders: white });
-    styleXml += xlsStyle('sStatusHeatstress', { size: 10, color: '#FFFFFF', fill: '#F87171', h: 'Center', borders: white });
-    styleXml += xlsStyle('sSevLow', { size: 10, color: '#FFFFFF', fill: '#4ADE80', h: 'Center', borders: white });
-    styleXml += xlsStyle('sSevModerate', { size: 10, color: '#FFFFFF', fill: '#FACC15', h: 'Center', borders: white });
-    styleXml += xlsStyle('sSevHigh', { size: 10, color: '#FFFFFF', fill: '#FB923C', h: 'Center', borders: white });
-    styleXml += xlsStyle('sSevCritical', { size: 10, color: '#FFFFFF', fill: '#F87171', h: 'Center', borders: white });
-    styleXml += xlsStyle('sDataCenterRow1', { size: 10, fill: '#FFCBA2', h: 'Center', borders: white });
-    styleXml += xlsStyle('sDataCenterRow2', { size: 10, fill: '#FFDDC2', h: 'Center', borders: white });
-    styleXml += xlsStyle('sRecRow1', { size: 10, fill: '#FFCBA2', h: 'Left', wrap: true, borders: white });
-    styleXml += xlsStyle('sRecRow2', { size: 10, fill: '#FFDDC2', h: 'Left', wrap: true, borders: white });
-    styleXml += '</Styles>';
+    def('sTempRow1', { size: 10, fill: '#FFCBA2', h: 'Center', borders: white, numFmt: '0.0' });
+    def('sTempRow2', { size: 10, fill: '#FFDDC2', h: 'Center', borders: white, numFmt: '0.0' });
+    def('sNote', { size: 9, color: '#6B7280', h: 'Left', wrap: true });
+    def('sStatusNormal', { size: 10, color: '#FFFFFF', fill: '#4ADE80', h: 'Center', borders: white });
+    def('sStatusMild', { size: 10, color: '#FFFFFF', fill: '#F59E0B', h: 'Center', borders: white });
+    def('sStatusModerate', { size: 10, color: '#FFFFFF', fill: '#FB923C', h: 'Center', borders: white });
+    def('sStatusHeatstress', { size: 10, color: '#FFFFFF', fill: '#F87171', h: 'Center', borders: white });
+    def('sSevLow', { size: 10, color: '#FFFFFF', fill: '#4ADE80', h: 'Center', borders: white });
+    def('sSevModerate', { size: 10, color: '#FFFFFF', fill: '#FACC15', h: 'Center', borders: white });
+    def('sSevHigh', { size: 10, color: '#FFFFFF', fill: '#FB923C', h: 'Center', borders: white });
+    def('sSevCritical', { size: 10, color: '#FFFFFF', fill: '#F87171', h: 'Center', borders: white });
+    def('sDataCenterRow1', { size: 10, fill: '#FFCBA2', h: 'Center', borders: white });
+    def('sDataCenterRow2', { size: 10, fill: '#FFDDC2', h: 'Center', borders: white });
+    def('sRecRow1', { size: 10, fill: '#FFCBA2', h: 'Left', wrap: true, borders: white });
+    def('sRecRow2', { size: 10, fill: '#FFDDC2', h: 'Left', wrap: true, borders: white });
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'HeatTrack';
+    wb.created = now;
+    const ws = wb.addWorksheet('HeatTrack Report');
 
     // ---- Columns: A margin | B-C Timestamp | D Duration | E Status | F Lowest | G Average |
     //      H Highest | I Duck Count | J Batch Count | K Urgency Level | L-M Top Recommendation ----
-    // B-C fit the longest timestamp ("September 30, 2026, 12:05:30 PM"); a date that
-    // doesn't fit shows as ##### in Excel
-    const colWidths = [22, 95, 95, 70, 80, 80, 80, 80, 70, 75, 75, 120, 120];
-    const span = colWidths.length - 2;          // MergeAcross for full-width rows (B..M)
-    let tableXml = '<Table>' + colWidths.map((w) => '<Column ss:Width="' + w + '"/>').join('');
-    const fullRow = (height, style, text) =>
-        '<Row ss:Height="' + height + '"><Cell/>' + textCell(style, text, span) + '</Row>';
-    const spacerRow = fullRow(15, 'sSpacer', '');
+    // Widths in characters. B-C fit the longest timestamp ("September 30, 2026, 12:05:30 PM");
+    // a date that doesn't fit shows as ##### in Excel
+    ws.columns = [4, 17, 17, 12.5, 14.5, 14.5, 14.5, 14.5, 12.5, 13.5, 13.5, 21.5, 21.5].map((width) => ({ width }));
+    const lastCol = 13;           // column M
+    const span = lastCol - 2;     // extra columns for full-width rows (B..M)
+
+    let r = 0;   // current row
+    const newRow = (height) => { r += 1; ws.getRow(r).height = height; };
+    // Writes a styled value at (r, col), merged `across` more columns and `down` more rows
+    // (the merged cells take the first cell's style)
+    const put = (col, value, style, across = 0, down = 0) => {
+        const cell = ws.getCell(r, col);
+        cell.style = style;
+        cell.value = value;
+        if (across || down) ws.mergeCells(r, col, r + down, col + across);
+    };
+    const fullRow = (height, style, text) => { newRow(height); put(2, text, style, span); };
+    const spacerRow = () => newRow(15);
 
     // Which filters produced this report
     const { start, end } = getLogDateBounds();
@@ -4350,29 +4414,29 @@ function exportDetectionsToExcel() {
         month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
     });
 
-    tableXml += '<Row ss:Height="15"><Cell/></Row>';
-    tableXml += fullRow(26, 'sTitle', 'HeatTrack Analytics Report');
-    tableXml += spacerRow;
-    tableXml += fullRow(18, 'sGenerated', 'Generated: ' + generated);
-    tableXml += fullRow(18, 'sGenerated', 'Filter: ' + logFilterLabel() + '   |   Period: ' + period
+    spacerRow();
+    fullRow(26, S.sTitle, 'HeatTrack Analytics Report');
+    spacerRow();
+    fullRow(18, S.sGenerated, 'Generated: ' + generated);
+    fullRow(18, S.sGenerated, 'Filter: ' + logFilterLabel() + '   |   Period: ' + period
         // Total = the ducks of all four statuses, the same sum as the boxes below
         + '   |   Total Records: ' + totalDucks);
-    tableXml += spacerRow;
+    spacerRow();
 
     // ---- Summary boxes: one per status (with share of all ducks) ----
     const share = (n) => (totalDucks ? ' (' + Math.round(((n || 0) / totalDucks) * 100) + '%)' : '');
     const cards = [
-        ['sCardNormalVal', 'sCardNormalLbl', counts.comfort, 'Thermal Comfort' + share(counts.comfort)],
-        ['sCardMildVal', 'sCardMildLbl', counts.mild, 'Mild Heat Stress' + share(counts.mild)],
-        ['sCardModerateVal', 'sCardModerateLbl', counts.moderate, 'Moderate Heat Stress' + share(counts.moderate)],
-        ['sCardHeatstressVal', 'sCardHeatstressLbl', counts.severe, 'Severe Heat Stress' + share(counts.severe)],
+        [S.sCardNormalVal, S.sCardNormalLbl, counts.comfort, 'Thermal Comfort' + share(counts.comfort)],
+        [S.sCardMildVal, S.sCardMildLbl, counts.mild, 'Mild Heat Stress' + share(counts.mild)],
+        [S.sCardModerateVal, S.sCardModerateLbl, counts.moderate, 'Moderate Heat Stress' + share(counts.moderate)],
+        [S.sCardHeatstressVal, S.sCardHeatstressLbl, counts.severe, 'Severe Heat Stress' + share(counts.severe)],
     ];
     const cardStart = [2, 5, 8, 11];            // columns B, E, H, K (3 wide each, B..M)
-    tableXml += '<Row ss:Height="22"><Cell/>' + cards.map((c, i) =>
-        '<Cell ss:Index="' + cardStart[i] + '" ss:MergeAcross="2" ss:StyleID="' + c[0] + '"><Data ss:Type="Number">' + (c[2] || 0) + '</Data></Cell>').join('') + '</Row>';
-    tableXml += '<Row ss:Height="22"><Cell/>' + cards.map((c, i) =>
-        '<Cell ss:Index="' + cardStart[i] + '" ss:MergeAcross="2" ss:StyleID="' + c[1] + '"><Data ss:Type="String">' + c[3] + '</Data></Cell>').join('') + '</Row>';
-    tableXml += spacerRow;
+    newRow(22);
+    cards.forEach((c, i) => put(cardStart[i], c[2] || 0, c[0], 2));
+    newRow(22);
+    cards.forEach((c, i) => put(cardStart[i], c[3], c[1], 2));
+    spacerRow();
 
     // ---- Average body temperature: mean of the Average Surface Temp column below,
     // '30 min' rows only (the 10/20-minute rows repeat readings already in them) ----
@@ -4381,28 +4445,23 @@ function exportDetectionsToExcel() {
     const avgBodyTemp = avgTemps.length ? avgTemps.reduce((sum, t) => sum + t, 0) / avgTemps.length : null;
     // Two rows: the label, then a note on which readings it uses; the value spans both
     const avgCount = avgTemps.length + ' reading' + (avgTemps.length === 1 ? '' : 's');
-    tableXml += '<Row ss:Height="22"><Cell/>'
-        + textCell('sAvgTempLbl', 'Average Body Temperature (' + avgCount + ')', 8)
-        + '<Cell ss:MergeAcross="2" ss:MergeDown="1" ss:StyleID="sAvgTempVal">' + (avgBodyTemp == null
-            ? '<Data ss:Type="String">--</Data>'
-            : '<Data ss:Type="Number">' + avgBodyTemp.toFixed(1) + '</Data>') + '</Cell>'
-        + '</Row>';
-    tableXml += '<Row ss:Height="16"><Cell/>'
-        + textCell('sAvgTempNote', avgBodyTemp == null
-            ? 'No 30 min readings in the selected filters.'
-            : '30 min readings only (10 and 20 min readings not included).', 8)
-        + '</Row>';
-    tableXml += spacerRow;
+    newRow(22);
+    put(2, 'Average Body Temperature (' + avgCount + ')', S.sAvgTempLbl, 8);
+    put(11, avgBodyTemp == null ? '--' : num(avgBodyTemp, 1), S.sAvgTempVal, 2, 1);
+    newRow(16);
+    put(2, avgBodyTemp == null
+        ? 'No 30 min readings in the selected filters.'
+        : '30 min readings only (10 and 20 min readings not included).', S.sAvgTempNote, 8);
+    spacerRow();
 
     // ---- Table header (same columns as the Detection Log) ----
-    tableXml += '<Row ss:Height="30"><Cell/>'
-        + textCell('sHeader', 'Timestamp', 1)
-        + ['Duration', 'Status', 'Lowest Surface Temp (°C)', 'Average Surface Temp (°C)', 'Highest Surface Temp (°C)',
-           'Duck Count', 'Batch Count', 'Urgency Level'].map((h) => textCell('sHeader', h)).join('')
-        + textCell('sHeader', 'Top Recommendation', 1)
-        + '</Row>';
+    newRow(30);
+    put(2, 'Timestamp', S.sHeader, 1);
+    ['Duration', 'Status', 'Lowest Surface Temp (°C)', 'Average Surface Temp (°C)', 'Highest Surface Temp (°C)',
+        'Duck Count', 'Batch Count', 'Urgency Level'].forEach((h, i) => put(4 + i, h, S.sHeader));
+    put(12, 'Top Recommendation', S.sHeader, 1);
     // Row number of the header: frozen on screen and repeated on every printed page
-    const headerRow = (tableXml.match(/<Row/g) || []).length;
+    const headerRow = r;
 
     // ---- Data rows ----
     rows.forEach((d) => {
@@ -4410,83 +4469,86 @@ function exportDetectionsToExcel() {
         // then 10, 20, 30 again; older rows without an interval were 30-minute rows
         const interval = minutesIn.get(d.id) || '30 min';
         // Darker fill (Row1) for 30-minute rows, lighter (Row2) for 10-minute rows
-        const odd = interval === '30 min';
-        const rowN = odd ? 'Row1' : 'Row2';
-        const tempCell = (t) => numCell('sTemp' + rowN, t, 1);
+        const rowN = interval === '30 min' ? 'Row1' : 'Row2';
         const ts = d.timestamp instanceof Date ? d.timestamp : new Date(d.timestamp);
-        const tsCell = Number.isNaN(ts.getTime())
-            ? textCell(odd ? 'sDataRow1Timestamp' : 'sDataRow2Timestamp', '--', 1)
-            : '<Cell ss:MergeAcross="1" ss:StyleID="' + (odd ? 'sDataRow1Timestamp' : 'sDataRow2Timestamp') + '"><Data ss:Type="DateTime">' + xlsDate(ts) + '</Data></Cell>';
-        const sevText = urgencyName(severityLevels.includes(d.severity) ? d.severity : 'LOW');
-        const center = odd ? 'sDataCenterRow1' : 'sDataCenterRow2';
-        const recStyle = odd ? 'sRecRow1' : 'sRecRow2';
-        const statusText = statusLabel(d.status);
+        const center = S['sDataCenter' + rowN];
         const statusStyle = { COMFORT: 'sStatusNormal', MILD: 'sStatusMild', MODERATE: 'sStatusModerate', SEVERE: 'sStatusHeatstress' }[d.status] || 'sStatusNormal';
         const sevStyle = d.severity === 'CRITICAL' ? 'sSevCritical' : d.severity === 'HIGH' ? 'sSevHigh'
             : d.severity === 'MODERATE' ? 'sSevModerate' : 'sSevLow';
         const recText = buildRecommendationFromDetection(d)?.action || '';
-        const rowHeight = Math.max(24, (Math.ceil(recText.length / 45) + 1) * 14);
-        const batch = d.batchCount != null && /^\d+$/.test(String(d.batchCount))
-            ? numCell(center, d.batchCount, 0)
-            : textCell(center, d.batchCount ?? '--');
+        const batch = d.batchCount != null && /^\d+$/.test(String(d.batchCount)) ? Number(d.batchCount) : String(d.batchCount ?? '--');
 
-        tableXml += '<Row ss:Height="' + rowHeight + '"><Cell/>'
-            + tsCell
-            + textCell(center, interval)
-            + textCell(statusStyle, statusText)
-            + tempCell(d.lowTemp)
-            + tempCell(d.avgTemp)
-            + tempCell(d.highTemp)
-            + numCell(center, d.count ?? 0, 0)
-            + batch
-            + textCell(sevStyle, sevText)
-            + textCell(recStyle, recText, 1)
-            + '</Row>';
+        newRow(Math.max(24, (Math.ceil(recText.length / 45) + 1) * 14));
+        put(2, Number.isNaN(ts.getTime()) ? '--' : xlsDate(ts), S['sData' + rowN + 'Timestamp'], 1);
+        put(4, interval, center);
+        put(5, statusLabel(d.status), S[statusStyle]);
+        put(6, num(d.lowTemp, 1), S['sTemp' + rowN]);
+        put(7, num(d.avgTemp, 1), S['sTemp' + rowN]);
+        put(8, num(d.highTemp, 1), S['sTemp' + rowN]);
+        put(9, num(d.count ?? 0, 0), center);
+        put(10, batch, center);
+        put(11, urgencyName(severityLevels.includes(d.severity) ? d.severity : 'LOW'), S[sevStyle]);
+        put(12, recText, S['sRec' + rowN], 1);
     });
 
     if (!rows.length) {
-        tableXml += fullRow(30, 'sDataCenterRow1', 'No detections for the selected events and period.');
+        fullRow(30, S.sDataCenterRow1, 'No detections for the selected events and period.');
     }
-    tableXml += spacerRow;
-    tableXml += fullRow(28, 'sNote', 'Duration: minutes into each 30-minute step of monitoring (10, 20, 30, then 10, 20, 30 again). The first detection is 10 min; after 10 minutes with no reading, counting starts again at 10 min. Totals count the 30 min readings only.');
-    tableXml += spacerRow;
+    spacerRow();
+    fullRow(28, S.sNote, 'Duration: minutes into each 30-minute step of monitoring (10, 20, 30, then 10, 20, 30 again). The first detection is 10 min; after 10 minutes with no reading, counting starts again at 10 min. Totals count the 30 min readings only.');
+    spacerRow();
     // Disclaimer: orange box; rich text so only "Disclaimer:" is bold
-    tableXml += '<Row ss:Height="44"><Cell/><Cell ss:MergeAcross="' + span + '" ss:StyleID="sDisclaimer">'
-        // Rich text ignores the cell's font colour, so the orange is set on the text too
-        + '<ss:Data ss:Type="String" xmlns="http://www.w3.org/TR/REC-html40"><Font html:Color="#9A3412"><B>Disclaimer:</B> '
-        + esc('The results and recommendations in this report are generated by an automated system. '
+    const disclaimerFont = { name: 'Calibri', size: 10, color: { argb: 'FF9A3412' } };
+    newRow(44);
+    put(2, { richText: [
+        { font: { ...disclaimerFont, bold: true }, text: 'Disclaimer: ' },
+        { font: disclaimerFont, text: 'The results, temperatures, averages and recommendations in this report are generated by an automated system. '
             + 'They are assistive only, may contain errors, and are not a veterinary diagnosis. Always confirm with direct on-site observation of the ducks '
-            + 'and follow your farm protocol or veterinary guidance before taking action.')
-        + '</Font></ss:Data></Cell></Row>';
-    tableXml += '</Table>';
+            + 'and follow your farm protocol or veterinary guidance before taking action.' },
+    ] }, S.sDisclaimer, span);
+    spacerRow();
 
-    const sheetName = 'HeatTrack Report';
-    const xml = '<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?>'
-        + '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office"'
-        + ' xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"'
-        + ' xmlns:html="http://www.w3.org/TR/REC-html40">'
-        + styleXml + '<Worksheet ss:Name="' + sheetName + '">'
-        // Print the table header at the top of every page
-        + '<Names><NamedRange ss:Name="Print_Titles" ss:RefersTo="=\'' + sheetName + '\'!R' + headerRow + '"/></Names>'
-        + tableXml
-        // Print / PDF: landscape, all columns on one page width, page numbers in the footer
-        + '<WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><PageSetup><Layout x:Orientation="Landscape"/>'
-        + '<Footer x:Margin="0.2" x:Data="&amp;LHeatTrack Analytics Report&amp;RPage &amp;P of &amp;N"/>'
-        + '<PageMargins x:Left="0.3" x:Right="0.3" x:Top="0.4" x:Bottom="0.5"/></PageSetup><FitToPage/>'
-        + '<Print><FitWidth>1</FitWidth><FitHeight>0</FitHeight><ValidPrinterInfo/></Print>'
-        // Keep everything down to the table header in view while scrolling
-        + '<FreezePanes/><FrozenNoSplit/><SplitHorizontal>' + headerRow + '</SplitHorizontal>'
-        + '<TopRowBottomPane>' + headerRow + '</TopRowBottomPane><ActivePane>2</ActivePane>'
-        + '</WorksheetOptions>'
-        + '</Worksheet></Workbook>';
+    // ---- Footer (like the website's): logo + name on the left, copyright on the right ----
+    newRow(32);
+    put(2, 'HeatTrack — Thermal AI System', S.sFooterBrand, 4);
+    put(7, 'Pateros Duckery AI-Integrated Assistive Monitoring System for Heat Stress Detection © ' + now.getFullYear(), S.sFooterCopy, 6);
+    if (logo) {
+        const logoId = wb.addImage({ base64: logo, extension: 'png' });
+        // Exact pixel offsets (ExcelJS reads col/row fractions against a fixed default
+        // width, not column B's real one): 18 px in from the left edge, the same as
+        // the copyright's right padding, and centred in the row (32 pt ~ 43 px tall).
+        // The brand text (indent 5, ~50 px) starts ~12 px after the 20 px logo.
+        const px = 9525;   // EMUs per pixel
+        ws.addImage(logoId, {
+            tl: { nativeCol: 1, nativeColOff: 18 * px, nativeRow: r - 1, nativeRowOff: 11 * px },
+            ext: { width: 20, height: 20 },
+            editAs: 'oneCell',
+        });
+    }
+
+    // Keep everything down to the table header in view while scrolling
+    ws.views = [{ state: 'frozen', xSplit: 0, ySplit: headerRow }];
+    // Print / PDF: landscape, all columns on one page width, the table header on
+    // every page, page numbers in the footer
+    ws.pageSetup = {
+        orientation: 'landscape',
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+        margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.5, header: 0.2, footer: 0.2 },
+        printTitlesRow: headerRow + ':' + headerRow,
+    };
+    ws.headerFooter.oddFooter = '&LHeatTrack Analytics Report&RPage &P of &N';
 
     // The link must be on the page, and the file kept a moment, for every browser to download it
-    const blob = new Blob([xml], { type: 'application/vnd.ms-excel' });
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     // Local date and time (toISOString is UTC, which can be the wrong day)
-    a.download = 'heattrack_report_' + xlsDate(now).slice(0, 10) + '_' + pad(now.getHours()) + pad(now.getMinutes()) + '.xls';
+    a.download = 'heattrack_report_' + now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate())
+        + '_' + pad(now.getHours()) + pad(now.getMinutes()) + '.xlsx';
     a.style.display = 'none';
     document.body.appendChild(a);
     a.click();
@@ -4691,7 +4753,20 @@ function setupEventListeners() {
     });
 
     // Export logs to Excel
-    document.getElementById('exportLogs')?.addEventListener('click', exportDetectionsToExcel);
+    // (the first report loads ExcelJS from the internet, so the button waits for it)
+    const exportBtn = document.getElementById('exportLogs');
+    exportBtn?.addEventListener('click', async () => {
+        if (exportBtn.disabled) return;
+        exportBtn.disabled = true;
+        try {
+            await exportDetectionsToExcel();
+        } catch (err) {
+            console.error('Report export failed:', err);
+            alert('Could not create the report. Check your internet connection and try again.');
+        } finally {
+            exportBtn.disabled = false;
+        }
+    });
 
     // Fullscreen camera expansion
     const normalCameraContainer = document.getElementById('normalCameraContainer');
