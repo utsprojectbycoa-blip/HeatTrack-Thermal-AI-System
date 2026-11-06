@@ -2375,7 +2375,7 @@ function getDetectionCounts(detections = summaryDetections()) {
     for (const d of detections) {
         const n = d.count ?? 1;
         if (statusKey[d.status]) counts[statusKey[d.status]] += n;
-        if (urgencyKey[d.severity]) counts[urgencyKey[d.severity]] += n;
+        if (urgencyKey[d.severity] && hasUrgency(d)) counts[urgencyKey[d.severity]] += n;
     }
     counts.total = counts.comfort + counts.mild + counts.moderate + counts.severe;
     return counts;
@@ -2686,6 +2686,14 @@ function statusBadgeHtml(status) {
 // Severity code -> urgency badge text (ROUTINE / MONITOR / URGENT / CRITICAL)
 const urgencyBadge = (level) => urgencyName(level).toUpperCase();
 
+// No humidity for over 60 minutes (air source 'none'): the result has no urgency,
+// only its heat-stress status. Check-ins and older rows always have one.
+const hasUrgency = (d) => d?.airSource !== 'none';
+// Air temperature from the thermal camera (with the last DHT22 humidity): "Thermal only"
+const isThermalOnly = (d) => d?.airSource === 'thermal';
+const NO_URGENCY_TEXT = 'No humidity reading for over 60 minutes, so no urgency level: only the heat-stress status is shown.';
+const THERMAL_ONLY_TEXT = 'Air temperature from the thermal camera (DHT22 not responding), with the last DHT22 humidity from the past 60 minutes.';
+
 function liveThermalHtml(thermal) {
     if (!thermal || !Array.isArray(thermal.ducks_now)) return null;
     const temps = thermal.ducks_now.filter((t) => typeof t === 'number');
@@ -2747,7 +2755,9 @@ function renderDetectionLogs() {
                     ${tempCell(d.highTemp)}
                     <td class="ht-log-cell--mono ht-log-dur">${duckLabel}</td>
                     <td class="ht-log-cell--mono" style="font-size:.78em;word-break:break-all" title="${batch}">${batch}</td>
-                    <td><span class="${sevPill}">${urgencyBadge(d.severity)}</span></td>
+                    <td>${hasUrgency(d)
+                        ? `<span class="${sevPill}">${urgencyBadge(d.severity)}</span>`
+                        : `<span class="ht-log-cell--mono" title="${NO_URGENCY_TEXT}">--</span>`}</td>
                 </tr>
             `;
         }).join('');
@@ -2791,7 +2801,7 @@ function renderLiveDetections() {
                     <div class="ht-live-item__row">
                         <span class="ht-live-item__tag">${info.label.toUpperCase()}</span>
                     </div>
-                    <div class="ht-live-item__meta">${d.bodyTemp}°C • ${d.count} duck${d.count !== 1 ? 's' : ''} • ${urgencyName(d.severity)}</div>
+                    <div class="ht-live-item__meta">${d.bodyTemp}°C • ${d.count} duck${d.count !== 1 ? 's' : ''}${hasUrgency(d) ? ` • ${urgencyName(d.severity)}` : ''}</div>
                 </div>
                 <div class="ht-live-item__time">${formatRelativeTime(d.timestamp)}</div>
             </div>
@@ -2888,6 +2898,13 @@ function renderRecommendations() {
     let html = displayRecs.map(r => {
         const cardClass = REC_SEVERITY_CLASS[r.severity] || REC_SEVERITY_CLASS.LOW;
         const ambientText = r.ambientTemp === undefined ? '...' : formatCardTemp(r.ambientTemp);
+        // Air source note: "Thermal only" (camera air + last humidity) or no urgency at all
+        const urgent = hasUrgency(r.detectionRef);
+        const airNote = !urgent
+            ? `<span class="ht-rec-card__category ht-rec-card__thermal-only" title="${NO_URGENCY_TEXT}">No urgency (no humidity)</span>`
+            : isThermalOnly(r.detectionRef)
+                ? `<span class="ht-rec-card__category ht-rec-card__thermal-only" title="${THERMAL_ONLY_TEXT}">Thermal only</span>`
+                : '';
         const tip = escapeHtml(getRecTip(r));
 
         return `
@@ -2899,11 +2916,12 @@ function renderRecommendations() {
                     <div class="ht-rec-card__content">
                         <div class="ht-rec-card__top">
                             <div class="ht-rec-card__action">${escapeHtml(r.action)}</div>
-                            <span class="ht-rec-sev">${urgencyBadge(r.severity)}</span>
+                            ${urgent ? `<span class="ht-rec-sev">${urgencyBadge(r.severity)}</span>` : ''}
                         </div>
                         <div class="ht-rec-card__meta">
                             <span class="ht-rec-card__category">Surface Temp ${formatCardTemp(r.bodyTemp)}</span>
                             <span class="ht-rec-card__category">Ambient Temp ${ambientText}</span>
+                            ${airNote}
                         </div>
                         <p class="ht-rec-card__tip">${tip}</p>
                         <div class="ht-rec-card__time">${r.timestamp}</div>
@@ -3054,7 +3072,7 @@ function openRecommendationModal(rec, currentTemp, { keepScroll = false } = {}) 
                     <span class="ht-modal-result__label">Detection Result</span>
                     <h3 class="ht-modal-action">${headline.title}</h3>
                 </div>
-                <span class="ht-modal-sev">${urgencyBadge(rec.severity)}</span>
+                ${hasUrgency(rec.detectionRef) ? `<span class="ht-modal-sev">${urgencyBadge(rec.severity)}</span>` : ''}
             </div>
             <p class="ht-modal-meta">${metaHtml}${sourceLabel ? `<span class="ht-modal-meta__src">${sourceLabel}</span>` : ''}</p>
         </div>
@@ -3394,7 +3412,9 @@ function getRecommendationSummary(rec, currentTemp) {
         MODERATE: 'Urgency is Monitor: take preventive steps and watch the trend.',
         LOW: 'Urgency is Routine: keep routine monitoring in place.',
     };
-    lines.push(meaning[rec.severity] || meaning.MODERATE);
+    lines.push(hasUrgency(rec.detectionRef)
+        ? (meaning[rec.severity] || meaning.MODERATE)
+        : `No humidity reading for over 60 minutes, so there is no urgency level; follow the ${statusLabel(getRecStatus(rec))} status.`);
 
     return lines;
 }
@@ -3407,8 +3427,9 @@ function getRecStatus(rec) {
 
 // Urgency Level: this result's level compared with the 30-minute reading before it.
 // Up = worse (toward Critical), down = better (toward Routine).
+// Readings without an urgency (no humidity) are skipped.
 function severityChangeHtml(rec) {
-    const readings = detailDetections().filter((d) => d.timestamp instanceof Date);
+    const readings = detailDetections().filter((d) => d.timestamp instanceof Date && hasUrgency(d));
     const own = readings.find((d) => d.id === rec.detectionId);
     if (!own) return '—';
     const previous = readings
@@ -3464,8 +3485,18 @@ function getRecommendationResultSummary(rec, currentTemp) {
     // Urgency Level shows this result's own urgency (it can differ from the status,
     // e.g. Mild Heat Stress made Urgent by hot, humid air). All ducks of a reading
     // share it, so instead of a duck count it shows the change from the previous reading
-    const level = severityLevels.includes(rec.severity) ? rec.severity : 'LOW';
-    items.push({ group: 'severity', tone: level.toLowerCase(), label: urgencyName(level), value: severityChangeHtml(rec) });
+    // No humidity for over 60 minutes: no urgency, only the status (gray dot, no level).
+    // Air temperature from the thermal camera: the urgency carries a "Thermal only" note
+    if (!hasUrgency(rec.detectionRef)) {
+        items.push({ group: 'severity', label: 'Not available',
+            value: `<span class="ht-sev-note" title="${NO_URGENCY_TEXT}"><i data-lucide="info"></i>No humidity reading for over 60 minutes</span>` });
+    } else {
+        const level = severityLevels.includes(rec.severity) ? rec.severity : 'LOW';
+        const thermalOnly = isThermalOnly(rec.detectionRef)
+            ? `<span class="ht-sev-note" title="${THERMAL_ONLY_TEXT}"><i data-lucide="info"></i>Thermal only (air from the thermal camera)</span>`
+            : '';
+        items.push({ group: 'severity', tone: level.toLowerCase(), label: urgencyName(level), value: severityChangeHtml(rec) + thermalOnly });
+    }
 
     // Extra batch details from the analytics table (only for detection-based recommendations)
     if (rec.lowTemp != null && rec.highTemp != null) {
@@ -3498,14 +3529,15 @@ function saveAlerts() {
     } catch (_) { /* storage full or blocked: the list still works for this visit */ }
 }
 
-// Days whose notifications and pop-ups are removed (Philippine date, YYYY-MM-DD).
-// Their readings were deleted from the database (delete_oct27_readings.sql).
-const REMOVED_ALERT_DAYS = new Set(['2026-10-27']);
-function isRemovedAlertDay(timestamp) {
-    const t = new Date(timestamp);
-    if (Number.isNaN(t.getTime())) return false;
-    const day = t.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });   // YYYY-MM-DD
-    return REMOVED_ALERT_DAYS.has(day);
+// Time spans whose notifications and pop-ups are removed (Philippine time, UTC+8)
+const REMOVED_ALERT_PERIODS = [
+    { from: '2026-10-12T14:00:00+08:00', to: '2026-10-12T16:30:00+08:00' },   // Oct 12, 2:00-4:30 PM
+    { from: '2026-10-27T00:00:00+08:00', to: '2026-10-28T00:00:00+08:00' },   // all of Oct 27
+].map((p) => ({ from: Date.parse(p.from), to: Date.parse(p.to) }));
+function isRemovedAlertTime(timestamp) {
+    const t = new Date(timestamp).getTime();
+    if (Number.isNaN(t)) return false;
+    return REMOVED_ALERT_PERIODS.some((p) => t >= p.from && t < p.to);
 }
 
 function loadSavedAlerts() {
@@ -3519,7 +3551,7 @@ function loadSavedAlerts() {
         ...a,
         timestamp: a.timestamp ? new Date(a.timestamp) : new Date(),
         viewedAt: a.viewedAt ? new Date(a.viewedAt) : null,
-    })).filter((a) => !isRemovedAlertDay(a.timestamp));
+    })).filter((a) => !isRemovedAlertTime(a.timestamp));
     if (Array.isArray(saved) && saved.length !== state.alerts.length) saveAlerts();
     state.alertsDisplayed = 0;
     updateAlertBadge();
@@ -3673,22 +3705,14 @@ function syncResultAlerts() {
     // Drop entries that no longer raise an alert: old check-ins, repeated
     // 30-minute rows and extra results inside a block (results no longer loaded stay)
     const loaded = new Set(state.detections.map((d) => d.id));
-    // Results deleted from the database: inside the loaded time span but no longer
-    // loaded (older results simply aren't loaded, so those stay)
-    const loadedTimes = state.detections
-        .map((d) => (d.timestamp instanceof Date ? d.timestamp.getTime() : NaN))
-        .filter((t) => !Number.isNaN(t));
-    const oldestLoaded = loadedTimes.length ? Math.min(...loadedTimes) : Infinity;
-    const deleted = (a) => !loaded.has(a.id) && new Date(a.timestamp).getTime() >= oldestLoaded;
     const before = state.alerts.length;
-    state.alerts = state.alerts.filter((a) => a.kind !== 'checkin' && !deleted(a)
-        && !isRemovedAlertDay(a.timestamp)
+    state.alerts = state.alerts.filter((a) => a.kind !== 'checkin' && !isRemovedAlertTime(a.timestamp)
         && (!loaded.has(a.id) || alertIds.has(a.id)));
     if (state.alerts.length !== before) saveAlerts();
 
     const known = new Set(state.alerts.map((a) => a.id));
     const added = summaryDetections()
-        .filter((d) => alertIds.has(d.id) && !known.has(d.id) && !isRemovedAlertDay(d.timestamp))
+        .filter((d) => alertIds.has(d.id) && !known.has(d.id) && !isRemovedAlertTime(d.timestamp))
         .map((d) => {
             // Already read on another browser of this account
             const read = alertReadIds.has(alertItemId(d.id));
@@ -3742,7 +3766,7 @@ function renderAlerts() {
                         <div class="ht-alert-item__body">
                             <div class="ht-alert-item__title"><span class="ht-alert-item__title-text">${alertTitle(a)}</span></div>
                             <div class="ht-alert-item__meta">
-                                <span class="ht-alert-item__sub">${a.bodyTemp}°C • ${urgencyName(a.severity)}</span>
+                                <span class="ht-alert-item__sub">${a.bodyTemp}°C${hasUrgency(a) ? ` • ${urgencyName(a.severity)}` : ''}</span>
                                 <span class="ht-alert-item__time">${formatRelativeTime(a.timestamp)}</span>
                             </div>
                         </div>
@@ -3806,7 +3830,9 @@ function markAlertAsViewed(alertId) {
 
 // Pop-up (lower right) for heat stress alerts.
 // It pops up for Urgent or Critical urgency (HIGH or CRITICAL severity), whatever
-// the status: a Mild row made Urgent by hot, humid air alerts too.
+// the status: a Mild row made Urgent by hot, humid air alerts too. A result with
+// no urgency (no humidity) has the level of its status, so it pops up for
+// Moderate or Severe Heat Stress.
 let toastTimer = null;
 const TOAST_LEVELS = ['HIGH', 'CRITICAL'];
 const isToastLevel = (level) => TOAST_LEVELS.includes(String(level || '').toUpperCase());
@@ -3823,33 +3849,40 @@ const fmtTemp = (t) => (t != null && t !== '--' && !Number.isNaN(Number(t)) ? `$
 
 function showToast(detection) {
     if (!state.alertsEnabled || !isToastLevel(detection?.severity)) return;
-    if (isRemovedAlertDay(detection?.timestamp)) return;   // removed day: no pop-up
+    if (isRemovedAlertTime(detection?.timestamp)) return;   // removed time span: no pop-up
     state.lastToastDetection = detection;
     let action = '';
     try { action = buildRecommendationFromDetection(detection).action || ''; } catch { /* no recommendation text */ }
     const stats = [['Surface temp', fmtTemp(detection.bodyTemp)]];
     if (detection.ambientTemp != null) stats.push(['Barn', fmtTemp(detection.ambientTemp)]);
     if (detection.count != null) stats.push(['Ducks', String(detection.count)]);
+    const urgent = hasUrgency(detection);
     renderToast({
         level: detection.severity,
+        showLevel: urgent,
         title: alertTitle(detection),
         icon: alertIcon(detection.severity),
         stats,
-        action: action || `Urgency: ${urgencyName(detection.severity)}. Open the details for the recommended actions.`,
+        action: action || (urgent
+            ? `Urgency: ${urgencyName(detection.severity)}. Open the details for the recommended actions.`
+            : 'Open the details for the recommended actions.'),
         timestamp: detection.timestamp,
     });
 }
 
 // Fills the pop-up card (same look as the old check-in card: colored top strip
-// and level badge, readings, the recommended action, Dismiss / View details)
-function renderToast({ kind = 'heatstress', level = 'LOW', title, icon, stats = [], stale = false, action, timestamp }) {
+// and level badge, readings, the recommended action, Dismiss / View details).
+// showLevel false: no level badge (a result without an urgency)
+function renderToast({ kind = 'heatstress', level = 'LOW', showLevel = true, title, icon, stats = [], stale = false, action, timestamp }) {
     const toast = document.getElementById('alertToast');
     if (!toast) return;
     toast.dataset.kind = kind;
     toast.dataset.level = level;
     toast.querySelector('.ht-toast__icon').innerHTML = `<i data-lucide="${icon}"></i>`;
     document.getElementById('toastTitle').textContent = title;
-    document.getElementById('toastLevel').textContent = urgencyName(level).toUpperCase();   // ROUTINE / MONITOR / URGENT / CRITICAL
+    const levelEl = document.getElementById('toastLevel');
+    levelEl.textContent = urgencyName(level).toUpperCase();   // ROUTINE / MONITOR / URGENT / CRITICAL
+    levelEl.style.display = showLevel ? '' : 'none';
 
     const statsEl = document.getElementById('toastStats');
     statsEl.innerHTML = '';
@@ -4135,9 +4168,9 @@ function initCharts() {
 }
 
 // Severity chart counts ducks (sum of duck_count) of the 30-minute readings,
-// matching the KPI cards
+// matching the KPI cards (results without an urgency are left out)
 function getSeverityData() {
-    const readings = thirtyMinuteReadings();
+    const readings = thirtyMinuteReadings().filter(hasUrgency);
     const sum = (sev) => readings
         .filter(d => d.severity === sev)
         .reduce((total, d) => total + (d.count ?? 1), 0);
@@ -4273,8 +4306,11 @@ function getFilteredLogDetections({ allRows = false } = {}) {
     const { kind, level } = state.logFilter;
     const rows = logRowsInPeriod({ allRows });
     if (level === 'ALL') return rows;
-    return rows.filter((d) => (kind === 'status' ? d.status : d.severity) === level);
+    return rows.filter((d) => logLevelOf(d, kind) === level);
 }
+
+// The row's Status, or its Urgency (null when it has none: no humidity)
+const logLevelOf = (d, kind) => (kind === 'status' ? d.status : (hasUrgency(d) ? d.severity : null));
 
 // The log rows inside the chosen period, before the status / urgency filter
 function logRowsInPeriod({ allRows = false } = {}) {
@@ -4314,7 +4350,7 @@ function renderLogFilterChips() {
     if (!box) return;
     const { kind, level } = state.logFilter;
     const rows = logRowsInPeriod();
-    const count = (lvl) => rows.filter((d) => (kind === 'status' ? d.status : d.severity) === lvl).length;
+    const count = (lvl) => rows.filter((d) => logLevelOf(d, kind) === lvl).length;
     const chip = (lvl, label, color) => `
         <button type="button" class="ht-log-chip${level === lvl ? ' is-active' : ''}" data-log-level="${lvl}"
             aria-pressed="${level === lvl}"${color ? ` style="--chip:${color}"` : ''}>
@@ -4508,7 +4544,8 @@ async function exportDetectionsToExcel() {
         put(8, num(d.highTemp, 1), S['sTemp' + rowN]);
         put(9, num(d.count ?? 0, 0), center);
         put(10, batch, center);
-        put(11, urgencyName(severityLevels.includes(d.severity) ? d.severity : 'LOW'), S[sevStyle]);
+        if (hasUrgency(d)) put(11, urgencyName(severityLevels.includes(d.severity) ? d.severity : 'LOW'), S[sevStyle]);
+        else put(11, '--', center);   // no humidity reading: no urgency
         put(12, recText, S['sRec' + rowN], 1);
     });
 
@@ -5323,6 +5360,8 @@ function normalizeSeverity(value) {
 // Rows without a temperature keep their saved status.
 // The status that usually goes with each urgency (for rows/check-ins without a status)
 const STATUS_OF_SEVERITY = { LOW: 'COMFORT', MODERATE: 'MILD', HIGH: 'MODERATE', CRITICAL: 'SEVERE' };
+// ...and the other way round: the level a status gives without THI
+const SEVERITY_OF_STATUS = { COMFORT: 'LOW', MILD: 'MODERATE', MODERATE: 'HIGH', SEVERE: 'CRITICAL' };
 
 function levelForRow(highTemp, savedSeverity, savedStatus) {
     const hasTemp = highTemp != null && !Number.isNaN(highTemp);
@@ -5338,6 +5377,10 @@ function mapAnalyticsRow(row) {
     const savedSeverity = normalizeSeverity(row.severity);
     const level = levelForRow(high, savedSeverity, row.status ? normalizeStatus(row.status, savedSeverity) : null);
     const status = level.status;
+    // Where the logger's air reading came from (air_source.sql): 'dht22' | 'thermal' | 'none',
+    // null on older rows. 'none' = no humidity for over 60 minutes: no urgency is shown,
+    // and its level follows the status (cards, recommendations, alerts on Moderate/Severe)
+    const airSource = ['dht22', 'thermal', 'none'].includes(row.air_source) ? row.air_source : null;
     // 10 = 10-minute slot row, 30 = 30-minute window row; rows saved before
     // the interval column existed are 30-minute rows
     const hasInterval = row.interval_minutes != null;
@@ -5358,7 +5401,8 @@ function mapAnalyticsRow(row) {
         count: Math.max(0, parseInt(row.duck_count, 10) || 0),
         batchCount: row.batch_count ?? null,
         confidence: null, // no confidence column in the analytics table
-        severity: level.severity,
+        severity: airSource === 'none' ? SEVERITY_OF_STATUS[status] : level.severity,
+        airSource,
         interval,
         hasInterval,
         ai: row.ai_recommendation || null,   // written by the "recommend" Edge Function (Gemini)
@@ -6423,79 +6467,6 @@ const DEVICE_RESULT_MSG = {
     has_readings: 'This device has saved readings, so it cannot be deleted.',
 };
 
-// ---- Device API key generator (admin) ----
-// A random 32-character key from the browser's secure random generator. Letters
-// and digits only, without look-alikes (0/O, 1/l/I), so it is easy to copy and
-// type. The database stores only its hash, so the key can be seen ONLY right after
-// it is generated: the admin copies it into the mini PC's .env
-// (HEATTRACK_DEVICE_API_KEY) and gives it to the user for signup.
-const DEVICE_KEY_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';   // 56 characters
-function generateDeviceKey(length = 32) {
-    const out = [];
-    const limit = 256 - (256 % DEVICE_KEY_CHARS.length);   // no bias toward some characters
-    while (out.length < length) {
-        const bytes = crypto.getRandomValues(new Uint8Array(length * 2));
-        for (const b of bytes) {
-            if (b < limit && out.length < length) out.push(DEVICE_KEY_CHARS[b % DEVICE_KEY_CHARS.length]);
-        }
-    }
-    return out.join('');
-}
-
-async function copyText(text) {
-    try { await navigator.clipboard.writeText(text); return true; } catch (_) { return false; }
-}
-
-// Adds "Generate key" under an API key field, and a box that shows the new key
-// with a Copy button (the only time the key can be seen)
-function addDeviceKeyGenerator(input) {
-    if (!input || input.dataset.keygen) return;
-    input.dataset.keygen = '1';
-    const form = input.form;
-    const anchor = input.parentElement && input.parentElement !== form ? input.parentElement : input;
-
-    const wrap = document.createElement('div');
-    wrap.style.cssText = 'margin-top:.4rem;display:flex;flex-direction:column;gap:.4rem;';
-    wrap.innerHTML = `
-        <button type="button" data-keygen-btn
-            style="align-self:flex-start;display:inline-flex;align-items:center;gap:.35rem;padding:.4rem .75rem;border-radius:999px;border:1px solid #fdba74;background:#fff7ed;color:#c2410c;font:600 .8rem 'DM Sans',system-ui,sans-serif;cursor:pointer">
-            <i data-lucide="key-round" style="width:14px;height:14px"></i><span>Generate key</span>
-        </button>
-        <div data-keygen-box hidden
-            style="padding:.6rem .75rem;border-radius:.6rem;border:1px solid #fed7aa;background:#fffbf5;font:.8rem 'DM Sans',system-ui,sans-serif;color:#7c2d12">
-            <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
-                <code data-keygen-value style="font:600 .85rem ui-monospace,Menlo,Consolas,monospace;word-break:break-all;color:#111827"></code>
-                <button type="button" data-keygen-copy
-                    style="padding:.2rem .6rem;border-radius:999px;border:1px solid #fdba74;background:#fff;color:#c2410c;font:600 .75rem 'DM Sans',system-ui,sans-serif;cursor:pointer">Copy</button>
-            </div>
-            <div data-keygen-note style="margin-top:.35rem;line-height:1.4">
-                Copy this key now: it is saved hashed and cannot be shown again. Put it in the
-                mini PC's .env (HEATTRACK_DEVICE_API_KEY) and give it to the user for signup.
-            </div>
-        </div>`;
-    anchor.insertAdjacentElement('afterend', wrap);
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-
-    const box = wrap.querySelector('[data-keygen-box]');
-    const value = wrap.querySelector('[data-keygen-value]');
-    wrap.querySelector('[data-keygen-btn]').addEventListener('click', async () => {
-        const key = generateDeviceKey();
-        input.value = key;
-        input.type = 'text';                      // show it in the field too
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        value.textContent = key;
-        box.hidden = false;
-        const copied = await copyText(key);
-        showAdminToast(copied ? 'New API key generated and copied.' : 'New API key generated. Copy it now.');
-    });
-    wrap.querySelector('[data-keygen-copy]').addEventListener('click', async () => {
-        showAdminToast(await copyText(value.textContent) ? 'API key copied.' : 'Could not copy. Select the key and copy it.', 'success');
-    });
-    // Typing your own key hides the generated one (it would no longer be the saved key)
-    input.addEventListener('input', () => { if (input.value !== value.textContent) box.hidden = true; });
-    return { hide: () => { box.hidden = true; value.textContent = ''; } };
-}
-
 function initAdminDevices() {
     const form = document.getElementById('adminDeviceForm');
     const editForm = document.getElementById('adminDeviceEditForm');
@@ -6503,8 +6474,6 @@ function initAdminDevices() {
     bindDeviceNumberInput(form?.elements.deviceNumber);
     bindDeviceNumberInput(editForm?.elements.deviceNumber);
     [form?.elements.deviceKey, editForm?.elements.deviceKey].forEach((input) => input && blockSpaces(input));
-    const newKeyGen = addDeviceKeyGenerator(form?.elements.deviceKey);
-    const editKeyGen = addDeviceKeyGenerator(editForm?.elements.deviceKey);
     [form, editForm].forEach((f) => f?.querySelectorAll('[data-password-toggle]').forEach((toggle) => toggle.addEventListener('click', () => togglePasswordGroup(toggle))));
 
     // Generate a random 32-character key (letters and numbers) and show it so it can be noted down
@@ -6546,26 +6515,13 @@ function initAdminDevices() {
         const { data, error } = await sb.rpc('admin_register_device', { p_device_code: code, p_api_key: key, p_device_url: url || null });
         if (error) { console.error('Register device failed:', error); showAdminDeviceStatus('Could not register the device: ' + error.message, 'error'); return; }
         if (data && data !== 'ok') { showAdminDeviceStatus(DEVICE_RESULT_MSG[data] || `Could not register the device (${data}).`, 'error'); return; }
-        // The generated key stays on screen (with Copy) after the form clears
-        const keyBox = form.querySelector('[data-keygen-box]');
-        const keepKeyBox = keyBox && !keyBox.hidden;
         form.reset();
-        if (keepKeyBox) {
-            keyBox.hidden = false;
-            const note = keyBox.querySelector('[data-keygen-note]');
-            if (note) note.textContent = `${code} registered with this key. Copy it now: it is saved hashed and cannot be shown again. Put it in the mini PC's .env (HEATTRACK_DEVICE_API_KEY) and give it to the user for signup.`;
-        }
         await loadAdminDevices();
         renderAdminAll();
         showAdminDeviceStatus(`${code} registered.`);
         showAdminToast(`${code} registered.`);
     });
     form?.addEventListener('reset', () => document.getElementById('adminDeviceStatus')?.classList.add('u-hidden'));
-    // Generating a key for the next device: the old key box message goes back to normal
-    form?.querySelector('[data-keygen-btn]')?.addEventListener('click', () => {
-        const note = form.querySelector('[data-keygen-note]');
-        if (note) note.textContent = "Copy this key now: it is saved hashed and cannot be shown again. Put it in the mini PC's .env (HEATTRACK_DEVICE_API_KEY) and give it to the user for signup.";
-    });
 
     document.getElementById('adminDeviceList')?.addEventListener('click', async (event) => {
         const button = event.target.closest('button');
@@ -6584,8 +6540,7 @@ function initAdminDevices() {
             editForm.elements.deviceNumber.readOnly = !!device.owner_id;
             editForm.elements.deviceUrl.value = device.device_url || '';
             adminSetText('adminDeviceCodeHint', device.owner_id ? 'Linked to an account, so the Device ID cannot be changed.' : '');
-            adminSetText('adminDeviceKeyHint', 'The current key is stored hashed and cannot be shown. Generate a new key to replace it.');
-            editKeyGen?.hide();
+            adminSetText('adminDeviceKeyHint', 'The current key is stored hashed and cannot be shown.');
             document.getElementById('adminDeviceEditError')?.classList.add('u-hidden');
             editModal?.classList.remove('u-hidden');
         } else if (deviceDelete) {
@@ -6645,7 +6600,7 @@ function initAdminDevices() {
         editModal.classList.add('u-hidden');
         await loadAdminDevices();
         renderAdminAll();
-        showAdminToast(key ? `${code} updated with the new API key. Update the mini PC's .env too.` : `${code} updated.`);
+        showAdminToast(`${code} updated.`);
     });
 }
 
