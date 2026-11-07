@@ -2686,12 +2686,14 @@ function statusBadgeHtml(status) {
 // Severity code -> urgency badge text (ROUTINE / MONITOR / URGENT / CRITICAL)
 const urgencyBadge = (level) => urgencyName(level).toUpperCase();
 
-// No humidity for over 60 minutes (air source 'none'): the result has no urgency,
-// only its heat-stress status. Check-ins and older rows always have one.
+// No air reading in the result's period (air source 'none'): the DHT22 was not
+// responding and the thermal-camera fallback had nothing to use (no DHT22 humidity
+// from the past 60 minutes, or no thermal frame). The result has no urgency, only
+// its heat-stress status. Check-ins and older rows always have one.
 const hasUrgency = (d) => d?.airSource !== 'none';
 // Air temperature from the thermal camera (with the last DHT22 humidity): "Thermal only"
 const isThermalOnly = (d) => d?.airSource === 'thermal';
-const NO_URGENCY_TEXT = 'No humidity reading for over 60 minutes, so no urgency level: only the heat-stress status is shown.';
+const NO_URGENCY_TEXT = 'No air reading during this period: the DHT22 was not responding, and the thermal camera could not stand in (it needs a DHT22 humidity from the past 60 minutes and a live thermal image). So there is no urgency level: only the heat-stress status is shown.';
 const THERMAL_ONLY_TEXT = 'Air temperature from the thermal camera (DHT22 not responding), with the last DHT22 humidity from the past 60 minutes.';
 
 function liveThermalHtml(thermal) {
@@ -2901,7 +2903,7 @@ function renderRecommendations() {
         // Air source note: "Thermal only" (camera air + last humidity) or no urgency at all
         const urgent = hasUrgency(r.detectionRef);
         const airNote = !urgent
-            ? `<span class="ht-rec-card__category ht-rec-card__thermal-only" title="${NO_URGENCY_TEXT}">No urgency (no humidity)</span>`
+            ? `<span class="ht-rec-card__category ht-rec-card__thermal-only" title="${NO_URGENCY_TEXT}">No urgency (no air reading)</span>`
             : isThermalOnly(r.detectionRef)
                 ? `<span class="ht-rec-card__category ht-rec-card__thermal-only" title="${THERMAL_ONLY_TEXT}">Thermal only</span>`
                 : '';
@@ -3414,7 +3416,7 @@ function getRecommendationSummary(rec, currentTemp) {
     };
     lines.push(hasUrgency(rec.detectionRef)
         ? (meaning[rec.severity] || meaning.MODERATE)
-        : `No humidity reading for over 60 minutes, so there is no urgency level; follow the ${statusLabel(getRecStatus(rec))} status.`);
+        : `No air (temperature and humidity) reading during this period, so there is no urgency level; follow the ${statusLabel(getRecStatus(rec))} status.`);
 
     return lines;
 }
@@ -3485,11 +3487,11 @@ function getRecommendationResultSummary(rec, currentTemp) {
     // Urgency Level shows this result's own urgency (it can differ from the status,
     // e.g. Mild Heat Stress made Urgent by hot, humid air). All ducks of a reading
     // share it, so instead of a duck count it shows the change from the previous reading
-    // No humidity for over 60 minutes: no urgency, only the status (gray dot, no level).
+    // No air reading in the period: no urgency, only the status (gray dot, no level).
     // Air temperature from the thermal camera: the urgency carries a "Thermal only" note
     if (!hasUrgency(rec.detectionRef)) {
         items.push({ group: 'severity', label: 'Not available',
-            value: `<span class="ht-sev-note" title="${NO_URGENCY_TEXT}"><i data-lucide="info"></i>No humidity reading for over 60 minutes</span>` });
+            value: `<span class="ht-sev-note" title="${NO_URGENCY_TEXT}"><i data-lucide="info"></i>No air reading during this period</span>` });
     } else {
         const level = severityLevels.includes(rec.severity) ? rec.severity : 'LOW';
         const thermalOnly = isThermalOnly(rec.detectionRef)
@@ -5378,7 +5380,7 @@ function mapAnalyticsRow(row) {
     const level = levelForRow(high, savedSeverity, row.status ? normalizeStatus(row.status, savedSeverity) : null);
     const status = level.status;
     // Where the logger's air reading came from (air_source.sql): 'dht22' | 'thermal' | 'none',
-    // null on older rows. 'none' = no humidity for over 60 minutes: no urgency is shown,
+    // null on older rows. 'none' = no air reading in the result's period: no urgency is shown,
     // and its level follows the status (cards, recommendations, alerts on Moderate/Severe)
     const airSource = ['dht22', 'thermal', 'none'].includes(row.air_source) ? row.air_source : null;
     // 10 = 10-minute slot row, 30 = 30-minute window row; rows saved before
