@@ -44,6 +44,8 @@ const RECOVERY_LINK = /(^|[#&?])type=recovery/.test(location.hash + location.sea
 
 // NOTE: the CDN already defines a global named "supabase", so the client is called "sb"
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const uiLocale = () => window.HeatTrackI18n?.getLanguage() === 'fil' ? 'fil-PH' : 'en-US';
+const uiText = (text) => window.HeatTrackI18n?.translate(text) ?? text;
 
 // If your body-temperature columns are named differently, change them here
 const DB_COLS = {
@@ -191,7 +193,7 @@ function applyFieldLimits(root, { passwords = false } = {}) {
     }
 }
 
-const SENSOR_HISTORY_LIMIT = 60;   // points kept on the environment chart
+const SENSOR_HISTORY_LIMIT = 60;   // latest readings kept for the Home sensor tiles (trend arrows, current values)
 const DETECTION_LOAD_LIMIT = 1000; // most recent analytics rows loaded
 
 // Initialize Lucide Icons
@@ -638,7 +640,12 @@ function initAuth() {
         clearAuthForms();
         Object.entries(authViews).forEach(([name, element]) => {
             if (name === 'forgot') element?.classList.toggle('u-hidden', name !== view);
-            else element?.classList.toggle('is-active', name === view);
+            else if (element) {
+                const isActive = name === view;
+                element.classList.toggle('is-active', isActive);
+                element.toggleAttribute('inert', !isActive);
+                element.setAttribute('aria-hidden', String(!isActive));
+            }
         });
         authApp.classList.toggle('ht-auth--login', view === 'login');
         authApp.classList.toggle('ht-auth--recovery', view === 'forgot');
@@ -715,7 +722,7 @@ function initAuth() {
         menuBtn?.setAttribute('aria-expanded', 'false');
 
         document.getElementById('alertToast')?.classList.remove('is-visible');
-        closeRecommendationModal();
+        closeResultModal();
         if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
 
         // Stop live updates and wipe the previous user's data from memory
@@ -732,7 +739,7 @@ function initAuth() {
             toggle.innerHTML = '<i data-lucide="eye"></i>';
         });
 
-        // Remove the page hash (e.g. #live) without triggering a route change
+        // Remove the page hash (e.g. #analytics) without triggering a route change
         history.replaceState(null, '', location.pathname + location.search);
         resetProfile();
 
@@ -1190,8 +1197,8 @@ const state = {
     alerts: [],
     alertsDisplayed: 0,
     alertsPageSize: 10,
-    recommendationsDisplayed: 0,
-    recommendationsPageSize: 8,
+    resultsDisplayed: 0,
+    resultsPageSize: 8,
     cameraActive: true,     // this browser's Camera Streams choice (browser storage)
     alertsWanted: true,     // this browser's Alert Notifications choice (browser storage)
     alertsEnabled: true,    // alertsWanted, and only while the cameras are on
@@ -1208,66 +1215,21 @@ const state = {
 // Severity levels
 const severityLevels = ['CRITICAL', 'HIGH', 'MODERATE', 'LOW'];
 
-// Recommendations based on severity
-const recommendations = {
-    CRITICAL: [
-        { action: 'Activate emergency cooling now (sprinklers + fans at 100%)', icon: 'droplets', type: 'urgent', category: 'Suggested Action', tip: 'Start cooling within 1–3 minutes while confirming affected birds on-site.' },
-        { action: 'Move high-temperature ducks to shaded recovery pen within 3 minutes', icon: 'move', type: 'urgent', category: 'Suggested Action', tip: 'Prioritize ducks with the highest thermal readings and visible distress.' },
-        { action: 'Start intensive rehydration: cool clean water at multiple access points', icon: 'glass-water', type: 'urgent', category: 'Prevention', tip: 'Ensure water is cool—not cold enough to shock—and reachable from every zone.' },
-        { action: 'Apply misting cycles every 2-3 minutes until surface temperature drops below 41.0°C', icon: 'cloud-rain', type: 'urgent', category: 'Environmental', tip: 'Pair misting with ventilation so humidity does not trap additional heat.' },
-        { action: 'Escalate to veterinarian if severe signs persist for more than 10 minutes', icon: 'phone', type: 'urgent', category: 'Temperature', tip: 'Document surface temperatures and intervention times for veterinary review.' },
-    ],
-    HIGH: [
-        { action: 'Run cooling fans at high speed and open all airflow panels', icon: 'fan', type: 'warning', category: 'Environmental', tip: 'Target stagnant zones where humidity and temperature combine to reduce evaporative cooling.' },
-        { action: 'Replace drinking water now and recheck trough temperature every 20 minutes', icon: 'glass-water', type: 'warning', category: 'Prevention', tip: 'Warm water discourages drinking—increasing dehydration risk during heat events.' },
-        { action: 'Separate crowded groups in the hottest zone to reduce heat load', icon: 'minimize-2', type: 'warning', category: 'Suggested Action', tip: 'Reduce collective body heat and improve access to cooler resting areas.' },
-        { action: 'Inspect at-risk ducks every 10 minutes for panting, wing spread, or lethargy', icon: 'eye', type: 'warning', category: 'Temperature', tip: 'Cross-check thermal hotspots with RGB behavior cues before escalating.' },
-        { action: 'Pause stressful handling and feeding activity until ambient temperature improves', icon: 'pause-circle', type: 'warning', category: 'Prevention', tip: 'Minimize additional metabolic heat from movement and digestion.' },
-    ],
-    MODERATE: [
-        { action: 'Shift feeding to early morning or late afternoon to avoid peak heat', icon: 'clock', type: 'caution', category: 'Prevention', tip: 'Digestion raises body temperature—schedule feeds outside the hottest hours.' },
-        { action: 'Confirm all drinkers are clean, flowing, and reachable from every section', icon: 'glass-water', type: 'caution', category: 'Prevention', tip: 'Blocked or distant drinkers are a common hidden cause of heat stress.' },
-        { action: 'Deploy temporary shade and reduce direct sun exposure in open areas', icon: 'tent', type: 'caution', category: 'Environmental', tip: 'Shade can lower effective temperature by several degrees in exposed pens.' },
-        { action: 'Track temperature and humidity trends every 15 minutes for early escalation', icon: 'activity', type: 'caution', category: 'Environmental', tip: 'Rising humidity with stable temperature still increases heat index risk.' },
-        { action: 'Pre-stage cooling equipment so response is immediate if readings rise', icon: 'shield', type: 'caution', category: 'Suggested Action', tip: 'Fans, hoses, and staff assignments should be ready before conditions worsen.' },
-    ],
-    LOW: [
-        { action: 'Continue routine monitoring and keep automated alerts enabled', icon: 'check-circle', type: 'info', category: 'Suggested Action', tip: 'Consistent monitoring catches sudden weather spikes between scheduled checks.' },
-        { action: 'Maintain baseline ventilation and verify fan operation once per shift', icon: 'wind', type: 'info', category: 'Environmental', tip: 'Confirm airflow direction moves hot air out rather than recirculating it.' },
-        { action: 'Log sensor and behavior data for daily heat-risk trend review', icon: 'file-text', type: 'info', category: 'Temperature', tip: 'Compare today\'s readings with the same time yesterday for early pattern detection.' },
-        { action: 'Perform preventive check of water supply and backup cooling systems', icon: 'settings', type: 'info', category: 'Prevention', tip: 'Test backup systems before they are needed during an emergency heat event.' },
-    ]
+// Result card icon for each urgency level
+const RESULT_ICON = {
+    CRITICAL: 'siren',
+    HIGH: 'alert-triangle',
+    MODERATE: 'thermometer-sun',
+    LOW: 'check-circle',
 };
 
-const REC_TYPE_CLASS = {
-    urgent: 'ht-rec-card ht-rec-card--urgent',
-    warning: 'ht-rec-card ht-rec-card--warning',
-    caution: 'ht-rec-card ht-rec-card--caution',
-    info: 'ht-rec-card ht-rec-card--info',
-};
-
-// Map severity levels to recommendation card CSS classes for consistent UI color uniformity
+// Map severity levels to result card CSS classes for consistent UI color uniformity
 const REC_SEVERITY_CLASS = {
     CRITICAL: 'ht-rec-card ht-rec-card--critical',
     HIGH: 'ht-rec-card ht-rec-card--high',
     MODERATE: 'ht-rec-card ht-rec-card--moderate',
     LOW: 'ht-rec-card ht-rec-card--low',
 };
-
-function getRecCategoryLabel(rec) {
-    return rec.category || 'Suggested Action';
-}
-
-function getRecTip(rec) {
-    if (rec.tip) return rec.tip;
-    const tips = {
-        CRITICAL: 'Treat as highest priority—confirm on-site and recheck within 3 minutes.',
-        HIGH: 'Apply cooling steps now and reassess barn conditions within 10 minutes.',
-        MODERATE: 'Preventive measures recommended—monitor trends every 15 minutes.',
-        LOW: 'Conditions are stable—maintain routine checks and alert readiness.',
-    };
-    return tips[rec.severity] || tips.MODERATE;
-}
 
 // ============================================
 // INITIALIZATION
@@ -1289,7 +1251,7 @@ function initSystem() {
     }
     renderDetectionLogs();
     renderLiveDetections();
-    renderRecommendations();
+    renderResults();
     renderAlerts();
     drawAnnotations();
 
@@ -1305,41 +1267,34 @@ function initSystem() {
 }
 
 // ============================================
-// HASH ROUTER (Home, Live, Analytics, Insights)
+// HASH ROUTER (Home dashboard, Analytics, About, FAQ, Profile)
 // ============================================
-const MONITOR_ROUTES = ['live', 'analytics', 'insights'];
+// Home is the monitoring dashboard (cameras, sensors, KPIs, results)
+const MONITOR_ROUTES = ['home', 'analytics'];
 
 function isMonitorRoute() {
     return MONITOR_ROUTES.includes(currentView);
 }
 
 function normalizeRoute(route) {
-    if (route === 'dashboard') return 'live';
-    if (MONITOR_ROUTES.includes(route) || route === 'home' || route === 'about' || route === 'faq' || route === 'profile') return route;
-    return 'home';
+    if (MONITOR_ROUTES.includes(route) || route === 'about' || route === 'faq' || route === 'profile') return route;
+    return 'home';   // includes the old 'live', 'insights' and 'dashboard' pages
 }
 
+// About page sections (each can be opened directly, e.g. #about-levels)
 const ABOUT_SECTION_HASHES = new Set([
-    '#about-howto',
-    '#about-guide',
     '#about-features',
-    '#about-rec',
+    '#about-levels',
+    '#about-team',
 ]);
 
-const ABOUT_NAV_SECTIONS = [
-    { id: 'about-howto', hash: '#about-howto' },
-    { id: 'about-guide', hash: '#about-guide' },
-    { id: 'about-features', hash: '#about-features' },
-    { id: 'about-rec', hash: '#about-rec' },
-];
+const ABOUT_NAV_SECTIONS = [...ABOUT_SECTION_HASHES].map((hash) => ({ id: hash.slice(1), hash }));
 
 let aboutNavScrollPending = false;
 
 function getRouteFromHash() {
     const h = (location.hash || '').toLowerCase();
-    if (h === '#live' || h === '#dashboard') return 'live';
     if (h === '#analytics') return 'analytics';
-    if (h === '#insights') return 'insights';
     if (h === '#faq' || h === '#about-faq') return 'faq'; // old #about-faq links still work
     if (h === '#about' || ABOUT_SECTION_HASHES.has(h) || h.startsWith('#about-')) return 'about';
     if (h === '#home-guide') return 'home';
@@ -1425,7 +1380,7 @@ function syncDashboardIntervals() {
 }
 
 function setAppDates() {
-    const s = new Date().toLocaleDateString('en-US', {
+    const s = new Date().toLocaleDateString(uiLocale(), {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
     });
     document.querySelectorAll('[data-date-today]').forEach((el) => {
@@ -1448,9 +1403,7 @@ function showView(route) {
         home: 'view-home',
         about: 'view-about',
         faq: 'view-faq',
-        live: 'view-live',
         analytics: 'view-analytics',
-        insights: 'view-insights',
         profile: 'view-profile',
     };
 
@@ -1458,15 +1411,13 @@ function showView(route) {
         home: 'HeatTrack — Home',
         about: 'HeatTrack — About',
         faq: 'HeatTrack — Frequently Asked Questions',
-        live: 'HeatTrack — Live',
         analytics: 'HeatTrack — Analytics',
-        insights: 'HeatTrack — Insights',
         profile: 'HeatTrack — Profile',
     };
 
     const previousView = currentView;
     currentView = normalizeRoute(route);
-    if (previousView === 'live' && currentView !== 'live') {
+    if (previousView === 'home' && currentView !== 'home') {
         const normalCameraContainer = document.getElementById('normalCameraContainer');
         const thermalCameraContainer = document.getElementById('thermalCameraContainer');
         if (normalCameraContainer?.resetZoom) normalCameraContainer.resetZoom();
@@ -1481,9 +1432,9 @@ function showView(route) {
     if (previousView === 'faq' && currentView !== 'faq') {
         document.querySelectorAll('#view-faq details[open]').forEach((item) => { item.open = false; });
     }
-    // Opening or leaving Insights: Results & Recommendations starts at the top
-    if ((previousView === 'insights') !== (currentView === 'insights')) {
-        const recList = document.getElementById('recommendationsList');
+    // Opening or leaving Home: Results starts at the top
+    if ((previousView === 'home') !== (currentView === 'home')) {
+        const recList = document.getElementById('resultsList');
         if (recList) recList.scrollTop = 0;
     }
 
@@ -1501,6 +1452,12 @@ function showView(route) {
         el.classList.toggle('ht-nav__link--active', isActive);
         el.setAttribute('aria-current', isActive ? 'page' : 'false');
     });
+    // FAQ button in the header: highlighted while the FAQ page is open
+    const faqBtn = document.getElementById('faqBtn');
+    if (faqBtn) {
+        faqBtn.classList.toggle('is-active', currentView === 'faq');
+        faqBtn.setAttribute('aria-current', currentView === 'faq' ? 'page' : 'false');
+    }
 
     document.title = titles[currentView] || titles.home;
     if (document.body.classList.contains('ht-auth-mode')) {
@@ -1509,14 +1466,17 @@ function showView(route) {
 
     syncDashboardIntervals();
 
-    if (currentView === 'live') {
+    if (currentView === 'home') {
         drawAnnotations();
+    }
+    if (currentView === 'analytics') {
+        refreshEnvTrendIfCurrent();
     }
 
     setAppDates();
 
     const currentHash = (location.hash || '').toLowerCase();
-    const routeHashes = ['#live', '#dashboard', '#analytics', '#insights', '#home', '#about', '#faq', '#profile'];
+    const routeHashes = ['#live', '#dashboard', '#insights', '#analytics', '#home', '#about', '#faq', '#profile'];
     const anchorId =
         currentView === 'about'
             ? getAboutAnchorId()
@@ -1593,7 +1553,7 @@ function initRouter() {
 // ============================================
 function updateTime() {
     const now = new Date();
-    const timeStr = now.toLocaleTimeString('en-US', {
+    const timeStr = now.toLocaleTimeString(uiLocale(), {
         hour12: true,
         hour: '2-digit',
         minute: '2-digit',
@@ -1604,12 +1564,12 @@ function updateTime() {
     const adminTimeEl = document.getElementById('adminLiveTime');
     if (adminTimeEl) adminTimeEl.textContent = timeStr;
 
-    if (currentView !== 'live') return;
+    if (currentView !== 'home') return;
 
     const tsEls = ['normalTimestamp', 'thermalTimestamp'];
     tsEls.forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.textContent = now.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+        if (el) el.textContent = now.toLocaleString(uiLocale(), { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
     });
 
     // Frame rates measured by the logger (set by livefeed.js); "--" when the
@@ -1626,12 +1586,32 @@ function updateTime() {
 
 function formatTimestamp(date) {
     // Full date with year and 12-hour time, e.g. "October 9, 2026, 2:05:30 PM"
-    return date.toLocaleString('en-US', {
+    return date.toLocaleString(uiLocale(), {
         month: 'long', day: 'numeric', year: 'numeric',
         hour: 'numeric', minute: '2-digit', second: '2-digit',
         hour12: true
     });
 }
+
+document.addEventListener('heattrack:languagechange', () => {
+    updateTime();
+    setAppDates();
+    drawEnvTrend();
+    if (envChart) {
+        envChart.data.datasets[0].label = uiText('Temperature (°C)');
+        envChart.data.datasets[1].label = uiText('Humidity (%)');
+        envChart.update('none');
+    }
+    if (detectionChart) {
+        detectionChart.data.labels = STATUS_ORDER.map((status) => uiText(STATUS_INFO[status].label));
+        detectionChart.update('none');
+    }
+    if (severityChart) {
+        severityChart.data.labels = ['Routine', 'Monitor', 'Urgent', 'Critical'].map(uiText);
+        severityChart.data.datasets[0].label = uiText('Ducks');
+        severityChart.update('none');
+    }
+});
 
 // 'yyyy-mm-dd' -> that day in local time (new Date('yyyy-mm-dd') would read it as UTC)
 function parseDateInput(value, endOfDay = false) {
@@ -1657,10 +1637,44 @@ function dateInputValue(d) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// Period of the Detection Log: 'all' | 'today' | 'last7' | 'last30' (quick ranges)
-// or 'custom' (the From / To dates in the period picker)
-function getLogDateBounds() {
-    const range = state.logPeriod;
+// ---- Period pickers (calendar button + quick ranges + range calendar) ----
+// Shared by the Detection Log History ('log') and the Environmental Trend ('env')
+// on the Analytics page. Each picker uses its own elements, named from its id:
+//   <id>PeriodBtn, <id>PeriodPanel, <id>PeriodChip, <id>PeriodLabel,
+//   <id>CustomStart, <id>CustomEnd (picked range, yyyy-mm-dd), <id>Calendar
+// period: 'all' | 'today' | 'last7' | 'last30' (quick ranges) or 'custom' (picked dates)
+const PERIOD_NAMES = { all: 'All time', today: 'Today', last7: 'Last 7 days', last30: 'Last 30 days' };
+const LOG_PERIOD_NAMES = PERIOD_NAMES;
+
+const newCal = () => ({ month: null, pendingStart: null, hover: null, view: 'days', yearEnd: null });
+
+const logPicker = {
+    id: 'log',
+    defaultPeriod: 'all',
+    get period() { return state.logPeriod; },
+    set period(v) { state.logPeriod = v; },
+    cal: newCal(),
+    onChange() {
+        state.currentPage = 1;
+        renderDetectionLogs();
+    },
+};
+
+const envPicker = {
+    id: 'env',
+    defaultPeriod: 'today',
+    period: 'today',
+    quickSwitch: true,       // quick ranges on a switch beside the calendar (not in its panel)
+    cal: newCal(),
+    onChange() { loadEnvTrend(); },
+};
+
+const PERIOD_PICKERS = [logPicker, envPicker];
+const pickerEl = (P, name) => document.getElementById(P.id + name);
+
+// Start and end of the picker's period ({ start: null, end: null } for All time)
+function periodBounds(P) {
+    const range = P.period;
     const now = new Date();
     const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
     let start = null;
@@ -1683,8 +1697,8 @@ function getLogDateBounds() {
         start.setDate(start.getDate() - 29);
         start.setHours(0, 0, 0, 0);
     } else if (range === 'custom') {
-        const startVal = document.getElementById('logCustomStart')?.value;
-        const endVal = document.getElementById('logCustomEnd')?.value;
+        const startVal = pickerEl(P, 'CustomStart')?.value;
+        const endVal = pickerEl(P, 'CustomEnd')?.value;
         let parsedStart = parseDateInput(startVal);
         let parsedEnd = parseDateInput(endVal, true);
         if (parsedStart && parsedEnd) {
@@ -1706,64 +1720,73 @@ function getLogDateBounds() {
     return { start, end };
 }
 
-const LOG_PERIOD_NAMES = { all: 'All time', today: 'Today', last7: 'Last 7 days', last30: 'Last 30 days' };
-
-// Text on the period button (and in the Excel header), e.g. 'Last 7 days' or 'Oct 1 – Oct 18, 2026'
-function logPeriodLabel() {
-    if (state.logPeriod !== 'custom') return LOG_PERIOD_NAMES[state.logPeriod] || LOG_PERIOD_NAMES.all;
-    const { start, end } = getLogDateBounds();
-    const day = (d, year = true) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(year ? { year: 'numeric' } : {}) });
+// Text of the period, e.g. 'Last 7 days' or 'Oct 1 – Oct 18, 2026'
+function periodLabel(P) {
+    if (P.period !== 'custom') return PERIOD_NAMES[P.period] || PERIOD_NAMES[P.defaultPeriod];
+    const { start, end } = periodBounds(P);
+    const day = (d, year = true) => d.toLocaleDateString(uiLocale(), { month: 'short', day: 'numeric', ...(year ? { year: 'numeric' } : {}) });
     const hasStart = start && start.getTime() > 0;
-    const startPicked = !!document.getElementById('logCustomStart')?.value;
-    const endPicked = !!document.getElementById('logCustomEnd')?.value;
+    const startPicked = !!pickerEl(P, 'CustomStart')?.value;
+    const endPicked = !!pickerEl(P, 'CustomEnd')?.value;
     if (hasStart && startPicked && endPicked) {
         if (day(start) === day(end)) return day(start);
         return start.getFullYear() === end.getFullYear() ? `${day(start, false)} – ${day(end)}` : `${day(start)} – ${day(end)}`;
     }
     if (hasStart && startPicked) return `From ${day(start)}`;
     if (endPicked) return `Until ${day(end)}`;
-    return LOG_PERIOD_NAMES.all;
+    return PERIOD_NAMES[P.defaultPeriod];
 }
 
 // Button text + which quick range is highlighted
-function renderLogPeriod() {
-    const text = logPeriodLabel();
-    const filtered = text !== LOG_PERIOD_NAMES.all;
-    const label = document.getElementById('logPeriodLabel');
+function renderPeriod(P) {
+    const text = periodLabel(P);
+    // The trend's quick ranges are on its switch, so its chip and dot are for picked dates only
+    const filtered = P.quickSwitch ? P.period === 'custom' : text !== PERIOD_NAMES[P.defaultPeriod];
+    const label = pickerEl(P, 'PeriodLabel');
     if (label) label.textContent = text;
     // Chip in the filter bar only while a period is on
-    const chip = document.getElementById('logPeriodChip');
+    const chip = pickerEl(P, 'PeriodChip');
     if (chip) chip.hidden = !filtered;
+    // Quick-range switch (Today / Last 7 days / Last 30 days), like the Status / Urgency switch
+    document.querySelectorAll(`[data-period-for="${P.id}"]`).forEach((b) => {
+        const active = b.dataset.period === P.period;
+        b.classList.toggle('is-active', active);
+        b.setAttribute('aria-pressed', String(active));
+    });
     // Calendar icon: dot while a period is on, the period in its tooltip and label
-    const btn = document.getElementById('logPeriodBtn');
+    const btn = pickerEl(P, 'PeriodBtn');
     if (btn) {
         btn.classList.toggle('has-period', filtered);
         btn.title = `Period: ${text}`;
         btn.setAttribute('aria-label', `Choose a period (${text})`);
     }
-    document.querySelectorAll('[data-log-period]').forEach((btn) => {
-        const active = btn.dataset.logPeriod === state.logPeriod;
-        btn.classList.toggle('is-active', active);
-        btn.setAttribute('aria-pressed', String(active));
+    pickerEl(P, 'PeriodPanel')?.querySelectorAll('[data-log-period]').forEach((preset) => {
+        const active = preset.dataset.logPeriod === P.period;
+        preset.classList.toggle('is-active', active);
+        preset.setAttribute('aria-pressed', String(active));
     });
 }
 
-function setLogPeriodPanel(open) {
-    const panel = document.getElementById('logPeriodPanel');
-    const btn = document.getElementById('logPeriodBtn');
+const periodPanelOpen = (P) => !!pickerEl(P, 'PeriodPanel')?.classList.contains('is-open');
+
+function setPeriodPanel(P, open) {
+    const panel = pickerEl(P, 'PeriodPanel');
+    const btn = pickerEl(P, 'PeriodBtn');
     if (!panel || !btn) return;
+    // Only one period panel open at a time
+    if (open) PERIOD_PICKERS.forEach((other) => { if (other !== P) setPeriodPanel(other, false); });
     // Opening shows the month of the picked range (or this month); a start date
     // picked without an end date is dropped when the panel closes
     if (open !== panel.classList.contains('is-open')) {
-        logCal.pendingStart = null;
-        logCal.hover = null;
+        P.cal.pendingStart = null;
+        P.cal.hover = null;
         if (open) {
-            logCal.month = null;
-            logCal.view = 'days';
+            P.cal.month = null;
+            P.cal.view = 'days';
         }
-        renderLogCalendar();
+        renderCalendar(P);
     }
-    if (open) positionLogPeriodPanel();
+    if (open) positionPeriodPanel(P);
     // A class (not [hidden]) so the panel can fade in and out
     panel.classList.toggle('is-open', open);
     btn.setAttribute('aria-expanded', String(open));
@@ -1773,9 +1796,9 @@ function setLogPeriodPanel(open) {
 // Places the (fixed) panel under the calendar button: lined up with its left edge,
 // or its right edge on phones, always inside the screen. If there isn't room below
 // but there is more above, it opens upward. It scrolls inside when it still doesn't fit.
-function positionLogPeriodPanel() {
-    const panel = document.getElementById('logPeriodPanel');
-    const btn = document.getElementById('logPeriodBtn');
+function positionPeriodPanel(P) {
+    const panel = pickerEl(P, 'PeriodPanel');
+    const btn = pickerEl(P, 'PeriodBtn');
     if (!panel || !btn) return;
     const gap = 6;
     const margin = 8;
@@ -1799,19 +1822,23 @@ function positionLogPeriodPanel() {
     panel.style.transformOrigin = `${upward ? 'bottom' : 'top'} ${vw <= 640 ? 'right' : 'left'}`;
 }
 
-const logPeriodPanelOpen = () => !!document.getElementById('logPeriodPanel')?.classList.contains('is-open');
-
-// Sets a quick range (clears any picked dates) and redraws the log
-function applyLogPeriod(period) {
-    state.logPeriod = period;
-    clearLogDateInput(document.getElementById('logCustomStart'));
-    clearLogDateInput(document.getElementById('logCustomEnd'));
-    logCal.pendingStart = null;
-    state.currentPage = 1;
-    renderLogPeriod();
-    renderLogCalendar();
-    renderDetectionLogs();
+// Sets a quick range (clears any picked dates) and redraws what the picker filters
+function applyPeriod(P, period) {
+    P.period = period;
+    clearLogDateInput(pickerEl(P, 'CustomStart'));
+    clearLogDateInput(pickerEl(P, 'CustomEnd'));
+    P.cal.pendingStart = null;
+    renderPeriod(P);
+    renderCalendar(P);
+    P.onChange();
 }
+
+// Detection Log names (used elsewhere: Excel report, sign-out reset, page changes)
+const getLogDateBounds = () => periodBounds(logPicker);
+const logPeriodLabel = () => periodLabel(logPicker);
+const renderLogPeriod = () => renderPeriod(logPicker);
+const setLogPeriodPanel = (open) => setPeriodPanel(logPicker, open);
+const applyLogPeriod = (period) => applyPeriod(logPicker, period);
 
 // Chip row back to its first chip (it scrolls sideways on narrow screens)
 function resetLogChipsScroll(smooth = false) {
@@ -1828,12 +1855,11 @@ function clearLogDateInput(input) {
 
 // ---- Range calendar (Pick dates) ----
 // First click picks the start day, the second the end day (either order; the same
-// day twice = that one day). The log updates once both are picked and the panel
+// day twice = that one day). The view updates once both are picked and the panel
 // closes. Days after today can't be picked. Arrow keys move between days.
 // The month title opens a month picker; its year title opens a year picker
 // (12 years at a time), so far-off dates are a few clicks away.
 // view: 'days' | 'months' | 'years'; yearEnd: last year shown in the year picker
-const logCal = { month: null, pendingStart: null, hover: null, view: 'days', yearEnd: null };
 const CAL_WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const CAL_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -1847,40 +1873,42 @@ function calClampMonth(year, month) {
 const calToday = () => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; };
 // A day button's 'yyyy-mm-dd' -> local midnight (future days too, unlike parseDateInput)
 const calDate = (iso) => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d); };
-const calDayLabel = (d) => d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+const calDayLabel = (d) => d.toLocaleDateString(uiLocale(), { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
 // The range to highlight: start picked and waiting for the end (follows the
 // pointer), otherwise the range in use
-function calRange() {
-    if (logCal.pendingStart) {
-        const other = logCal.hover || logCal.pendingStart;
-        return other < logCal.pendingStart ? [other, logCal.pendingStart] : [logCal.pendingStart, other];
+function calRange(P) {
+    const cal = P.cal;
+    if (cal.pendingStart) {
+        const other = cal.hover || cal.pendingStart;
+        return other < cal.pendingStart ? [other, cal.pendingStart] : [cal.pendingStart, other];
     }
-    if (state.logPeriod !== 'custom') return [null, null];
-    const from = parseDateInput(document.getElementById('logCustomStart')?.value);
-    const to = parseDateInput(document.getElementById('logCustomEnd')?.value);
+    if (P.period !== 'custom') return [null, null];
+    const from = parseDateInput(pickerEl(P, 'CustomStart')?.value);
+    const to = parseDateInput(pickerEl(P, 'CustomEnd')?.value);
     return [from || to, to || from];
 }
 
-function renderLogCalendar(focusDay) {
-    const box = document.getElementById('logCalendar');
+function renderCalendar(P, focusDay) {
+    const box = pickerEl(P, 'Calendar');
     if (!box) return;
+    const cal = P.cal;
     const today = calToday();
-    if (!logCal.month) {
-        const [from] = calRange();
+    if (!cal.month) {
+        const [from] = calRange(P);
         const shown = from || today;
-        logCal.month = new Date(shown.getFullYear(), shown.getMonth(), 1);
+        cal.month = new Date(shown.getFullYear(), shown.getMonth(), 1);
     }
-    const year = logCal.month.getFullYear();
-    const month = logCal.month.getMonth();
+    const year = cal.month.getFullYear();
+    const month = cal.month.getMonth();
     const thisYear = today.getFullYear();
     const thisMonth = today.getMonth();
-    const view = logCal.view;
+    const view = cal.view;
 
     // Header (arrows step by a month, a year or 12 years) and body for the view
     let title, body, nextDisabled, prevLabel, nextLabel;
     if (view === 'years') {
-        const end = logCal.yearEnd;
+        const end = cal.yearEnd;
         const years = Array.from({ length: 12 }, (_, i) => end - 11 + i);
         title = `<span class="ht-cal__title" aria-live="polite">${end - 11} – ${end}</span>`;
         body = `<div class="ht-cal__picks" role="group" aria-label="Years">${years.map((y) => `
@@ -1909,7 +1937,7 @@ function renderLogCalendar(focusDay) {
             days += `<button type="button" class="ht-cal__day${date.getTime() === today.getTime() ? ' is-today' : ''}"
                 data-cal-day="${dateInputValue(date)}" aria-label="${calDayLabel(date)}"${future ? ' disabled' : ''}>${d}</button>`;
         }
-        const monthName = logCal.month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        const monthName = cal.month.toLocaleDateString(uiLocale(), { month: 'long', year: 'numeric' });
         title = `<button type="button" class="ht-cal__title ht-cal__title--btn" data-cal-view="months" aria-live="polite"
             aria-label="${monthName}, choose a month or year">${monthName}<i data-lucide="chevron-down"></i></button>`;
         body = `<div class="ht-cal__grid" role="group" aria-label="Days">
@@ -1920,10 +1948,10 @@ function renderLogCalendar(focusDay) {
         [prevLabel, nextLabel] = ['Previous month', 'Next month'];
     }
 
-    const pending = !!logCal.pendingStart;
-    const [from] = calRange();
+    const pending = !!cal.pendingStart;
+    const [from] = calRange(P);
     const hint = pending ? 'Now pick the end date'
-        : from ? logPeriodLabel()
+        : from ? periodLabel(P)
         : 'Pick a start date';
     box.innerHTML = `
         <div class="ht-cal__head">
@@ -1936,17 +1964,17 @@ function renderLogCalendar(focusDay) {
             <span class="ht-cal__hint${pending ? ' is-pending' : ''}">${hint}</span>
             ${pending || from ? '<button type="button" class="ht-linkbtn" data-cal-clear>Clear</button>' : ''}
         </div>`;
-    paintLogCalendarRange();
+    paintCalendarRange(P);
     if (window.lucide) lucide.createIcons();
     // A month with 6 week rows is taller: re-fit the open panel
-    if (logPeriodPanelOpen()) positionLogPeriodPanel();
+    if (periodPanelOpen(P)) positionPeriodPanel(P);
     if (focusDay) box.querySelector(`[data-cal-day="${dateInputValue(focusDay)}"]`)?.focus();
 }
 
 // Range colours only (no redraw), so hovering while picking the end stays smooth
-function paintLogCalendarRange() {
-    const [from, to] = calRange();
-    document.querySelectorAll('#logCalendar [data-cal-day]').forEach((btn) => {
+function paintCalendarRange(P) {
+    const [from, to] = calRange(P);
+    pickerEl(P, 'Calendar')?.querySelectorAll('[data-cal-day]').forEach((btn) => {
         const t = calDate(btn.dataset.calDay).getTime();
         const isStart = !!from && t === from.getTime();
         const isEnd = !!to && t === to.getTime();
@@ -1957,33 +1985,34 @@ function paintLogCalendarRange() {
     });
 }
 
-function pickLogCalendarDay(date) {
-    if (!logCal.pendingStart) {
-        logCal.pendingStart = date;
-        logCal.hover = null;
-        renderLogCalendar(date);
+function pickCalendarDay(P, date) {
+    const cal = P.cal;
+    if (!cal.pendingStart) {
+        cal.pendingStart = date;
+        cal.hover = null;
+        renderCalendar(P, date);
         return;
     }
-    let [from, to] = [logCal.pendingStart, date];
+    let [from, to] = [cal.pendingStart, date];
     if (to < from) [from, to] = [to, from];
-    document.getElementById('logCustomStart').value = dateInputValue(from);
-    document.getElementById('logCustomEnd').value = dateInputValue(to);
-    logCal.pendingStart = null;
-    logCal.hover = null;
-    state.logPeriod = 'custom';
-    state.currentPage = 1;
-    renderLogPeriod();
-    renderDetectionLogs();
-    setLogPeriodPanel(false);
+    pickerEl(P, 'CustomStart').value = dateInputValue(from);
+    pickerEl(P, 'CustomEnd').value = dateInputValue(to);
+    cal.pendingStart = null;
+    cal.hover = null;
+    P.period = 'custom';
+    renderPeriod(P);
+    P.onChange();
+    setPeriodPanel(P, false);
 }
 
-function initLogCalendar() {
-    const box = document.getElementById('logCalendar');
+function initCalendar(P) {
+    const box = pickerEl(P, 'Calendar');
     if (!box) return;
+    const cal = P.cal;
     // Redraws in another view and keeps keyboard focus in the calendar
     const showView = (view) => {
-        logCal.view = view;
-        renderLogCalendar();
+        cal.view = view;
+        renderCalendar(P);
         (box.querySelector('.ht-cal__pick.is-selected:not(:disabled)')
             || box.querySelector('.ht-cal__title--btn')
             || box.querySelector('.ht-cal__day:not(:disabled)'))?.focus();
@@ -1992,14 +2021,14 @@ function initLogCalendar() {
         const nav = e.target.closest('[data-cal-nav]');
         if (nav && !nav.disabled) {
             const step = Number(nav.dataset.calNav);
-            if (logCal.view === 'years') {
-                logCal.yearEnd = Math.min(logCal.yearEnd + step * 12, calToday().getFullYear());
-            } else if (logCal.view === 'months') {
-                logCal.month = calClampMonth(logCal.month.getFullYear() + step, logCal.month.getMonth());
+            if (cal.view === 'years') {
+                cal.yearEnd = Math.min(cal.yearEnd + step * 12, calToday().getFullYear());
+            } else if (cal.view === 'months') {
+                cal.month = calClampMonth(cal.month.getFullYear() + step, cal.month.getMonth());
             } else {
-                logCal.month = new Date(logCal.month.getFullYear(), logCal.month.getMonth() + step, 1);
+                cal.month = new Date(cal.month.getFullYear(), cal.month.getMonth() + step, 1);
             }
-            renderLogCalendar();
+            renderCalendar(P);
             box.querySelector(`[data-cal-nav="${nav.dataset.calNav}"]:not(:disabled)`)?.focus();
             return;
         }
@@ -2009,52 +2038,52 @@ function initLogCalendar() {
         if (viewBtn) {
             if (viewBtn.dataset.calView === 'years') {
                 const thisYear = calToday().getFullYear();
-                logCal.yearEnd = thisYear - Math.floor((thisYear - logCal.month.getFullYear()) / 12) * 12;
+                cal.yearEnd = thisYear - Math.floor((thisYear - cal.month.getFullYear()) / 12) * 12;
             }
             showView(viewBtn.dataset.calView);
             return;
         }
         const yearBtn = e.target.closest('[data-cal-year]');
         if (yearBtn && !yearBtn.disabled) {
-            logCal.month = calClampMonth(Number(yearBtn.dataset.calYear), logCal.month.getMonth());
+            cal.month = calClampMonth(Number(yearBtn.dataset.calYear), cal.month.getMonth());
             showView('months');
             return;
         }
         const monthBtn = e.target.closest('[data-cal-month]');
         if (monthBtn && !monthBtn.disabled) {
-            logCal.month = new Date(logCal.month.getFullYear(), Number(monthBtn.dataset.calMonth), 1);
+            cal.month = new Date(cal.month.getFullYear(), Number(monthBtn.dataset.calMonth), 1);
             showView('days');
             return;
         }
         if (e.target.closest('[data-cal-clear]')) {
-            if (logCal.pendingStart) {
-                logCal.pendingStart = null;   // drops only the half-picked range; the period in use stays
-                renderLogCalendar();
+            if (cal.pendingStart) {
+                cal.pendingStart = null;   // drops only the half-picked range; the period in use stays
+                renderCalendar(P);
             } else {
-                applyLogPeriod('all');
+                applyPeriod(P, P.defaultPeriod);
             }
             return;
         }
         const day = e.target.closest('[data-cal-day]');
-        if (day && !day.disabled) pickLogCalendarDay(calDate(day.dataset.calDay));
+        if (day && !day.disabled) pickCalendarDay(P, calDate(day.dataset.calDay));
     });
     // While picking the end date, the range follows the pointer / keyboard focus
     const follow = (e) => {
         const day = e.target.closest?.('[data-cal-day]');
-        if (!logCal.pendingStart || !day || day.disabled) return;
+        if (!cal.pendingStart || !day || day.disabled) return;
         const date = calDate(day.dataset.calDay);
-        if (logCal.hover && logCal.hover.getTime() === date.getTime()) return;
-        logCal.hover = date;
-        paintLogCalendarRange();
+        if (cal.hover && cal.hover.getTime() === date.getTime()) return;
+        cal.hover = date;
+        paintCalendarRange(P);
     };
     box.addEventListener('mouseover', follow);
     box.addEventListener('focusin', follow);
     box.addEventListener('keydown', (e) => {
         // Escape in the month / year picker steps back toward the days (instead of closing the panel)
-        if (e.key === 'Escape' && logCal.view !== 'days') {
+        if (e.key === 'Escape' && cal.view !== 'days') {
             e.preventDefault();
             e.stopPropagation();
-            showView(logCal.view === 'years' ? 'months' : 'days');
+            showView(cal.view === 'years' ? 'months' : 'days');
             return;
         }
         const day = e.target.closest('[data-cal-day]');
@@ -2064,39 +2093,39 @@ function initLogCalendar() {
         const next = calDate(day.dataset.calDay);
         next.setDate(next.getDate() + step);
         if (next > calToday()) return;
-        if (next.getMonth() !== logCal.month.getMonth() || next.getFullYear() !== logCal.month.getFullYear()) {
-            logCal.month = new Date(next.getFullYear(), next.getMonth(), 1);
-            renderLogCalendar(next);
+        if (next.getMonth() !== cal.month.getMonth() || next.getFullYear() !== cal.month.getFullYear()) {
+            cal.month = new Date(next.getFullYear(), next.getMonth(), 1);
+            renderCalendar(P, next);
         } else {
             box.querySelector(`[data-cal-day="${dateInputValue(next)}"]`)?.focus();
         }
     });
-    renderLogCalendar();
+    renderCalendar(P);
 }
 
-function initLogPeriod() {
-    const btn = document.getElementById('logPeriodBtn');
-    const panel = document.getElementById('logPeriodPanel');
+function initPeriodPicker(P) {
+    const btn = pickerEl(P, 'PeriodBtn');
+    const panel = pickerEl(P, 'PeriodPanel');
     if (!btn || !panel) return;
 
     btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        setLogPeriodPanel(!logPeriodPanelOpen());
+        setPeriodPanel(P, !periodPanelOpen(P));
     });
     // Clicks inside the panel (dates, quick ranges) don't count as "outside"
     panel.addEventListener('click', (e) => e.stopPropagation());
-    document.addEventListener('click', () => setLogPeriodPanel(false));
+    document.addEventListener('click', () => setPeriodPanel(P, false));
     // The panel is fixed to the screen: keep it under the button while the page
     // scrolls or resizes (scroll inside the panel itself doesn't move it)
     const follow = (e) => {
-        if (!logPeriodPanelOpen() || panel.contains(e.target)) return;
-        positionLogPeriodPanel();
+        if (!periodPanelOpen(P) || panel.contains(e.target)) return;
+        positionPeriodPanel(P);
     };
     window.addEventListener('scroll', follow, { capture: true, passive: true });
     window.addEventListener('resize', follow);
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && logPeriodPanelOpen()) {
-            setLogPeriodPanel(false);
+        if (e.key === 'Escape' && periodPanelOpen(P)) {
+            setPeriodPanel(P, false);
             btn.focus();
         }
     });
@@ -2104,14 +2133,27 @@ function initLogPeriod() {
     // Quick range: replaces any picked dates and closes the panel
     panel.querySelectorAll('[data-log-period]').forEach((preset) => {
         preset.addEventListener('click', () => {
-            applyLogPeriod(preset.dataset.logPeriod);
-            setLogPeriodPanel(false);
+            applyPeriod(P, preset.dataset.logPeriod);
+            setPeriodPanel(P, false);
         });
     });
-    // x on the period chip: back to All time
-    document.querySelector('[data-log-period-clear]')?.addEventListener('click', () => applyLogPeriod('all'));
-    initLogCalendar();
-    renderLogPeriod();
+    // Quick-range switch: replaces any picked dates
+    document.querySelectorAll(`[data-period-for="${P.id}"]`).forEach((b) => {
+        b.addEventListener('click', () => {
+            if (b.dataset.period !== P.period) applyPeriod(P, b.dataset.period);
+            setPeriodPanel(P, false);
+        });
+    });
+    // x on the period chip: back to the default period
+    pickerEl(P, 'PeriodChip')?.querySelector('[data-log-period-clear]')
+        ?.addEventListener('click', () => applyPeriod(P, P.defaultPeriod));
+    initCalendar(P);
+    renderPeriod(P);
+}
+
+function initLogPeriod() {
+    initPeriodPicker(logPicker);
+    initPeriodPicker(envPicker);
 }
 
 async function toggleFullscreen(element) {
@@ -2318,31 +2360,15 @@ function initWheelZoom(container) {
     applyNow();
 }
 
-// The recommendation for one result: Gemini's text when it has been generated
-// (see requestAiRecommendation), otherwise the guideline text for its severity.
-// The icon and card colour always come from the severity.
-// Results with the same severity each get a different guideline action
-// (picked by the result's id, so a result always shows the same one).
-function recommendationFor(detection, severity = detection?.severity || 'MODERATE') {
-    const recs = recommendations[severity] || recommendations.MODERATE;
-    const variant = Math.abs(Number(detection?.dbId) || 0);
-    const base = recs[variant % recs.length] || { action: 'Review detection details and follow farm protocol.', icon: 'clipboard-list', type: 'info' };
-    // AI text only belongs to the result's own severity (the check-in can raise the level)
-    const ownLevel = !!detection && detection.severity === severity;
-    const ai = ownLevel && detection.ai ? detection.ai : null;
-    const rec = { ...base, ai, variant, analyticsId: ownLevel ? (detection.dbId ?? null) : null };
-    if (ai) {
-        rec.action = ai.action || base.action;
-        rec.tip = ai.tip || base.tip;
-        rec.category = ai.category || base.category;
-    }
-    return rec;
+// The card icon for one result (the card colour also comes from the severity)
+function resultIconFor(detection, severity = detection?.severity || 'MODERATE') {
+    return { icon: RESULT_ICON[severity] || RESULT_ICON.MODERATE };
 }
 
-function buildRecommendationFromDetection(detection) {
+function buildResultFromDetection(detection) {
     const severity = detection?.severity || 'MODERATE';
     return {
-        ...recommendationFor(detection, severity),
+        ...resultIconFor(detection, severity),
         id: `toast-${detection.id}`,
         timestamp: formatTimestamp(detection.timestamp),
         severity,
@@ -2408,7 +2434,7 @@ function updateSensorReadings(temp, humidity) {
     const tempEl = document.getElementById('tempValue');
     if (tempEl) tempEl.textContent = typeof temp === 'number' ? temp.toFixed(1) : '--';
     const tempPercent = typeof temp === 'number' ? Math.min(100, Math.max(0, ((temp - 20) / 30) * 100)) : 0;
-    // Same levels as the check-in alerts, so the bar colour matches the recommendations
+    // Same levels as the check-in alerts, so the bar colour matches the results
     const tempLevel = checkinLevelFromTemp(temp);
     const tempZone = { LOW: ['ok', 'Normal'], MODERATE: ['caution', 'Moderate'], HIGH: ['warn', 'High'], CRITICAL: ['danger', 'Critical'] }[tempLevel];
     setMeter('temp', tempPercent, temp, tempZone);
@@ -2597,7 +2623,7 @@ function updateCameraUI(hasCamera) {
 }
 
 function updateAnnotations() {
-    if (currentView !== 'live') return;
+    if (currentView !== 'home') return;
     const normalContainer = document.getElementById('normalAnnotations');
     const thermalContainer = document.getElementById('thermalAnnotations');
     const normalStats = document.getElementById('normalDuckStats');
@@ -2770,8 +2796,8 @@ function renderDetectionLogs() {
                 const detection = state.detections.find(item => item.id === id);
                 if (!detection) return;
                 const currentTemp = state.sensorHistory.temp[state.sensorHistory.temp.length - 1] ?? null;
-                const rec = buildRecommendationFromDetection(detection);
-                openRecommendationModal(rec, currentTemp);
+                const rec = buildResultFromDetection(detection);
+                openResultModal(rec, currentTemp);
             });
         });
     }
@@ -2843,14 +2869,14 @@ async function loadAmbientTemps(detections) {
         d.ambientTemp = data ? toNum(data.temperature) : null;
         return true;
     }));
-    if (found.some(Boolean)) renderRecommendations();
+    if (found.some(Boolean)) renderResults();
 }
 
-function renderRecommendations() {
-    const container = document.getElementById('recommendationsList');
+function renderResults() {
+    const container = document.getElementById('resultsList');
     const activeRecs = [];
 
-    // One recommendation per 30-minute reading with ducks (newest first), on the
+    // One result per 30-minute reading with ducks (newest first), on the
     // 30-minute steps (see logEntryLabels). Slots without ducks have no row.
     const duckDetections = detailDetections().filter(d => d.count > 0);
     const currentTemp = state.sensorHistory.temp.length > 0 ? state.sensorHistory.temp[state.sensorHistory.temp.length - 1] : null;
@@ -2858,7 +2884,7 @@ function renderRecommendations() {
     if (!duckDetections.length) {
         container.innerHTML = `
             <div class="ht-footnote" style="text-align:center; padding:1.5rem 0; font-size:15px; line-height:1.6;">
-                No ducks detected yet, so there are no recommendations. The first recommendation appears 20 minutes after ducks are first detected, then every 30 minutes.
+                No ducks detected yet, so there are no results. The first result appears 20 minutes after ducks are first detected, then every 30 minutes.
             </div>
         `;
         lucide.createIcons();
@@ -2867,7 +2893,7 @@ function renderRecommendations() {
 
     duckDetections.forEach(d => {
         activeRecs.push({
-            ...recommendationFor(d, recommendations[d.severity] ? d.severity : 'LOW'),
+            ...resultIconFor(d, RESULT_ICON[d.severity] ? d.severity : 'LOW'),
             id: `duck-${d.id}`,
             detectionId: d.id,
             timestamp: formatTimestamp(d.timestamp),
@@ -2886,14 +2912,14 @@ function renderRecommendations() {
         });
     });
 
-    // Sort all active recommendations so latest items appear first
+    // Sort all active results so latest items appear first
     activeRecs.sort((a, b) => (b.timestampMs || 0) - (a.timestampMs || 0));
 
-    // Ensure the latest recommendations are shown first and preserve older items when the user expands the list
-    if (state.recommendationsDisplayed === 0 && activeRecs.length > 0) {
-        state.recommendationsDisplayed = state.recommendationsPageSize;
+    // Ensure the latest results are shown first and preserve older items when the user expands the list
+    if (state.resultsDisplayed === 0 && activeRecs.length > 0) {
+        state.resultsDisplayed = state.resultsPageSize;
     }
-    const toShow = Math.min(state.recommendationsDisplayed, activeRecs.length);
+    const toShow = Math.min(state.resultsDisplayed, activeRecs.length);
     const displayRecs = activeRecs.slice(0, toShow);
     const hasMore = toShow < activeRecs.length;
 
@@ -2907,7 +2933,6 @@ function renderRecommendations() {
             : isThermalOnly(r.detectionRef)
                 ? `<span class="ht-rec-card__category ht-rec-card__thermal-only" title="${THERMAL_ONLY_TEXT}">Thermal only</span>`
                 : '';
-        const tip = escapeHtml(getRecTip(r));
 
         return `
             <button type="button" data-rec-id="${r.id}" class="${cardClass}" role="listitem">
@@ -2917,7 +2942,7 @@ function renderRecommendations() {
                     </div>
                     <div class="ht-rec-card__content">
                         <div class="ht-rec-card__top">
-                            <div class="ht-rec-card__action">${escapeHtml(r.action)}</div>
+                            <div class="ht-rec-card__action">${escapeHtml(getResultHeadline(r).title)}</div>
                             ${urgent ? `<span class="ht-rec-sev">${urgencyBadge(r.severity)}</span>` : ''}
                         </div>
                         <div class="ht-rec-card__meta">
@@ -2925,7 +2950,6 @@ function renderRecommendations() {
                             <span class="ht-rec-card__category">Ambient Temp ${ambientText}</span>
                             ${airNote}
                         </div>
-                        <p class="ht-rec-card__tip">${tip}</p>
                         <div class="ht-rec-card__time">${r.timestamp}</div>
                     </div>
                 </div>
@@ -2933,12 +2957,12 @@ function renderRecommendations() {
         `;
     }).join('');
 
-    // Add "Show More" button if there are more recommendations
+    // Add "Show More" button if there are more results
     if (hasMore) {
         html += `
             <div style="padding: 0.75rem 0; text-align: center;">
                 <button type="button" id="recShowMore" class="ht-btn ht-btn--ghost">
-                    Show More Recommendations
+                    Show More Results
                 </button>
             </div>
         `;
@@ -2949,15 +2973,12 @@ function renderRecommendations() {
     // Air temperature of each result on screen (looked up once per result)
     loadAmbientTemps(displayRecs.map((r) => state.detections.find((d) => `duck-${d.id}` === r.id)).filter(Boolean));
 
-    // Ask Gemini for the results on screen that have no AI text yet
-    displayRecs.forEach((r) => { if (!r.ai && r.analyticsId != null) requestAiRecommendation(r.analyticsId); });
-
     container.querySelectorAll('[data-rec-id]').forEach(btn => {
         btn.addEventListener('click', () => {
             const recId = btn.getAttribute('data-rec-id');
             const selected = displayRecs.find(r => r.id === recId);
             if (selected) {
-                openRecommendationModal(selected, currentTemp);
+                openResultModal(selected, currentTemp);
             }
         });
     });
@@ -2966,17 +2987,17 @@ function renderRecommendations() {
     const showMoreBtn = container.querySelector('#recShowMore');
     if (showMoreBtn) {
         showMoreBtn.addEventListener('click', () => {
-            state.recommendationsDisplayed += state.recommendationsPageSize;
-            renderRecommendations();
+            state.resultsDisplayed += state.resultsPageSize;
+            renderResults();
         });
     }
 
     lucide.createIcons();
 }
 
-function openRecommendationModal(rec, currentTemp, { keepScroll = false } = {}) {
-    const modal = document.getElementById('recommendationModal');
-    const body = document.getElementById('recommendationModalBody');
+function openResultModal(rec, currentTemp, { keepScroll = false } = {}) {
+    const modal = document.getElementById('resultModal');
+    const body = document.getElementById('resultModalBody');
     if (!modal || !body) return;
 
     // Not looked up yet: fetch this result's own air temperature, then refresh the modal
@@ -2986,42 +3007,15 @@ function openRecommendationModal(rec, currentTemp, { keepScroll = false } = {}) 
         loadAmbientTemps([ref]).finally(() => {
             ref._ambientPending = false;
             if (ref.ambientTemp === undefined) ref.ambientTemp = null;   // lookup failed or no reading
-            const m = document.getElementById('recommendationModal');
+            const m = document.getElementById('resultModal');
             const stillOpen = m && m.classList.contains('is-open') && m.dataset.recId === String(rec.id);
-            if (stillOpen) openRecommendationModal({ ...rec, ambientTemp: ref.ambientTemp }, currentTemp, { keepScroll: true });
+            if (stillOpen) openResultModal({ ...rec, ambientTemp: ref.ambientTemp }, currentTemp, { keepScroll: true });
         });
     }
 
-    // Gemini's text for this result when it exists; guideline text otherwise
-    const ai = rec.ai || null;
-    // Always 5 lines: the AI's list, topped up from the guideline text if it gave fewer
-    const pick = (aiList, fallback) => {
-        const lines = Array.isArray(aiList) ? aiList.filter(Boolean) : [];
-        const seen = new Set(lines.map((l) => l.toLowerCase()));
-        fallback.forEach((l) => { if (!seen.has(l.toLowerCase())) { seen.add(l.toLowerCase()); lines.push(l); } });
-        return lines.slice(0, REC_LIST_LENGTH);
-    };
-    const guidanceLines = pick(ai?.suggested_actions, getRecommendationGuidance(rec));
-    const resultSummary = getRecommendationResultSummary(rec, currentTemp);
-    const headline = getRecommendationHeadline(rec);
-    const preventionTips = pick(ai?.prevention, getRecommendationPreventionTips(rec));
-    // Summary: Gemini's explanation + insights when it has answered, the built-in summary otherwise
-    const summaryLines = ai
-        ? [ai.explanation, ...(ai.environmental_insights || []), ...(ai.temperature_guidance || [])].filter(Boolean)
-        : getRecommendationSummary(rec, currentTemp);
-
-    // Where the text came from (shown under the headline)
-    const lastFail = rec.analyticsId != null ? aiRec.failedAt.get(rec.analyticsId) : null;
-    const canGenerate = !ai && rec.analyticsId != null && aiRec.enabled
-        && !(lastFail && Date.now() - lastFail < AI_REC_RETRY_AFTER_MS);
-    // (nothing is shown when the text is the built-in fallback)
-    const sourceLabel = ai
-        ? `<span class="ht-ai-badge"><i data-lucide="sparkles"></i>AI-generated · ${aiProviderName(ai.model)}</span>`
-        : canGenerate
-            ? '<span class="ht-ai-badge ht-ai-badge--pending"><span class="ht-ai-badge__spinner" aria-hidden="true"></span>Generating AI recommendation...</span>'
-            : '';
-    openRecState = { rec, currentTemp };
-    if (canGenerate) requestAiRecommendation(rec.analyticsId, true);
+    const resultSummary = getResultDetails(rec, currentTemp);
+    const headline = getResultHeadline(rec);
+    const summaryLines = getResultSummary(rec, currentTemp);
     const severityClass = rec.severity ? rec.severity.toLowerCase() : 'low';
     const heroClass = `ht-modal-hero ht-modal-hero--${severityClass}`;
     // Row 1: Temperature Readings (full width). Row 2: Duck/Batch Count, then Urgency Level
@@ -3056,14 +3050,11 @@ function openRecommendationModal(rec, currentTemp, { keepScroll = false } = {}) 
         `;
     }).join('');
     // Bold the key figures (°C, %, minutes) so each line can be scanned quickly.
-    // Text is escaped first: AI lines come from Gemini.
     const emphasize = (line) => escapeHtml(line).replace(
         /(\d+(?:\.\d+)?(?:[–-]\d+(?:\.\d+)?)?\s?(?:°C|%|minutes?|min))/g,
         '<strong>$1</strong>'
     );
     const listItems = (lines) => lines.map(line => `<li>${emphasize(line)}</li>`).join('');
-    const guidanceHtml = listItems(guidanceLines);
-    const preventionHtml = listItems(preventionTips);
     const summaryHtml = listItems(summaryLines);
     const metaHtml = headline.meta.map(m => `<span${m.cls ? ` class="${m.cls}"` : ''}>${m.text}</span>`).join('');
 
@@ -3076,7 +3067,7 @@ function openRecommendationModal(rec, currentTemp, { keepScroll = false } = {}) 
                 </div>
                 ${hasUrgency(rec.detectionRef) ? `<span class="ht-modal-sev">${urgencyBadge(rec.severity)}</span>` : ''}
             </div>
-            <p class="ht-modal-meta">${metaHtml}${sourceLabel ? `<span class="ht-modal-meta__src">${sourceLabel}</span>` : ''}</p>
+            <p class="ht-modal-meta">${metaHtml}</p>
         </div>
 
         <div class="ht-modal-detail-grid">
@@ -3087,7 +3078,6 @@ function openRecommendationModal(rec, currentTemp, { keepScroll = false } = {}) 
                 </div>
                 <div class="ht-modal-snapshot">${resultHtml}</div>
             </div>
-            <!-- Order: understand what happened → act now → prevent -->
             <div class="ht-modal-detail-card ht-modal-detail-card--summary">
                 <div class="ht-modal-detail-card__head">
                     <i data-lucide="file-text"></i>
@@ -3095,26 +3085,12 @@ function openRecommendationModal(rec, currentTemp, { keepScroll = false } = {}) 
                 </div>
                 <ul class="ht-modal-list">${summaryHtml}</ul>
             </div>
-            <div class="ht-modal-detail-card ht-modal-detail-card--actions">
-                <div class="ht-modal-detail-card__head">
-                    <i data-lucide="zap"></i>
-                    <span>Suggested Actions</span>
-                </div>
-                <ul class="ht-modal-list">${guidanceHtml}</ul>
-            </div>
-            <div class="ht-modal-detail-card ht-modal-detail-card--prevent">
-                <div class="ht-modal-detail-card__head">
-                    <i data-lucide="shield"></i>
-                    <span>Heat Stress Prevention</span>
-                </div>
-                <ul class="ht-modal-list">${preventionHtml}</ul>
-            </div>
         </div>
 
         <div class="ht-modal-callout">
             <h4><i data-lucide="info"></i> <span>Disclaimer</span></h4>
             <p>
-                These results and recommendations are assistive only and may contain errors. Always confirm with direct on-site observation of the ducks and follow your established farm protocol or veterinary guidance before taking critical action.
+                These results are assistive only and may contain errors. Always confirm with direct on-site observation of the ducks and follow your established farm protocol or veterinary guidance before taking critical action.
             </p>
         </div>
     `;
@@ -3140,20 +3116,10 @@ function openRecommendationModal(rec, currentTemp, { keepScroll = false } = {}) 
     lucide.createIcons();
 }
 
-// Which AI wrote a recommendation, from the model id the recommend function saves
-function aiProviderName(model) {
-    const m = String(model || '').toLowerCase();
-    if (m.startsWith('gemini')) return 'Google Gemini';
-    if (m.startsWith('groq/')) return 'Groq (Llama)';
-    if (m.startsWith('openrouter/')) return 'OpenRouter';
-    return 'AI';
-}
-
-function closeRecommendationModal() {
-    const modal = document.getElementById('recommendationModal');
+function closeResultModal() {
+    const modal = document.getElementById('resultModal');
     if (!modal) return;
     modal.classList.remove('is-open');
-    openRecState = null;
     // Back to the top once it has faded out (opening resets it too)
     setTimeout(() => {
         if (modal.classList.contains('is-open')) return;
@@ -3162,167 +3128,8 @@ function closeRecommendationModal() {
     }, 300);
 }
 
-// ============================================
-// AI RECOMMENDATIONS (Google Gemini via the "recommend" Edge Function)
-// ============================================
-// Each result is sent to Gemini once; the answer is saved on the analytics row
-// (ai_recommendation), so later page loads just read it. Requests run one at a
-// time to stay within Gemini's free-tier rate limit. Until a result has AI
-// text, the guideline text is shown, so the dashboard never waits on Gemini.
-const AI_REC_FUNCTION = 'recommend';
-const AI_REC_GAP_MS = 7000;              // one request per 7 s (~8.5/min), under Gemini Flash's 10 per minute
-const AI_REC_RATE_LIMIT_PAUSE_MS = 60 * 1000;
-const AI_REC_DAILY_LIMIT_PAUSE_MS = 30 * 60 * 1000;   // every AI is out for the day: check again in 30 min
-const AI_REC_RETRY_AFTER_MS = 5 * 60 * 1000;
-
-const aiRec = {
-    enabled: true,          // turned off for this visit if the function or API key is missing
-    queue: [],              // analytics ids waiting for Gemini
-    busy: false,
-    pausedUntil: 0,
-    failedAt: new Map(),    // analytics id -> time of the last failure (retried later)
-};
-let openRecState = null;    // the recommendation currently open in the detail modal
-
-function requestAiRecommendation(analyticsId, urgent = false) {
-    if (!aiRec.enabled || analyticsId == null || !currentUser) return;
-    const detection = state.detections.find((d) => d.dbId === analyticsId);
-    if (!detection || detection.ai) return;
-    const failed = aiRec.failedAt.get(analyticsId);
-    if (failed && Date.now() - failed < AI_REC_RETRY_AFTER_MS) return;
-    const index = aiRec.queue.indexOf(analyticsId);
-    if (index !== -1) {
-        if (!urgent) return;
-        aiRec.queue.splice(index, 1);
-    }
-    if (urgent) aiRec.queue.unshift(analyticsId); else aiRec.queue.push(analyticsId);
-    processAiRecQueue();
-}
-
-async function processAiRecQueue() {
-    if (aiRec.busy || !aiRec.queue.length) return;
-    const wait = aiRec.pausedUntil - Date.now();
-    if (wait > 0) { setTimeout(processAiRecQueue, wait); return; }
-
-    aiRec.busy = true;
-    const analyticsId = aiRec.queue.shift();
-    try {
-        const detection = state.detections.find((d) => d.dbId === analyticsId);
-        if (!detection || detection.ai) return;
-        const { data, error } = await sb.functions.invoke(AI_REC_FUNCTION, { body: { analytics_id: analyticsId } });
-        if (error) {
-            const status = error.context?.status;
-            let info = {};
-            try { info = (await error.context.json()) || {}; } catch (_) {}
-            const code = info.error || '';
-            if (status === 404 && !code) {
-                // The Edge Function itself is not deployed
-                disableAiRecommendations('Deploy supabase/functions/recommend (see ai_recommendations.sql).');
-            } else if (code === 'not_configured') {
-                disableAiRecommendations('Set the GEMINI_API_KEY secret for the recommend Edge Function.');
-            } else if (status === 429) {
-                // Every AI provider is at its limit (the function already tried them all)
-                aiRec.pausedUntil = Date.now() + (info.daily ? AI_REC_DAILY_LIMIT_PAUSE_MS : AI_REC_RATE_LIMIT_PAUSE_MS);
-                aiRec.queue.unshift(analyticsId);    // try this one again after the pause
-            } else {
-                // info.tried: why each AI provider failed (from the recommend function)
-                console.warn('HeatTrack: AI recommendation failed for result', analyticsId, status, code || error.message, info.tried || '');
-                aiRec.failedAt.set(analyticsId, Date.now());
-                refreshOpenRecommendation(analyticsId);
-            }
-            return;
-        }
-        if (data?.recommendation) {
-            detection.ai = data.recommendation;
-            renderRecommendations();
-            refreshOpenRecommendation(analyticsId);
-        }
-    } catch (err) {
-        console.warn('HeatTrack: AI recommendation request failed', err);
-        aiRec.failedAt.set(analyticsId, Date.now());
-        refreshOpenRecommendation(analyticsId);
-    } finally {
-        aiRec.busy = false;
-        if (aiRec.queue.length) setTimeout(processAiRecQueue, AI_REC_GAP_MS);
-    }
-}
-
-function disableAiRecommendations(reason) {
-    if (aiRec.enabled) console.warn('HeatTrack: AI recommendations are off, showing guideline text. ' + reason);
-    aiRec.enabled = false;
-    aiRec.queue = [];
-    if (openRecState) refreshOpenRecommendation(openRecState.rec.analyticsId);
-}
-
-// Re-draw the detail modal if it is showing this result (AI text arrived or failed)
-function refreshOpenRecommendation(analyticsId) {
-    const modal = document.getElementById('recommendationModal');
-    if (!openRecState || !modal?.classList.contains('is-open') || openRecState.rec.analyticsId !== analyticsId) return;
-    const { rec, currentTemp } = openRecState;
-    const detection = state.detections.find((d) => d.dbId === analyticsId);
-    const fresh = detection ? { ...rec, ...recommendationFor(detection, rec.severity) } : rec;
-    // keep the scroll position while swapping in the new text
-    const body = document.getElementById('recommendationModalBody');
-    const top = body?.scrollTop || 0;
-    const failed = !fresh.ai && aiRec.failedAt.has(analyticsId);
-    openRecommendationModal(failed ? { ...fresh, analyticsId: null } : fresh, currentTemp, { keepScroll: true });
-    if (body) body.scrollTop = top;
-}
-
-// Fallback lists start at a different item for each result, so two results
-// with the same severity don't show the same list (Gemini's text replaces them)
-function rotateForResult(list, rec) {
-    const shift = (rec?.variant || 0) % list.length;
-    return list.slice(shift).concat(list.slice(0, shift));
-}
-
-// Suggested Actions and Heat Stress Prevention both show this many lines
-const REC_LIST_LENGTH = 5;
-
-// Lead line first (skipped if missing or already in the list), then the list, cut to 5
-function withLead(lead, list) {
-    const rest = lead ? list.filter((l) => l.toLowerCase() !== lead.toLowerCase()) : list;
-    return (lead ? [lead, ...rest] : rest).slice(0, REC_LIST_LENGTH);
-}
-
-function getRecommendationGuidance(rec) {
-    const guidanceBySeverity = {
-        CRITICAL: [
-            'Start cooling right away and keep the hottest birds apart.',
-            'Watch response for 1–3 minutes and be ready to escalate.',
-            'Keep water available and avoid extra handling.',
-            'Run misting with strong ventilation so humidity does not trap heat.',
-            'Call a veterinarian if severe signs last more than 10 minutes.'
-        ],
-        HIGH: [
-            'Turn fans and shade on high, then recheck in 10 minutes.',
-            'Reduce crowding and delay non-essential activity.',
-            'Focus on the hottest zones first.',
-            'Watch for panting, wing spreading, or lethargy every 10 minutes.',
-            'Open all airflow panels to move hot air out of the barn.'
-        ],
-        MODERATE: [
-            'Use preventive cooling and monitor the trend.',
-            'Check drinkers, vents, and shade coverage.',
-            'Be ready to act if temperatures rise again.',
-            'Recheck temperature and humidity every 15 minutes.',
-            'Add temporary shade over sunny open areas.'
-        ],
-        LOW: [
-            'Keep regular monitoring active.',
-            'Verify water and airflow are working.',
-            'Note any new heat spikes for the next check.',
-            'Keep automated alerts switched on.',
-            'Check fan operation once per shift.'
-        ]
-    };
-
-    // Lead with the result's guideline action, like Prevention leads with its tip
-    return withLead(rec.action, rotateForResult(guidanceBySeverity[rec.severity] || guidanceBySeverity.MODERATE, rec));
-}
-
 // Modal heading: the detection result plus its key facts (time, confidence)
-function getRecommendationHeadline(rec) {
+function getResultHeadline(rec) {
     // The result's status: "Thermal Comfort", or e.g. "Mild Heat Stress Detected"
     const status = getRecStatus(rec);
     const title = status === 'COMFORT' ? statusLabel(status) : `${statusLabel(status)} Detected`;
@@ -3335,44 +3142,9 @@ function getRecommendationHeadline(rec) {
     return { title, meta };
 }
 
-function getRecommendationPreventionTips(rec) {
-    const bySeverity = {
-        CRITICAL: [
-            'Open airflow and keep water available.',
-            'Avoid unnecessary movement or handling.',
-            'Keep the hottest animals separated from the group.',
-            'Provide cool, not cold, water at several drinking points.',
-            'Hold feeding until surface temperatures come down.'
-        ],
-        HIGH: [
-            'Boost shade and fan output where it is hottest.',
-            'Check that all birds can reach water easily.',
-            'Delay extra handling until conditions calm.',
-            'Replace warm trough water and recheck it every 20 minutes.',
-            'Move feeding to the cooler early morning or late afternoon.'
-        ],
-        MODERATE: [
-            'Check vents, water, and shade before heat rises.',
-            'Move cooling equipment closer if needed.',
-            'Track the trend for any quick changes.',
-            'Keep drinkers clean, flowing, and reachable from every section.',
-            'Schedule feeding outside the hottest hours of the day.'
-        ],
-        LOW: [
-            'Keep normal checks active and log peak readings.',
-            'Confirm fans and water are working properly.',
-            'Stay ready for a quick response if heat rises.',
-            'Test backup cooling before hot weather arrives.',
-            'Review daily heat trends to spot rising risk early.'
-        ]
-    };
-
-    return withLead(rec.tip, rotateForResult(bySeverity[rec.severity] || bySeverity.MODERATE, rec));
-}
-
-// Summary card (when there is no Gemini text): what was found, the conditions
+// Summary card: what was found, the conditions
 // behind it, and what it means, each as one short line
-function getRecommendationSummary(rec, currentTemp) {
+function getResultSummary(rec, currentTemp) {
     const counts = getDetectionCounts();
     const total = counts.total;
     const humidValue = state.sensorHistory.humidity[state.sensorHistory.humidity.length - 1];
@@ -3421,7 +3193,7 @@ function getRecommendationSummary(rec, currentTemp) {
     return lines;
 }
 
-// Duck recommendations carry the detection status (from the surface temperature);
+// Duck results carry the detection status (from the surface temperature);
 // check-ins without one take the status that usually goes with their urgency
 function getRecStatus(rec) {
     return STATUS_INFO[rec.status] ? rec.status : (STATUS_OF_SEVERITY[rec.severity] || 'COMFORT');
@@ -3443,7 +3215,7 @@ function severityChangeHtml(rec) {
     const rank = (sev) => severityLevels.length - 1 - severityLevels.indexOf(sev);   // LOW 0 ... CRITICAL 3
     const diff = rank(own.severity) - rank(previous.severity);
     const prevLabel = urgencyName(previous.severity);
-    const prevTime = previous.timestamp.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const prevTime = previous.timestamp.toLocaleTimeString(uiLocale(), { hour: 'numeric', minute: '2-digit' });
     const [cls, icon, text] = diff > 0 ? ['up', 'trending-up', `Up from ${prevLabel}`]
         : diff < 0 ? ['down', 'trending-down', `Down from ${prevLabel}`]
         : ['same', 'minus', 'No changes'];
@@ -3451,7 +3223,7 @@ function severityChangeHtml(rec) {
         + `<span class="ht-sev-change__time"><span class="ht-sev-change__dot" aria-hidden="true">·</span>Previous reading ${prevTime}</span>`;
 }
 
-function getRecommendationResultSummary(rec, currentTemp) {
+function getResultDetails(rec, currentTemp) {
     // The result's own air temperature (highest DHT22 reading in its interval). A saved
     // detection never falls back to the CURRENT reading (that would show e.g. this
     // evening's temperature for a midday result); only check-ins without a record do.
@@ -3500,7 +3272,7 @@ function getRecommendationResultSummary(rec, currentTemp) {
         items.push({ group: 'severity', tone: level.toLowerCase(), label: urgencyName(level), value: severityChangeHtml(rec) + thermalOnly });
     }
 
-    // Extra batch details from the analytics table (only for detection-based recommendations)
+    // Extra batch details from the analytics table (only for detection-based results)
     if (rec.lowTemp != null && rec.highTemp != null) {
         items.splice(2, 0, { group: 'temperature', icon: 'arrow-left-right', label: 'Surface Temperature Range', value: `${rec.lowTemp}–${rec.highTemp}°C` });
     }
@@ -3512,7 +3284,7 @@ function formatRelativeTime(date) {
     if (diff < 60) return 'Just now';
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return date.toLocaleDateString(uiLocale(), { month: 'short', day: 'numeric' });
 }
 
 // ============================================
@@ -3800,8 +3572,8 @@ function renderAlerts() {
             if (alert) {
                 // The stored copy can be older than the result (e.g. before its AI text arrived)
                 const detection = state.detections.find((d) => d.id === alert.id) || alert;
-                const rec = buildRecommendationFromDetection(detection);
-                openRecommendationModal(rec, state.sensorHistory.temp[state.sensorHistory.temp.length - 1]);
+                const rec = buildResultFromDetection(detection);
+                openResultModal(rec, state.sensorHistory.temp[state.sensorHistory.temp.length - 1]);
             }
         });
     });
@@ -3853,8 +3625,6 @@ function showToast(detection) {
     if (!state.alertsEnabled || !isToastLevel(detection?.severity)) return;
     if (isRemovedAlertTime(detection?.timestamp)) return;   // removed time span: no pop-up
     state.lastToastDetection = detection;
-    let action = '';
-    try { action = buildRecommendationFromDetection(detection).action || ''; } catch { /* no recommendation text */ }
     const stats = [['Surface temp', fmtTemp(detection.bodyTemp)]];
     if (detection.ambientTemp != null) stats.push(['Barn', fmtTemp(detection.ambientTemp)]);
     if (detection.count != null) stats.push(['Ducks', String(detection.count)]);
@@ -3865,15 +3635,15 @@ function showToast(detection) {
         title: alertTitle(detection),
         icon: alertIcon(detection.severity),
         stats,
-        action: action || (urgent
-            ? `Urgency: ${urgencyName(detection.severity)}. Open the details for the recommended actions.`
-            : 'Open the details for the recommended actions.'),
+        action: urgent
+            ? `Urgency: ${urgencyName(detection.severity)}. Open the details for the full detection results.`
+            : 'Open the details for the full detection results.',
         timestamp: detection.timestamp,
     });
 }
 
 // Fills the pop-up card (same look as the old check-in card: colored top strip
-// and level badge, readings, the recommended action, Dismiss / View details).
+// and level badge, readings, a short note, Dismiss / View details).
 // showLevel false: no level badge (a result without an urgency)
 function renderToast({ kind = 'heatstress', level = 'LOW', showLevel = true, title, icon, stats = [], stale = false, action, timestamp }) {
     const toast = document.getElementById('alertToast');
@@ -3900,7 +3670,7 @@ function renderToast({ kind = 'heatstress', level = 'LOW', showLevel = true, tit
     document.getElementById('toastMessage').textContent = action;
     const at = new Date(timestamp);
     document.getElementById('toastTime').textContent = Number.isNaN(at.getTime())
-        ? '' : at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        ? '' : at.toLocaleTimeString(uiLocale(), { hour: 'numeric', minute: '2-digit' });
     lucide.createIcons();
 
     toast.classList.add('is-visible');
@@ -3959,16 +3729,16 @@ function initCharts() {
         }
     };
 
-    // Environmental Trend Chart
+    // Environmental Trend Chart (Analytics; filled by loadEnvTrend for the picked period)
     const envCtx = document.getElementById('envChart').getContext('2d');
     envChart = new Chart(envCtx, {
         type: 'line',
         data: {
-            labels: state.sensorHistory.labels,
+            labels: [],
             datasets: [
                 {
-                    label: 'Temperature (°C)',
-                    data: state.sensorHistory.temp,
+                    label: uiText('Temperature (°C)'),
+                    data: [],
                     borderColor: '#f97316',
                     backgroundColor: 'rgba(249, 115, 22, 0.08)',
                     borderWidth: 2,
@@ -3978,8 +3748,8 @@ function initCharts() {
                     pointHoverRadius: 4,
                 },
                 {
-                    label: 'Humidity (%)',
-                    data: state.sensorHistory.humidity,
+                    label: uiText('Humidity (%)'),
+                    data: [],
                     borderColor: '#60a5fa',
                     backgroundColor: 'rgba(96, 165, 250, 0.08)',
                     borderWidth: 2,
@@ -4026,10 +3796,10 @@ function initCharts() {
                     cornerRadius: 8,
                     callbacks: {
                         // Full date beside the 12-hour time, e.g. "October 9, 2026, 2:05:30 PM"
+                        // (or the time window of an averaged point)
                         title: (items) => {
                             const item = items[0];
-                            const at = item ? state.sensorHistory.times[item.dataIndex] : null;
-                            return at ? formatTimestamp(at) : (item?.label || '');
+                            return item ? envTrendPointTitle(item.dataIndex) : '';
                         },
                     },
                 }
@@ -4042,7 +3812,7 @@ function initCharts() {
     detectionChart = new Chart(detCtx, {
         type: 'doughnut',
         data: {
-            labels: detectionStatusLabels,
+            labels: STATUS_ORDER.map((status) => uiText(STATUS_INFO[status].label)),
             datasets: [{
                 data: [state.stats.normalCount || 0, state.stats.mildCount || 0, state.stats.stressCount || 0, state.stats.criticalCount || 0],
                 backgroundColor: STATUS_ORDER.map((s) => STATUS_INFO[s].color),
@@ -4086,9 +3856,9 @@ function initCharts() {
     severityChart = new Chart(sevCtx, {
         type: 'bar',
         data: {
-            labels: ['Routine', 'Monitor', 'Urgent', 'Critical'],   // urgency, same order as getSeverityData()
+            labels: ['Routine', 'Monitor', 'Urgent', 'Critical'].map(uiText),   // urgency, same order as getSeverityData()
             datasets: [{
-                label: 'Ducks',
+                label: uiText('Ducks'),
                 data: severityData,
                 backgroundColor: [
                     'rgba(34, 197, 94, 0.7)',
@@ -4180,12 +3950,190 @@ function getSeverityData() {
     return [sum('LOW'), sum('MODERATE'), sum('HIGH'), sum('CRITICAL')];
 }
 
-function updateEnvChart() {
+// ============================================
+// ENVIRONMENTAL TREND (Analytics page)
+// The saved DHT22 readings (public.environment) for the period picked in the
+// filter (same period picker as the Detection Log History), on the same chart
+// that used to sit under the DHT22 tiles. Long periods are averaged into equal
+// time windows so the line stays readable; windows without readings are left
+// out (nothing is invented). The database does the averaging
+// (environment_trend.sql); until that function exists the raw rows are fetched
+// and averaged here instead.
+// ============================================
+const ENV_TREND_STEPS = [60, 300, 600, 900, 1800, 3600, 7200, 10800, 21600, 43200, 86400];   // seconds
+const ENV_TREND_MAX_POINTS = 360;
+const ENV_TREND_RAW_CAP = 20000;          // fallback only: raw rows fetched at most
+const ENV_TREND_PAGE = 1000;              // Supabase returns at most 1000 rows per request
+
+const envTrend = {
+    rpcMissing: false,     // environment_trend.sql not run yet: use the raw rows
+    request: 0,            // newer requests win over older ones
+    points: [],            // [{ start, end, temp, humidity, n }]
+    loadedKey: null,       // which period the chart shows
+};
+
+// The picked period, ending now at the latest
+function envTrendBounds() {
+    const now = new Date();
+    let { start, end } = periodBounds(envPicker);
+    if (!end || end > now) end = now;
+    // 'Until <date>' (no start picked): the 30 days before it
+    if (!start || start.getTime() <= 0) {
+        start = new Date(end);
+        start.setDate(start.getDate() - 30);
+        start.setHours(0, 0, 0, 0);
+    }
+    return { start, end };
+}
+
+// Smallest window that keeps the chart at ENV_TREND_MAX_POINTS points or fewer
+function envTrendStep(start, end) {
+    const span = Math.max(1, (end - start) / 1000);
+    return ENV_TREND_STEPS.find((s) => span / s <= ENV_TREND_MAX_POINTS) || ENV_TREND_STEPS[ENV_TREND_STEPS.length - 1];
+}
+
+// Database-side averages (environment_trend.sql)
+async function fetchEnvTrendRpc(start, end, step) {
+    const { data, error } = await sb.rpc('environment_trend', {
+        p_start: start.toISOString(), p_end: end.toISOString(), p_bucket_seconds: step,
+    });
+    if (error) throw error;
+    return {
+        rows: (data || []).map((r) => ({
+            at: new Date(r.bucket_start), temp: toNum(r.avg_temp), humidity: toNum(r.avg_humidity), n: Number(r.readings) || 0,
+        })),
+        truncated: false,
+    };
+}
+
+// Fallback: the raw rows of the period, averaged here (capped for long periods)
+async function fetchEnvTrendRaw(start, end, step) {
+    const uid = currentUser?.id;
+    const sums = new Map();
+    let truncated = false;
+    for (let from = 0; ; from += ENV_TREND_PAGE) {
+        if (from >= ENV_TREND_RAW_CAP) { truncated = true; break; }
+        const { data, error } = await sb.from('environment').select('timestamp, temperature, humidity')
+            .eq('userid', uid).gte('timestamp', start.toISOString()).lt('timestamp', end.toISOString())
+            .order('timestamp', { ascending: true }).range(from, from + ENV_TREND_PAGE - 1);
+        if (error) throw error;
+        (data || []).forEach((row) => {
+            const at = new Date(row.timestamp);
+            const t = toNum(row.temperature);
+            const h = toNum(row.humidity);
+            if (Number.isNaN(at.getTime()) || (typeof t !== 'number' && typeof h !== 'number')) return;
+            const i = Math.floor((at - start) / 1000 / step);
+            const b = sums.get(i) || { sumT: 0, nT: 0, sumH: 0, nH: 0, n: 0 };
+            if (typeof t === 'number') { b.sumT += t; b.nT += 1; }
+            if (typeof h === 'number') { b.sumH += h; b.nH += 1; }
+            b.n += 1;
+            sums.set(i, b);
+        });
+        if (!data || data.length < ENV_TREND_PAGE) break;
+    }
+    const rows = [...sums.entries()].map(([i, b]) => ({
+        at: new Date(start.getTime() + i * step * 1000),
+        temp: b.nT ? b.sumT / b.nT : null,
+        humidity: b.nH ? b.sumH / b.nH : null,
+        n: b.n,
+    }));
+    return { rows, truncated };
+}
+
+// Load and draw the picked period
+async function loadEnvTrend() {
+    if (!currentUser || !envChart) return;
+    const { start, end } = envTrendBounds();
+    const step = envTrendStep(start, end);
+    const request = ++envTrend.request;
+    setEnvTrendNote('Loading readings…');
+
+    let result;
+    try {
+        if (!envTrend.rpcMissing) {
+            try {
+                result = await fetchEnvTrendRpc(start, end, step);
+            } catch (err) {
+                // Function not created yet (environment_trend.sql): use the raw rows from now on
+                const missing = err?.code === 'PGRST202' || err?.code === '42883' || /environment_trend/i.test(err?.message || '');
+                if (!missing) throw err;
+                envTrend.rpcMissing = true;
+            }
+        }
+        if (!result) result = await fetchEnvTrendRaw(start, end, step);
+    } catch (err) {
+        if (request !== envTrend.request) return;
+        console.error('Could not load the environmental trend:', err);
+        envTrend.points = [];
+        drawEnvTrend();
+        setEnvTrendNote('Could not load the readings for this period. Check your connection and try again.');
+        return;
+    }
+    if (request !== envTrend.request) return;   // another period was picked meanwhile
+
+    envTrend.points = result.rows
+        .filter((r) => r.n > 0)
+        .sort((a, b) => a.at - b.at)
+        .map((r) => ({ start: r.at, end: new Date(r.at.getTime() + step * 1000), temp: r.temp, humidity: r.humidity, n: r.n }));
+    envTrend.loadedKey = `${envPicker.period}:${start.getTime()}`;
+    drawEnvTrend();
+    setEnvTrendNote(result.truncated
+        ? `Only the first ${ENV_TREND_RAW_CAP.toLocaleString(uiLocale())} readings of this period are shown. Run environment_trend.sql in Supabase to chart the whole period.`
+        : '');
+}
+
+function setEnvTrendNote(text) {
+    const el = document.getElementById('envTrendNote');
+    if (!el) return;
+    el.textContent = text;
+    el.hidden = !text;
+}
+
+function drawEnvTrend() {
     if (!envChart) return;
-    envChart.data.labels = state.sensorHistory.labels;
-    envChart.data.datasets[0].data = state.sensorHistory.temp;
-    envChart.data.datasets[1].data = state.sensorHistory.humidity;
+    const p = envTrend.points;
+    const round = (v) => (typeof v === 'number' ? Number(v.toFixed(1)) : null);
+    envChart.data.labels = p.map((x) => x.start.toLocaleTimeString(uiLocale(), { hour: '2-digit', minute: '2-digit' }));
+    envChart.data.datasets[0].data = p.map((x) => round(x.temp));
+    envChart.data.datasets[1].data = p.map((x) => round(x.humidity));
     envChart.update('none');
+    const empty = document.getElementById('envTrendEmpty');
+    if (empty) empty.hidden = p.length > 0;
+}
+
+// Tooltip title: the reading time, or the time window of an averaged point
+function envTrendPointTitle(i) {
+    const x = envTrend.points[i];
+    if (!x) return '';
+    const minutes = (x.end - x.start) / 60000;
+    if (minutes <= 1) return formatTimestamp(x.start);
+    const day = x.start.toLocaleDateString(uiLocale(), { month: 'long', day: 'numeric', year: 'numeric' });
+    const t = (d) => d.toLocaleTimeString(uiLocale(), { hour: 'numeric', minute: '2-digit' });
+    return `${day}, ${t(x.start)} – ${t(x.end)}`;
+}
+
+// The current period keeps up with new readings (on opening Analytics and every 10 minutes)
+function refreshEnvTrendIfCurrent() {
+    if (currentView !== 'analytics') return;
+    const { start } = envTrendBounds();
+    const key = `${envPicker.period}:${start.getTime()}`;
+    const picked = periodBounds(envPicker).end;
+    const includesNow = !picked || picked >= new Date();   // Today / Last 7 / Last 30 / a range up to today
+    if (includesNow || envTrend.loadedKey !== key) loadEnvTrend();
+}
+
+function resetEnvTrend() {
+    envTrend.request += 1;     // drop any request still running for the previous account
+    envTrend.points = [];
+    envTrend.loadedKey = null;
+    envTrend.rpcMissing = false;
+    envPicker.period = envPicker.defaultPeriod;
+    clearLogDateInput(document.getElementById('envCustomStart'));
+    clearLogDateInput(document.getElementById('envCustomEnd'));
+    setPeriodPanel(envPicker, false);
+    renderPeriod(envPicker);
+    drawEnvTrend();
+    setEnvTrendNote('');
 }
 
 // Same 30-minute readings as the KPI cards
@@ -4342,8 +4290,10 @@ const LOG_FILTER_CHIPS = {
 // Text for the Excel header, e.g. 'Urgency Level – Urgent'
 function logFilterLabel() {
     const { kind, level } = state.logFilter;
-    if (level === 'ALL') return 'All Records';
-    return kind === 'status' ? `Status – ${STATUS_INFO[level].label}` : `Urgency Level – ${URGENCY_NAME[level]}`;
+    if (level === 'ALL') return uiText('All Records');
+    const category = kind === 'status' ? 'Status' : 'Urgency Level';
+    const label = kind === 'status' ? STATUS_INFO[level].label : URGENCY_NAME[level];
+    return `${uiText(category)} – ${uiText(label)}`;
 }
 
 // Redraws the Status / Urgency switch and the chips with their record counts (for the chosen period)
@@ -4435,21 +4385,19 @@ async function exportDetectionsToExcel() {
     def('sSevCritical', { size: 10, color: '#FFFFFF', fill: '#F87171', h: 'Center', borders: white });
     def('sDataCenterRow1', { size: 10, fill: '#FFCBA2', h: 'Center', borders: white });
     def('sDataCenterRow2', { size: 10, fill: '#FFDDC2', h: 'Center', borders: white });
-    def('sRecRow1', { size: 10, fill: '#FFCBA2', h: 'Left', wrap: true, borders: white });
-    def('sRecRow2', { size: 10, fill: '#FFDDC2', h: 'Left', wrap: true, borders: white });
 
     const wb = new ExcelJS.Workbook();
     wb.creator = 'HeatTrack';
     wb.created = now;
-    const ws = wb.addWorksheet('HeatTrack Report');
+    const ws = wb.addWorksheet(uiText('HeatTrack Report'));
 
     // ---- Columns: A margin | B-C Timestamp | D Duration | E Status | F Lowest | G Average |
-    //      H Highest | I Duck Count | J Batch Count | K Urgency Level | L-M Top Recommendation ----
+    //      H Highest | I Duck Count | J Batch Count | K Urgency Level ----
     // Widths in characters. B-C fit the longest timestamp ("September 30, 2026, 12:05:30 PM");
     // a date that doesn't fit shows as ##### in Excel
-    ws.columns = [4, 17, 17, 12.5, 14.5, 14.5, 14.5, 14.5, 12.5, 13.5, 13.5, 21.5, 21.5].map((width) => ({ width }));
-    const lastCol = 13;           // column M
-    const span = lastCol - 2;     // extra columns for full-width rows (B..M)
+    ws.columns = [4, 17, 17, 15, 15, 14.5, 14.5, 14.5, 14, 14, 14].map((width) => ({ width }));
+    const lastCol = 11;           // column K
+    const span = lastCol - 2;     // extra columns for full-width rows (B..K)
 
     let r = 0;   // current row
     const newRow = (height) => { r += 1; ws.getRow(r).height = height; };
@@ -4458,7 +4406,13 @@ async function exportDetectionsToExcel() {
     const put = (col, value, style, across = 0, down = 0) => {
         const cell = ws.getCell(r, col);
         cell.style = style;
-        cell.value = value;
+        if (typeof value === 'string') cell.value = uiText(value);
+        else if (value && Array.isArray(value.richText)) {
+            cell.value = {
+                ...value,
+                richText: value.richText.map((run) => ({ ...run, text: uiText(run.text) })),
+            };
+        } else cell.value = value;
         if (across || down) ws.mergeCells(r, col, r + down, col + across);
     };
     const fullRow = (height, style, text) => { newRow(height); put(2, text, style, span); };
@@ -4466,35 +4420,37 @@ async function exportDetectionsToExcel() {
 
     // Which filters produced this report
     const { start, end } = getLogDateBounds();
-    const fmtDay = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const fmtDay = (d) => d.toLocaleDateString(uiLocale(), { month: 'short', day: 'numeric', year: 'numeric' });
     let period = logPeriodLabel();
     if (state.logPeriod !== 'custom' && start && end && start.getTime() > 0) period += ' (' + fmtDay(start) + (fmtDay(start) === fmtDay(end) ? '' : ' to ' + fmtDay(end)) + ')';
-    const generated = now.toLocaleString('en-US', {
+    const generated = now.toLocaleString(uiLocale(), {
         month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
     });
 
     spacerRow();
     fullRow(26, S.sTitle, 'HeatTrack Analytics Report');
     spacerRow();
-    fullRow(18, S.sGenerated, 'Generated: ' + generated);
-    fullRow(18, S.sGenerated, 'Filter: ' + logFilterLabel() + '   |   Period: ' + period
+    fullRow(18, S.sGenerated, uiText('Generated:') + ' ' + generated);
+    fullRow(18, S.sGenerated, uiText('Filter:') + ' ' + logFilterLabel() + '   |   ' + uiText('Period:') + ' ' + uiText(period)
         // Total = the ducks of all four statuses, the same sum as the boxes below
-        + '   |   Total Records: ' + totalDucks);
+        + '   |   ' + uiText('Total Records:') + ' ' + totalDucks);
     spacerRow();
 
     // ---- Summary boxes: one per status (with share of all ducks) ----
     const share = (n) => (totalDucks ? ' (' + Math.round(((n || 0) / totalDucks) * 100) + '%)' : '');
     const cards = [
-        [S.sCardNormalVal, S.sCardNormalLbl, counts.comfort, 'Thermal Comfort' + share(counts.comfort)],
-        [S.sCardMildVal, S.sCardMildLbl, counts.mild, 'Mild Heat Stress' + share(counts.mild)],
-        [S.sCardModerateVal, S.sCardModerateLbl, counts.moderate, 'Moderate Heat Stress' + share(counts.moderate)],
-        [S.sCardHeatstressVal, S.sCardHeatstressLbl, counts.severe, 'Severe Heat Stress' + share(counts.severe)],
+        [S.sCardNormalVal, S.sCardNormalLbl, counts.comfort, uiText('Thermal Comfort') + share(counts.comfort)],
+        [S.sCardMildVal, S.sCardMildLbl, counts.mild, uiText('Mild Heat Stress') + share(counts.mild)],
+        [S.sCardModerateVal, S.sCardModerateLbl, counts.moderate, uiText('Moderate Heat Stress') + share(counts.moderate)],
+        [S.sCardHeatstressVal, S.sCardHeatstressLbl, counts.severe, uiText('Severe Heat Stress') + share(counts.severe)],
     ];
-    const cardStart = [2, 5, 8, 11];            // columns B, E, H, K (3 wide each, B..M)
+    // Columns B-C, D-E, F-H, I-K (B..K)
+    const cardStart = [2, 4, 6, 9];
+    const cardAcross = [1, 1, 2, 2];
     newRow(22);
-    cards.forEach((c, i) => put(cardStart[i], c[2] || 0, c[0], 2));
+    cards.forEach((c, i) => put(cardStart[i], c[2] || 0, c[0], cardAcross[i]));
     newRow(22);
-    cards.forEach((c, i) => put(cardStart[i], c[3], c[1], 2));
+    cards.forEach((c, i) => put(cardStart[i], c[3], c[1], cardAcross[i]));
     spacerRow();
 
     // ---- Average body temperature: mean of the Average Surface Temp column below,
@@ -4503,14 +4459,14 @@ async function exportDetectionsToExcel() {
         .map((d) => d.avgTemp).filter((t) => t != null && !Number.isNaN(Number(t))).map(Number);
     const avgBodyTemp = avgTemps.length ? avgTemps.reduce((sum, t) => sum + t, 0) / avgTemps.length : null;
     // Two rows: the label, then a note on which readings it uses; the value spans both
-    const avgCount = avgTemps.length + ' reading' + (avgTemps.length === 1 ? '' : 's');
+    const avgCount = avgTemps.length + ' ' + uiText(avgTemps.length === 1 ? 'reading' : 'readings');
     newRow(22);
-    put(2, 'Average Body Temperature (' + avgCount + ')', S.sAvgTempLbl, 8);
-    put(11, avgBodyTemp == null ? '--' : num(avgBodyTemp, 1), S.sAvgTempVal, 2, 1);
+    put(2, uiText('Average Body Temperature') + ' (' + avgCount + ')', S.sAvgTempLbl, 7);
+    put(10, avgBodyTemp == null ? '--' : num(avgBodyTemp, 1), S.sAvgTempVal, 1, 1);
     newRow(16);
     put(2, avgBodyTemp == null
         ? 'No 30 min readings in the selected filters.'
-        : '30 min readings only (10 and 20 min readings not included).', S.sAvgTempNote, 8);
+        : '30 min readings only (10 and 20 min readings not included).', S.sAvgTempNote, 7);
     spacerRow();
 
     // ---- Table header (same columns as the Detection Log) ----
@@ -4518,7 +4474,6 @@ async function exportDetectionsToExcel() {
     put(2, 'Timestamp', S.sHeader, 1);
     ['Duration', 'Status', 'Lowest Surface Temp (°C)', 'Average Surface Temp (°C)', 'Highest Surface Temp (°C)',
         'Duck Count', 'Batch Count', 'Urgency Level'].forEach((h, i) => put(4 + i, h, S.sHeader));
-    put(12, 'Top Recommendation', S.sHeader, 1);
     // Row number of the header: frozen on screen and repeated on every printed page
     const headerRow = r;
 
@@ -4534,10 +4489,9 @@ async function exportDetectionsToExcel() {
         const statusStyle = { COMFORT: 'sStatusNormal', MILD: 'sStatusMild', MODERATE: 'sStatusModerate', SEVERE: 'sStatusHeatstress' }[d.status] || 'sStatusNormal';
         const sevStyle = d.severity === 'CRITICAL' ? 'sSevCritical' : d.severity === 'HIGH' ? 'sSevHigh'
             : d.severity === 'MODERATE' ? 'sSevModerate' : 'sSevLow';
-        const recText = buildRecommendationFromDetection(d)?.action || '';
         const batch = d.batchCount != null && /^\d+$/.test(String(d.batchCount)) ? Number(d.batchCount) : String(d.batchCount ?? '--');
 
-        newRow(Math.max(24, (Math.ceil(recText.length / 45) + 1) * 14));
+        newRow(24);
         put(2, Number.isNaN(ts.getTime()) ? '--' : xlsDate(ts), S['sData' + rowN + 'Timestamp'], 1);
         put(4, interval, center);
         put(5, statusLabel(d.status), S[statusStyle]);
@@ -4548,7 +4502,6 @@ async function exportDetectionsToExcel() {
         put(10, batch, center);
         if (hasUrgency(d)) put(11, urgencyName(severityLevels.includes(d.severity) ? d.severity : 'LOW'), S[sevStyle]);
         else put(11, '--', center);   // no humidity reading: no urgency
-        put(12, recText, S['sRec' + rowN], 1);
     });
 
     if (!rows.length) {
@@ -4562,7 +4515,7 @@ async function exportDetectionsToExcel() {
     newRow(44);
     put(2, { richText: [
         { font: { ...disclaimerFont, bold: true }, text: 'Disclaimer: ' },
-        { font: disclaimerFont, text: 'The results, temperatures, averages and recommendations in this report are generated by an automated system. '
+        { font: disclaimerFont, text: 'The results, temperatures and averages in this report are generated by an automated system. '
             + 'They are assistive only, may contain errors, and are not a veterinary diagnosis. Always confirm with direct on-site observation of the ducks '
             + 'and follow your farm protocol or veterinary guidance before taking action.' },
     ] }, S.sDisclaimer, span);
@@ -4571,7 +4524,8 @@ async function exportDetectionsToExcel() {
     // ---- Footer (like the website's): logo + name on the left, copyright on the right ----
     newRow(32);
     put(2, 'HeatTrack — Thermal AI System', S.sFooterBrand, 4);
-    put(7, 'Pateros Duckery AI-Integrated Assistive Monitoring System for Heat Stress Detection © ' + now.getFullYear(), S.sFooterCopy, 6);
+    put(7, uiText('Pateros Duckery AI-Integrated Assistive Monitoring System for Heat Stress Detection')
+        + ' © ' + now.getFullYear(), S.sFooterCopy, 4);
     if (logo) {
         const logoId = wb.addImage({ base64: logo, extension: 'png' });
         // Exact pixel offsets (ExcelJS reads col/row fractions against a fixed default
@@ -4598,7 +4552,8 @@ async function exportDetectionsToExcel() {
         margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.5, header: 0.2, footer: 0.2 },
         printTitlesRow: headerRow + ':' + headerRow,
     };
-    ws.headerFooter.oddFooter = '&LHeatTrack Analytics Report&RPage &P of &N';
+    const footerPageCount = uiLocale() === 'fil-PH' ? 'sa' : 'of';
+    ws.headerFooter.oddFooter = '&L' + uiText('HeatTrack Analytics Report') + '&R' + uiText('Page') + ' &P ' + footerPageCount + ' &N';
 
     // The link must be on the page, and the file kept a moment, for every browser to download it
     const buffer = await wb.xlsx.writeBuffer();
@@ -4622,12 +4577,18 @@ function setupEventListeners() {
     const alertBtn = document.getElementById('alertBtn');
     const settingsBtn = document.getElementById('settingsBtn');
 
-    // Settings -> FAQ button: close the settings panel when leaving for the FAQ page
-    document.querySelector('.ht-settings-faq-link')?.addEventListener('click', closeHeaderPanels);
+    // FAQ button (beside Settings and the bell): closes any open panel and opens the FAQ page
+    const faqBtn = document.getElementById('faqBtn');
+    faqBtn?.addEventListener('click', () => {
+        closeHeaderPanels();
+        if ((location.hash || '').toLowerCase() === '#faq') showView('faq');
+        else location.hash = '#faq';
+    });
 
-    // Suppress hover/tooltips on touch for alert/settings
+    // Suppress hover/tooltips on touch for alert/settings/FAQ
     alertBtn?.addEventListener('touchstart', suppressHoverTemporarily, { passive: true });
     settingsBtn?.addEventListener('touchstart', suppressHoverTemporarily, { passive: true });
+    faqBtn?.addEventListener('touchstart', suppressHoverTemporarily, { passive: true });
 
     // Alert button
     alertBtn?.addEventListener('click', () => {
@@ -4732,7 +4693,7 @@ function setupEventListeners() {
         toast.classList.remove('is-visible');
     });
 
-    // "View details": open the recommendation details and mark the alert as viewed
+    // "View details": open the result details and mark the alert as viewed
     document.getElementById('toastDetails')?.addEventListener('click', () => {
         document.getElementById('alertToast')?.classList.remove('is-visible');
         const detection = state.lastToastDetection;
@@ -4741,15 +4702,15 @@ function setupEventListeners() {
             markAlertAsViewed(detection.id);
         }
         const currentTemp = state.sensorHistory.temp.length > 0 ? state.sensorHistory.temp[state.sensorHistory.temp.length - 1] : null;
-        openRecommendationModal(buildRecommendationFromDetection(detection), currentTemp);
+        openResultModal(buildResultFromDetection(detection), currentTemp);
     });
 
-    // Recommendation modal controls
-    document.getElementById('closeRecommendationModal')?.addEventListener('click', closeRecommendationModal);
-    document.getElementById('recommendationModalBackdrop')?.addEventListener('click', closeRecommendationModal);
+    // Result modal controls
+    document.getElementById('closeResultModal')?.addEventListener('click', closeResultModal);
+    document.getElementById('resultModalBackdrop')?.addEventListener('click', closeResultModal);
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-            closeRecommendationModal();
+            closeResultModal();
         }
     });
 
@@ -5079,7 +5040,7 @@ function renderProfile() {
     document.getElementById('profileHandle').textContent = u.username ? '@' + u.username : '';
     document.getElementById('profileAvatar').textContent = initials;
     document.getElementById('profileSince').textContent = u.createdAt
-        ? 'Member since ' + new Date(u.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+        ? 'Member since ' + new Date(u.createdAt).toLocaleDateString(uiLocale(), { month: 'long', day: 'numeric', year: 'numeric' })
         : '';
 }
 
@@ -5284,7 +5245,7 @@ function initProfile() {
 }
 
 // ============================================
-// 10-MINUTE REFRESH (recommendations + insights panels)
+// 10-MINUTE REFRESH (results + insights panels)
 // Fires on the clock at :00, :10, :20, :30, :40, :50 while a user is signed in.
 // No notification or pop-up: only heat-stress results raise those.
 // ============================================
@@ -5309,10 +5270,11 @@ function checkinUserActive() {
 function runCheckin() {
     if (!checkinUserActive()) return;
 
-    // Refresh the Recommendations + Insights panels on the same rhythm
-    renderRecommendations();
+    // Refresh the Results + Insights panels on the same rhythm
+    renderResults();
     renderLiveDetections();
     updateStats();
+    refreshEnvTrendIfCurrent();   // the current day / week / month picks up new readings
 }
 
 // Next :00 / :10 / :20 ... boundary (re-scheduled every time, so it never drifts)
@@ -5381,7 +5343,7 @@ function mapAnalyticsRow(row) {
     const status = level.status;
     // Where the logger's air reading came from (air_source.sql): 'dht22' | 'thermal' | 'none',
     // null on older rows. 'none' = no air reading in the result's period: no urgency is shown,
-    // and its level follows the status (cards, recommendations, alerts on Moderate/Severe)
+    // and its level follows the status (cards, results, alerts on Moderate/Severe)
     const airSource = ['dht22', 'thermal', 'none'].includes(row.air_source) ? row.air_source : null;
     // 10 = 10-minute slot row, 30 = 30-minute window row; rows saved before
     // the interval column existed are 30-minute rows
@@ -5407,7 +5369,6 @@ function mapAnalyticsRow(row) {
         airSource,
         interval,
         hasInterval,
-        ai: row.ai_recommendation || null,   // written by the "recommend" Edge Function (Gemini)
         deviceId: row.device_id ?? null,
     };
 }
@@ -5462,7 +5423,7 @@ function summaryDetections() {
     return state.detections.filter((d) => !(d.hasInterval && d.interval === 30) || !windowCovered(d));
 }
 
-// Insights page Results (live list) and Recommendations show only the 30-minute
+// The Home dashboard's Results show only the 30-minute
 // readings (20 minutes after the first detection, then every 30 minutes); first
 // detections are left out
 function detailDetections() {
@@ -5583,7 +5544,7 @@ function intervalBadge(label) {
 function pushSensorPoint(row) {
     const temp = toNum(row.temperature);
     const humidity = toNum(row.humidity);
-    const label = new Date(row.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const label = new Date(row.timestamp).toLocaleTimeString(uiLocale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
     state.sensorHistory.temp.push(temp);
     state.sensorHistory.humidity.push(humidity);
@@ -5611,12 +5572,11 @@ function pushSensorPoint(row) {
 function refreshDashboard() {
     updateStats();
     updateSensorReadings();
-    updateEnvChart();
     updateDetectionChart();
     updateSeverityChart();
     renderDetectionLogs();
     renderLiveDetections();
-    renderRecommendations();
+    renderResults();
     renderAlerts();
     updateAnnotations();
 }
@@ -5632,11 +5592,12 @@ function resetDashboardData() {
     state.sensorHistory.humidity = [];
     state.sensorHistory.labels = [];
     state.sensorHistory.times = [];
+    resetEnvTrend();   // the next account starts on today's trend
     state.alerts = [];
     alertReadIds = new Set();
     state.alertCount = 0;
     state.alertsDisplayed = 0;
-    state.recommendationsDisplayed = 0;
+    state.resultsDisplayed = 0;
     state.currentPage = 1;
     // The next account starts with the whole log, unfiltered
     state.logFilter = { kind: 'status', level: 'ALL' };
@@ -5690,8 +5651,10 @@ async function loadCloudData() {
     if (readIds) mergeAlertReads(uid, readIds);
 
     state.currentPage = 1;
-    state.recommendationsDisplayed = 0;
+    state.resultsDisplayed = 0;
     refreshDashboard();
+    envTrend.loadedKey = null;      // new account data: reload the trend if Analytics is open
+    refreshEnvTrendIfCurrent();
 }
 
 function handleEnvironmentInsert(row) {
@@ -5701,8 +5664,7 @@ function handleEnvironmentInsert(row) {
     }
     pushSensorPoint(row);
     updateSensorReadings();
-    updateEnvChart();
-    // Recommendations/insights refresh every 10 minutes (see 10-MINUTE REFRESH),
+    // Results/insights refresh every 10 minutes (see 10-MINUTE REFRESH),
     // not on every reading. Heat-stress detections still refresh them immediately.
 }
 
@@ -5722,6 +5684,21 @@ function handleAnalyticsInsert(row) {
     }
 }
 
+// The logger saves a result first and sets its air_source ("Thermal only" / no
+// urgency) with a separate update a moment later (air_source.sql), so a live row
+// arrives without it. Apply such updates to the result already on the page.
+// The object is updated in place because results keep a reference to it.
+function handleAnalyticsUpdate(row) {
+    if (!row || row.id == null) return;
+    const existing = state.detections.find(d => d.dbId === row.id);
+    if (!existing) return;
+    const fresh = mapAnalyticsRow(row);
+    if (existing.airSource === fresh.airSource && existing.severity === fresh.severity) return;
+    Object.assign(existing, fresh);
+    refreshDashboard();
+    syncResultAlerts();
+}
+
 // Live updates: new rows written by your device/backend appear instantly
 function subscribeRealtime(userId) {
     unsubscribeRealtime();
@@ -5733,6 +5710,9 @@ function subscribeRealtime(userId) {
         .on('postgres_changes',
             { event: 'INSERT', schema: 'public', table: 'analytics', filter: `userid=eq.${userId}` },
             (payload) => handleAnalyticsInsert(payload.new))
+        .on('postgres_changes',
+            { event: 'UPDATE', schema: 'public', table: 'analytics', filter: `userid=eq.${userId}` },
+            (payload) => handleAnalyticsUpdate(payload.new))   // air_source set after the insert
         .on('postgres_changes',
             { event: 'INSERT', schema: 'public', table: 'notification_reads', filter: `user_id=eq.${userId}` },
             (payload) => {
@@ -5768,6 +5748,17 @@ async function pollNewRows(userId) {
         ]);
         (envRes.data || []).forEach(handleEnvironmentInsert);
         (analyticsRes.data || []).forEach(handleAnalyticsInsert);   // oldest first, so newest ends on top
+        // Results from the last 2 hours still without an air source: the logger may
+        // have set it since (in case Realtime missed the update)
+        const since = Date.now() - 2 * 60 * 60 * 1000;
+        const missing = state.detections
+            .filter(d => d.airSource == null && d.dbId != null && d.timestamp?.getTime() >= since)
+            .map(d => d.dbId);
+        if (missing.length) {
+            const { data: updated } = await sb.from('analytics').select('*')
+                .in('id', missing.slice(0, 100)).not('air_source', 'is', null);
+            (updated || []).forEach(handleAnalyticsUpdate);
+        }
         await refreshAlertReads(userId);   // notifications read on another browser
         await refreshAccountSettings(userId);   // Camera Streams changed on another browser
     } catch (err) {
@@ -6048,7 +6039,7 @@ function escapeHtml(value) {
 }
 
 function adminFormatDate(value) {
-    return value ? new Date(value).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Not provided';
+    return value ? new Date(value).toLocaleDateString(uiLocale(), { year: 'numeric', month: 'short', day: 'numeric' }) : 'Not provided';
 }
 
 function showAdminToast(message, type = 'success') {
@@ -6661,7 +6652,7 @@ function renderAdminSelf() {
     document.getElementById('adminProfileHandle').textContent = u.username ? '@' + u.username : '';
     document.getElementById('adminProfileAvatar').textContent = initials;
     document.getElementById('adminProfileSince').textContent = u.createdAt
-        ? 'Admin since ' + new Date(u.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+        ? 'Admin since ' + new Date(u.createdAt).toLocaleDateString(uiLocale(), { month: 'long', day: 'numeric', year: 'numeric' })
         : '';
 }
 
@@ -6941,7 +6932,7 @@ function renderAdminWeather(w) {
     set('adminWeatherDesc', desc);
     set('adminWeatherFeels', `${Math.round(w.heatIndex)}°C`);
     set('adminWeatherHumid', `${Math.round(w.humidity)}%`);
-    set('adminWeatherUpdated', 'Updated ' + new Date(w.at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }));
+    set('adminWeatherUpdated', 'Updated ' + new Date(w.at).toLocaleTimeString(uiLocale(), { hour: 'numeric', minute: '2-digit' }));
     const iconEl = document.getElementById('adminWeatherIcon');
     if (iconEl) {
         iconEl.innerHTML = `<i data-lucide="${icon}"></i>`;
