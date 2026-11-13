@@ -1157,13 +1157,6 @@ img { max-width: 100%; height: auto; display: block; }
     font-weight: 600;
 }
 .ht-language-control__switch { flex: 0 0 auto; }
-.ht-language-control--settings {
-    padding: 0.7rem 0.75rem;
-    border: 1px solid rgba(51, 65, 85, 0.3);
-    border-radius: var(--ht-radius-lg);
-    color: var(--ht-surface-200);
-    min-height: 0;
-}
 
 
 /* ---- Page section header (monitor pages) ------------------------------------- */
@@ -4163,6 +4156,15 @@ input[type="date"] {
 .ht-switch-row__icon svg { width: 1rem; height: 1rem; }
 .ht-switch-row__icon--green { background: rgba(34, 197, 94, 0.1); color: #4ade80; }
 .ht-switch-row__icon--blue { background: rgba(59, 130, 246, 0.1); color: #60a5fa; }
+.ht-switch-row__icon--orange { background: rgba(249, 115, 22, 0.1); color: #fb923c; }
+/* Language row: text may shrink, the English / Filipino switch keeps its size on the right */
+.ht-switch-row--language { gap: 0.75rem; }
+.ht-switch-row--language .ht-switch-row__text { min-width: 0; }
+.ht-switch-row--language .ht-language-control__switch { flex: 0 0 auto; }
+.ht-switch-row--language .ht-switch-row__title,
+.ht-switch-row--language .ht-switch-row__sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Compact switch, about as tall as the toggles' text, so all three rows match */
+.ht-switch-row--language .ht-language-control__switch.ht-log-filters__switch button { padding: .3rem .65rem; font-size: .72rem; }
 
 .ht-switch-row__title { font-size: 0.75rem; font-weight: 500; color: var(--ht-surface-50); line-height: 1.5; }
 .ht-switch-row__sub { font-size: 10px; color: var(--ht-surface-500); line-height: 1.5; }
@@ -7446,6 +7448,13 @@ button.ht-cap-card__link {
     color: #202020;
     background: #fff;
 }
+/* Language switch (Sign In / Sign Up / Settings): the picked language uses the
+   orange accent of the active navigation link instead of white */
+.ht-language-control__switch.ht-log-filters__switch button.is-active {
+    color: #fff;
+    background: linear-gradient(145deg, #fb923c, var(--ht-thermal-600));
+    box-shadow: var(--ht-shadow-xs), 0 0 0 1px rgba(255, 255, 255, 0.2) inset;
+}
 
 .ht-auth::before {
     position: absolute;
@@ -8422,4 +8431,67 @@ body.ht-login-loading-open { overflow: hidden; }
     .ht-admin-device__actions,
     #adminDeviceModal .ht-admin-ui__modal-actions { flex-direction: column-reverse; align-items: stretch; }
     #adminDeviceModal .ht-admin-ui__modal-actions .ht-btn { justify-content: center; }
+}
+
+/* ---- Phone layout fixes (English and Filipino) ---------------------------------
+   Same layout in both languages; only the switch text size below adapts to the
+   longer Filipino labels. */
+
+/* Sign In / Sign Up / Settings: the language switch fits its labels instead of being
+   stretched to 100% (which squeezed the label and made the buttons overlap) */
+@media (max-width: 640px) {
+    .ht-language-control__switch.ht-log-filters__switch { flex: 1 1 auto; width: auto; min-width: 0; }
+    .ht-language-control__switch.ht-log-filters__switch button { flex: 1 0 auto; min-width: max-content; padding: .3rem .7rem; }
+    /* Settings: the switch keeps its own width on the right of the row */
+    .ht-switch-row--language .ht-language-control__switch.ht-log-filters__switch { flex: 0 0 auto; }
+    .ht-language-control > span { flex: 0 0 auto; }
+}
+
+@media (max-width: 680px) {
+    /* Sign In is much shorter than Sign Up: the card fits the login form instead of keeping the tall Sign Up height */
+    .ht-auth--login .ht-auth__card { height: auto; min-height: 0; align-self: start; }
+    .ht-auth--login .ht-auth__form-panel--login { height: auto; }
+    /* The welcome title may wrap to two lines inside the same header band */
+    .ht-auth__welcome-content h1 { overflow-wrap: anywhere; }
+}
+@media (max-width: 380px) {
+    /* Same header height as before: a slightly smaller title and tighter gaps leave room for a second line */
+    .ht-auth__welcome-content h1 { font-size: 1.1rem; line-height: 1.12; }
+    .ht-auth__switch-copy { margin-top: .45rem; }
+    .ht-auth__welcome-content .ht-auth__outline-btn { margin-top: .4rem; }
+}
+
+@media (max-width: 640px) {
+    /* Detection Distribution: donut and legend side by side;
+       a long status name wraps inside its own column instead of pushing the legend under the donut */
+    .ht-panel--chart .ht-panel__pad--chart-layout { flex-wrap: nowrap; gap: .75rem; }
+    .ht-panel--chart .ht-detection-legend { flex: 1 1 0; min-width: 0; max-width: 11.5rem; }
+    .ht-panel--chart .ht-detection-legend-item { max-width: 100%; padding: .375rem .5rem; white-space: normal; text-align: left; line-height: 1.25; }
+    .ht-panel--chart .ht-detection-legend-swatch { flex-shrink: 0; }
+
+    /* Environmental Trend: the period switch and the calendar button stay on one row */
+    .ht-env-trend__filters { flex-wrap: wrap; }
+    /* Basis = the row minus the calendar button, so the dates chip wraps under them */
+    .ht-env-trend__filters .ht-log-filters__switch { flex: 1 1 calc(100% - 2.85rem); min-width: 0; }
+    .ht-env-trend__filters .ht-log-filters__switch button {
+        flex: 1 1 auto;
+        padding: .4rem .2rem;
+        font-size: clamp(.66rem, 3.4vw, .75rem);
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    /* The Filipino labels are longer: they shrink with the screen so all three fit (about 9px at 320px wide) */
+    html[lang="fil"] .ht-env-trend__filters .ht-log-filters__switch button { font-size: clamp(.54rem, calc((100vw - 142px) / 20.5), .75rem); }
+    .ht-env-trend__filters .ht-log-period { flex: 0 0 auto; }
+    /* The picked dates sit on their own row, centred on the line like the other filters */
+    .ht-env-trend__filters .ht-log-period-chip { align-self: center; }
+
+    /* "No DHT22 readings in this period.": kept inside the plot area, clear of the axis numbers */
+    .ht-env-trend__empty { padding: 0 .5rem 0 2.75rem; text-align: center; line-height: 1.4; text-shadow: 0 0 4px #fff, 0 0 4px #fff, 0 0 2px #fff; }
+}
+
+/* Date picker: the day number stays vertically centred in its cell */
+@media (max-width: 640px) {
+    .ht-cal__day,
+    .ht-cal__pick { display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
 }
