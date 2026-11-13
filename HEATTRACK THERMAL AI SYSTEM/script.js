@@ -3645,9 +3645,12 @@ function showToast(detection) {
     if (!state.alertsEnabled || !isToastLevel(detection?.severity)) return;
     if (isRemovedAlertTime(detection?.timestamp)) return;   // removed time span: no pop-up
     state.lastToastDetection = detection;
-    const stats = [['Surface temp', fmtTemp(detection.bodyTemp)]];
-    if (detection.ambientTemp != null) stats.push(['Barn', fmtTemp(detection.ambientTemp)]);
-    if (detection.count != null) stats.push(['Ducks', String(detection.count)]);
+    // Row 1: surface temperature (full width); row 2: batch count | ducks
+    const stats = [
+        ['Surface temp', fmtTemp(detection.bodyTemp)],
+        ['Batch count', detection.batchCount != null ? String(detection.batchCount) : '--'],
+        ['Ducks', detection.count != null ? String(detection.count) : '--'],
+    ];
     const urgent = hasUrgency(detection);
     renderToast({
         level: detection.severity,
@@ -3655,17 +3658,14 @@ function showToast(detection) {
         title: alertTitle(detection),
         icon: alertIcon(detection.severity),
         stats,
-        action: urgent
-            ? `Urgency: ${urgencyName(detection.severity)}. Open the details for the full detection results.`
-            : 'Open the details for the full detection results.',
         timestamp: detection.timestamp,
     });
 }
 
-// Fills the pop-up card (same look as the old check-in card: colored top strip
-// and level badge, readings, a short note, Dismiss / View details).
+// Fills the pop-up card: title + level badge, reading containers
+// (surface temp full width, then batch count | ducks), Dismiss / View details.
 // showLevel false: no level badge (a result without an urgency)
-function renderToast({ kind = 'heatstress', level = 'LOW', showLevel = true, title, icon, stats = [], stale = false, action, timestamp }) {
+function renderToast({ kind = 'heatstress', level = 'LOW', showLevel = true, title, icon, stats = [], stale = false, timestamp }) {
     const toast = document.getElementById('alertToast');
     if (!toast) return;
     toast.dataset.kind = kind;
@@ -3679,15 +3679,16 @@ function renderToast({ kind = 'heatstress', level = 'LOW', showLevel = true, tit
     const statsEl = document.getElementById('toastStats');
     statsEl.innerHTML = '';
     stats.forEach(([label, value]) => {
-        const span = document.createElement('span');
-        span.append(`${label} `);
+        const tile = document.createElement('span');
+        tile.className = 'ht-toast__stat';
+        const name = document.createElement('span');
+        name.textContent = label;
         const b = document.createElement('b');
         b.textContent = value;
-        span.appendChild(b);
-        statsEl.appendChild(span);
+        tile.append(name, b);
+        statsEl.appendChild(tile);
     });
     document.getElementById('toastStale').hidden = !stale;
-    document.getElementById('toastMessage').textContent = action;
     const at = new Date(timestamp);
     document.getElementById('toastTime').textContent = Number.isNaN(at.getTime())
         ? '' : at.toLocaleTimeString(uiLocale(), { hour: 'numeric', minute: '2-digit' });
