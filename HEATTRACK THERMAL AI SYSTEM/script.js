@@ -1423,10 +1423,12 @@ function showView(route) {
         if (normalCameraContainer?.resetZoom) normalCameraContainer.resetZoom();
         if (thermalCameraContainer?.resetZoom) thermalCameraContainer.resetZoom();
     }
-    // Leaving Analytics: the chip row starts at its first chip and the period panel is closed next time
+    // Leaving Analytics: the chip row starts at its first chip, the period panels are closed,
+    // and both period pickers go back to their defaults (Log: All time, Trend: Today)
     if (previousView === 'analytics' && currentView !== 'analytics') {
         resetLogChipsScroll();
-        setLogPeriodPanel(false);
+        resetPeriodPicker(logPicker);
+        resetPeriodPicker(envPicker, { redraw: false });   // refreshEnvTrendIfCurrent reloads it on return
     }
     // Leaving the FAQ: close every open question so it starts collapsed next time
     if (previousView === 'faq' && currentView !== 'faq') {
@@ -1831,6 +1833,24 @@ function applyPeriod(P, period) {
     renderPeriod(P);
     renderCalendar(P);
     P.onChange();
+}
+
+// Back to the picker's default period (picked dates cleared, panel closed).
+// Used when leaving the Analytics page. Only redraws when something changed;
+// the Environmental Trend reloads by itself when Analytics opens again.
+function resetPeriodPicker(P, { redraw = true } = {}) {
+    const startEl = pickerEl(P, 'CustomStart');
+    const endEl = pickerEl(P, 'CustomEnd');
+    const changed = P.period !== P.defaultPeriod || !!startEl?.value || !!endEl?.value;
+    setPeriodPanel(P, false);
+    P.cal = newCal();
+    if (!changed) return;
+    P.period = P.defaultPeriod;
+    clearLogDateInput(startEl);
+    clearLogDateInput(endEl);
+    renderPeriod(P);
+    renderCalendar(P);
+    if (redraw) P.onChange();
 }
 
 // Detection Log names (used elsewhere: Excel report, sign-out reset, page changes)
