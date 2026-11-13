@@ -3645,10 +3645,10 @@ function showToast(detection) {
     if (!state.alertsEnabled || !isToastLevel(detection?.severity)) return;
     if (isRemovedAlertTime(detection?.timestamp)) return;   // removed time span: no pop-up
     state.lastToastDetection = detection;
-    // Row 1: surface temperature (full width); row 2: batch count | ducks
+    // One row, three columns: surface temp | ambient temp | ducks
     const stats = [
-        ['Surface temp', fmtTemp(detection.bodyTemp)],
-        ['Batch count', detection.batchCount != null ? String(detection.batchCount) : '--'],
+        ['Surface Temp.', fmtTemp(detection.bodyTemp)],
+        ['Ambient Temp.', fmtTemp(detection.ambientTemp)],
         ['Ducks', detection.count != null ? String(detection.count) : '--'],
     ];
     const urgent = hasUrgency(detection);
@@ -3663,7 +3663,7 @@ function showToast(detection) {
 }
 
 // Fills the pop-up card: title + level badge, reading containers
-// (surface temp full width, then batch count | ducks), Dismiss / View details.
+// (surface temp | ambient temp | ducks), Dismiss / View details.
 // showLevel false: no level badge (a result without an urgency)
 function renderToast({ kind = 'heatstress', level = 'LOW', showLevel = true, title, icon, stats = [], stale = false, timestamp }) {
     const toast = document.getElementById('alertToast');
