@@ -698,8 +698,15 @@
                 <h3 class="ht-settings-panel__title">Settings</h3>
             </div>
             <div class="ht-settings-panel__body ht-switch-list">
-                <div class="ht-language-control ht-language-control--settings">
-                    <span id="settingsLanguageLabel">Language</span>
+                <!-- Language: same row as Camera Streams / Alert Notifications, the switch on the right -->
+                <div class="ht-switch-row ht-switch-row--language">
+                    <div class="ht-switch-row__text">
+                        <div class="ht-switch-row__icon ht-switch-row__icon--orange"><i data-lucide="languages"></i></div>
+                        <div>
+                            <div id="settingsLanguageLabel" class="ht-switch-row__title">Language</div>
+                            <div class="ht-switch-row__sub">App language</div>
+                        </div>
+                    </div>
                     <div class="ht-language-control__switch ht-log-filters__switch" role="group" aria-labelledby="settingsLanguageLabel">
                         <button type="button" class="is-active" data-language-option="en" aria-pressed="true">English</button>
                         <button type="button" data-language-option="fil" aria-pressed="false">Filipino</button>
@@ -739,6 +746,18 @@
             <!-- HOME VIEW -->
             <section id="view-home" class="ht-view" aria-label="Monitoring Dashboard">
                 <h2 class="u-sr-only">Monitoring Dashboard</h2>
+                <!-- Page header like Analytics / Profile -->
+                <header class="page-section-header">
+                    <div class="ht-wrap ht-page-head">
+                        <div class="ht-page-head__row">
+                            <div>
+                                <h2 class="page-section-title">Dashboard</h2>
+                                <p class="page-section-subtitle">Watch the live cameras, barn conditions, and latest results.</p>
+                            </div>
+                            <span class="ht-date" data-date-today></span>
+                        </div>
+                    </div>
+                </header>
                 <div class="ht-wrap ht-page-body">
                     <!-- DASHBOARD: two columns (70 / 30) on wide screens, stacked below 1280px -->
                     <div class="ht-home-dash">
@@ -941,6 +960,7 @@
                         <header class="ht-section-head ht-section-head--center">
                             <p class="ht-section-eyebrow">Core Capabilities</p>
                             <h2 id="features-heading" class="ht-section-title">What HeatTrack Delivers</h2>
+                            <p class="ht-section-sub">The main tools HeatTrack uses to watch over your ducks, from detection to alerts.</p>
                         </header>
                         <div class="ht-cap-grid">
                             <article class="ht-cap-card ht-cap-card--thermal">
@@ -987,6 +1007,7 @@
                         <header class="ht-section-head ht-section-head--center">
                             <p class="ht-section-eyebrow">Heat Stress Level Reference</p>
                             <h2 id="levels-heading" class="ht-section-title">Status, Urgency &amp; Thermal Colors</h2>
+                            <p class="ht-section-sub">What each status, urgency level, and thermal color means, so you know when to act.</p>
                         </header>
                         <div class="ht-quickref">
                             <div class="ht-quickref__grid">
