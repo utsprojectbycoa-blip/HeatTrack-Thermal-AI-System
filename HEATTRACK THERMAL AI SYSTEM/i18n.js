@@ -11,6 +11,7 @@
     const translations = {
         // Language & app name
         'Language': 'Wika',
+        'App language': 'Wika ng app',
         'English': 'English',
         'Filipino': 'Filipino',
         'HeatTrack': 'HeatTrack',
@@ -39,7 +40,7 @@
         'Forgot password?': 'Nakalimutan ang password?',
         'Hello, Quack!': 'Kumusta, Quack!',
         'Already have an account?': 'May account ka na?',
-        'Welcome Back!': 'Kumusta Ulit!',
+        'Welcome Back!': 'Maligayang Pagbalik!',
         "Don't have an account yet?": 'Wala ka pang account?',
         'Forgot Password?': 'Nakalimutan ang Password?',
         'Send Reset Link': 'Ipadala ang Link',
@@ -270,6 +271,9 @@
         'Online': 'Online',
         'Checking...': 'Sinusuri...',
         'Results': 'Mga Resulta',
+        'Show More Results': 'Ipakita ang Iba Pang Resulta',
+        'Show More Notifications': 'Ipakita ang Iba Pang Abiso',
+        'Show More Requests': 'Ipakita ang Iba Pang Request',
         'Monitoring': 'Pagbabantay',
         'Thermal': 'Thermal',
         'Ducks': 'Itik',
@@ -450,6 +454,9 @@
 
         // Analytics
         'Review detection records, analyze trends, and generate reports.': 'Suriin ang mga tala, alamin ang takbo at gumawa ng ulat.',
+        'Watch the live cameras, barn conditions, and latest results.': 'Bantayan ang live na camera, kalagayan ng kulungan, at bagong resulta.',
+        'The main tools HeatTrack uses to watch over your ducks, from detection to alerts.': 'Ang mga pangunahing kasangkapan ng HeatTrack sa pagbabantay ng iyong mga itik, mula detection hanggang alerto.',
+        'What each status, urgency level, and thermal color means, so you know when to act.': 'Ang kahulugan ng bawat katayuan, antas ng urgency, at kulay thermal, para malaman mo kung kailan kikilos.',
         'Detection Log History': 'Kasaysayan ng Detection',
         'Generate Report': 'Gumawa ng Ulat',
         'Quick ranges': 'Mabilisang saklaw',
