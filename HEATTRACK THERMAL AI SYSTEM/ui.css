@@ -4318,18 +4318,21 @@ input[type="date"] {
 }
 .ht-toast.is-visible { opacity: 1; transform: none; pointer-events: auto; }
 
-.ht-toast__body { padding: 1rem 1.1rem .9rem; }
-.ht-toast__head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .55rem; }
+.ht-toast__body { padding: 1rem 1.1rem 0; }
+.ht-toast__head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .65rem; }
 .ht-toast__title { display: flex; align-items: center; gap: .45rem; font-weight: 700; font-size: .95rem; }
 .ht-toast__icon { display: inline-flex; }
 .ht-toast__icon svg { width: 1.05rem; height: 1.05rem; color: var(--sev); }
 /* Same badge as the Severity Level pills (.ht-pill) */
 .ht-toast__level { padding: .125rem .5rem; border-radius: .25rem; font-size: .75rem; font-weight: 700; text-transform: uppercase; color: var(--sev); background: var(--sev-tint); white-space: nowrap; }
-.ht-toast__stats { display: flex; flex-wrap: wrap; gap: .35rem .9rem; margin: 0 0 .5rem; font-size: .82rem; color: #475569; }
-.ht-toast__stats b { color: #0f172a; }
-.ht-toast__stale { margin: 0 0 .5rem; font-size: .78rem; font-weight: 600; color: #b45309; }
-.ht-toast__action { margin: 0; padding: .6rem .7rem; border-radius: 12px; background: #f8fafc; font-size: .86rem; font-weight: 600; line-height: 1.4; }
-.ht-toast__foot { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .65rem 1.1rem .85rem; }
+/* Readings: Surface temperature across the full width, then Batch count | Ducks */
+.ht-toast__stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem; margin: 0; }
+.ht-toast__stats:empty { display: none; }
+.ht-toast__stat { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; min-width: 0; padding: .5rem .7rem; border-radius: 12px; background: #f8fafc; font-size: .82rem; color: #475569; }
+.ht-toast__stat:first-child { grid-column: 1 / -1; }
+.ht-toast__stat b { color: #0f172a; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ht-toast__stale { margin: .5rem 0 0; font-size: .78rem; font-weight: 600; color: #b45309; }
+.ht-toast__foot { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .75rem 1.1rem .85rem; }
 .ht-toast__time { font-size: .75rem; color: #94a3b8; }
 .ht-toast__btns { display: flex; gap: .4rem; }
 .ht-toast__btn { padding: .45rem .85rem; border-radius: 999px; border: 1px solid #e2e8f0; background: #fff; color: #334155; font: 700 .8rem 'DM Sans', system-ui, sans-serif; cursor: pointer; }
