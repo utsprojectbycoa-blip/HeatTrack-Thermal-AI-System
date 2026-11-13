@@ -4325,12 +4325,15 @@ input[type="date"] {
 .ht-toast__icon svg { width: 1.05rem; height: 1.05rem; color: var(--sev); }
 /* Same badge as the Severity Level pills (.ht-pill) */
 .ht-toast__level { padding: .125rem .5rem; border-radius: .25rem; font-size: .75rem; font-weight: 700; text-transform: uppercase; color: var(--sev); background: var(--sev-tint); white-space: nowrap; }
-/* Readings: Surface temperature across the full width, then Batch count | Ducks */
-.ht-toast__stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem; margin: 0; }
+/* Readings: one row of three (Surface Temp. | Ambient Temp. | Ducks);
+   each has its label on one line and the value on the line below */
+.ht-toast__stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .4rem; margin: 0; }
 .ht-toast__stats:empty { display: none; }
-.ht-toast__stat { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; min-width: 0; padding: .5rem .7rem; border-radius: 12px; background: #f8fafc; font-size: .82rem; color: #475569; }
-.ht-toast__stat:first-child { grid-column: 1 / -1; }
-.ht-toast__stat b { color: #0f172a; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ht-toast__stat { display: flex; flex-direction: column; gap: .15rem; min-width: 0; padding: .5rem .6rem; border-radius: 12px; background: #f8fafc; font-size: .75rem; color: #475569; }
+.ht-toast__stat > span,
+.ht-toast__stat b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ht-toast__stat b { color: #0f172a; font-size: .95rem; font-variant-numeric: tabular-nums; }
+@media (max-width: 360px) { .ht-toast__stat { padding: .45rem .5rem; font-size: .7rem; } }
 .ht-toast__stale { margin: .5rem 0 0; font-size: .78rem; font-weight: 600; color: #b45309; }
 .ht-toast__foot { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .75rem 1.1rem .85rem; }
 .ht-toast__time { font-size: .75rem; color: #94a3b8; }
